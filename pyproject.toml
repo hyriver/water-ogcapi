@@ -1,0 +1,249 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [
+  "hatch-vcs",
+  "hatchling",
+]
+
+[project]
+name = "water-ogcapi"
+description = "An async-first Python client for USGS water data services over OGC API Features."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [ { name = "Taher Chegini", email = "cheginit@gmail.com" } ]
+requires-python = ">=3.12"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: GIS",
+  "Typing :: Typed",
+]
+dynamic = [
+  "version",
+]
+dependencies = [
+  # h2 is httpx2's `http2` extra, spelled out so conda-forge (no extras) matches.
+  "h2>=4,<5",
+  "httpx2>=2.12",
+]
+optional-dependencies.dev = [
+  "git-cliff",
+  "pytest",
+  "pytest-cov",
+]
+optional-dependencies.lint = [
+  "codespell",
+  "pre-commit",
+]
+optional-dependencies.test = [
+  "coverage[toml]",
+  "pytest-cov",
+  "pytest-sugar",
+]
+optional-dependencies.typecheck = [
+  "pyright",
+]
+urls.Changelog = "https://github.com/hyriver/water-ogcapi/releases"
+urls.CI = "https://github.com/hyriver/water-ogcapi/actions"
+urls.Homepage = "https://github.com/hyriver/water-ogcapi"
+urls.Issues = "https://github.com/hyriver/water-ogcapi/issues"
+
+[tool.hatch]
+version.source = "vcs"
+build.targets.wheel.packages = [
+  "src/water_ogcapi",
+]
+
+[tool.pixi.workspace]
+channels = [ "conda-forge" ]
+platforms = [ "linux-64", "osx-64", "osx-arm64", "win-64" ]
+
+[tool.pixi.dependencies]
+httpx2 = ">=2.12"
+h2 = ">=4,<5"
+
+[tool.pixi.pypi-dependencies]
+water-ogcapi = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+release = { cmd = "git tag -a {{ version }} -m {{ version }} && git push && git push --tags", args = [
+  { arg = "version" },
+] }
+
+[tool.pixi.feature.dev.tasks]
+changelog = "git cliff -c pyproject.toml --unreleased"
+changelog-update = "git cliff -c pyproject.toml -o CHANGELOG.md"
+
+[tool.pixi.feature.lint.tasks]
+lint = "pre-commit run --all-files"
+pcupdate = "pre-commit autoupdate"
+spell = "codespell -w"
+
+[tool.pixi.feature.py312.dependencies]
+python = "~=3.12.0"
+
+[tool.pixi.feature.py314.dependencies]
+python = "~=3.14.0"
+
+[tool.pixi.feature.py315]
+# 3.15 is a release candidate: its builds need the python_rc label, and "3.15.*"
+# matches pre-releases where "~=3.15.0" does not.
+channels = [ "conda-forge", "conda-forge/label/python_rc" ]
+dependencies.python = "3.15.*"
+
+[tool.pixi.feature.test.tasks]
+test = "pytest -m 'not network'"
+test-network = "pytest -m network"
+test-all = "pytest"
+report = { cmd = [ "coverage", "report" ], depends-on = [ "test-all" ] }
+html = { cmd = [ "coverage", "html" ], depends-on = [ "report" ] }
+
+[tool.pixi.feature.typecheck.tasks]
+typecheck = "pyright"
+
+[tool.pixi.environments]
+dev = { features = [ "dev", "py314" ] }
+test312 = { features = [ "test", "py312" ] }
+test315 = { features = [ "test", "py315" ] }
+typecheck = { features = [ "typecheck", "py314" ] }
+lint = { features = [ "lint", "py314" ], no-default-feature = true }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = [ ".pixi", "__pycache__" ]
+lint.select = [ "ALL" ]
+lint.ignore = [
+  "ANN",     # pyright is better at this
+  "B905",    # zip without strict is fine in Python 3.12+
+  "COM",     # ruff format takes care of our commas
+  "CPY001",  # no need for copyright header
+  "D",       # we prefer our own docstring style
+  "E501",    # leave line-length enforcement to ruff format
+  "FBT",     # we don't hate bool args around here
+  "FIX",     # yes, we want XXX as a marker
+  "ISC001",  # conflicts with ruff format
+  "N",       # we need more naming freedom
+  "PLC0415", # sometimes, imports have to live elsewhere
+  "PLR0913", # yes, many arguments, but most have defaults
+  "PLR2004", # numbers are sometimes fine
+  "TC001",   # first-party typing-only imports are cheap, keep simple for docs
+  "TC003",   # stdlib typing-only imports are cheap, keep simple for docs
+  "TRY301",  # raising within try/except is fine for us
+]
+lint.per-file-ignores."tests/*.py" = [
+  "B015",
+  "B017",
+  "B018",
+  "BLE001",
+  "DTZ",
+  "EM",
+  "INP001",
+  "PLR0124",
+  "PT011",
+  "PT012",
+  "RUF012",
+  "S",
+  "SIM201",
+  "SIM202",
+  "SIM300",
+  # tests intentionally inspect private state
+  "SLF001",
+  "TRY",
+]
+lint.extend-safe-fixes = [
+  "E402",
+  "PT018",
+  "TID252",
+]
+lint.isort.known-first-party = [ "water_ogcapi" ]
+lint.isort.required-imports = [ "from __future__ import annotations" ]
+
+[tool.codespell]
+# "gages" / "gages-II" is a USGS dataset and stream-gage product name in
+# water-resources usage, so don't second-guess it as "gauges".
+ignore-words-list = "gage,gages"
+skip = "__pycache__,_build,.mypy_cache,.git,./htmlcov,.pixi,pixi.lock"
+
+[tool.vulture]
+paths = [ "src" ]
+ignore_names = [
+  "setUp",
+  "tearDown",
+  # pytest naming conventions.
+  "test_*",
+]
+ignore_decorators = [
+  # Properties may be invoked dynamically (getattr / dataclass).
+  "@property",
+  # pytest fixtures and parametrize args look unused but are wired up
+  # by pytest at collection time.
+  "@pytest.fixture",
+  "@pytest.mark.*",
+]
+# Dead-code detection. Pre-commit runs `vulture --quiet` and reads this
+# config; raise the bar to >=80% confidence so it stays signal, not noise.
+min_confidence = 80
+
+[tool.pyproject-fmt]
+expand_tables = [ "tool.pixi" ]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+include = [ "src" ]
+ignore = [
+  "tests/*.py",
+]
+reportMissingTypeStubs = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+
+[tool.pytest]
+ini_options.testpaths = [
+  "tests",
+]
+ini_options.addopts = [
+  "--import-mode=importlib",
+  "-v",
+  "--cov",
+  "--cov-append",
+  "--cov-branch",
+  "--cov-report=xml",
+  "--junitxml=junit.xml",
+  "--durations=5",
+  "--basetemp=.pytest_tmp",
+]
+ini_options.markers = [
+  "network: tests that make requests to external services",
+]
+
+[tool.coverage]
+run.source_pkgs = [
+  "water_ogcapi",
+]
+run.branch = true
+run.parallel = true
+paths.source = [ "src", "*/site-packages" ]
+report.omit = [
+  "**/__init__.py",
+]
+report.exclude_lines = [
+  "if sys.platform",
+  "if TYPE_CHECKING:",
+  # Listing exclude_lines drops coverage's default pragma, so restate it.
+  "pragma: no cover",
+]
+report.ignore_errors = true

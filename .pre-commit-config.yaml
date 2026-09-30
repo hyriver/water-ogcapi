@@ -87,5 +87,6 @@ repos:
     - mdformat-ruff
     - ruff
     - mdformat-config
+    - mdformat-frontmatter
     - mdformat-toc
     args: [--wrap, '88']

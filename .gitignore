@@ -60,3 +60,13 @@ ENV/
 # Misc
 .DS_Store
 junit.xml
+
+# AI agents. AGENTS.md and .agents/skills/ are the shared files; .claude/skills links to
+# the latter. The negations override a global ignore of these directories.
+!/.agents/
+!/.claude/
+/.claude/*
+!/.claude/skills
+# Claude Code skips AGENTS.md when a CLAUDE.md exists, so keep personal ones out.
+CLAUDE.md
+CLAUDE.local.md

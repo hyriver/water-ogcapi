@@ -305,6 +305,19 @@ Layering rule for anything new:
     Actions. The workflow keeps no Zensical build cache, following Zensical's advice for
     CI.
 
+### D-17: Docs pages come from their sources
+
+- **Status:** accepted.
+- **Date:** 2026-09-30.
+- **Decision:** A docs page whose text has a canonical source elsewhere includes that
+    source: the home page includes `README.md`, the contributing page `AGENTS.md`, and
+    the license page `LICENSE`. mkdocstrings generates the API reference from the
+    NumPy-style docstrings in `src/`.
+- **Why:** Each text has one source, so the published site matches the repository.
+- **Limits:** The strict build passed with a relative link to `LICENSE` in the README,
+    which has no target on the site, so links in included files must be absolute URLs.
+    Zensical's mkdocstrings support is preliminary and has no backlinks.
+
 ### D-18: The API key travels only in a header
 
 - **Status:** accepted.

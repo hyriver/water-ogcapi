@@ -41,6 +41,7 @@ optional-dependencies.dev = [
   "pytest-cov",
 ]
 optional-dependencies.docs = [
+  "mkdocstrings-python",
   "zensical",
 ]
 optional-dependencies.lint = [

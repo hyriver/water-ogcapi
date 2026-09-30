@@ -38,3 +38,11 @@ pymdownx.snippets.base_path = ["."]
 pymdownx.snippets.check_paths = true
 pymdownx.superfences = {}
 pymdownx.tasklist.custom_checkbox = true
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "numpy"
+members_order = "source"
+show_source = false

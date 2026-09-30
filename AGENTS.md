@@ -1,6 +1,7 @@
-# AGENTS.md
+# Contributing
 
-Instructions for AI coding agents working in this repository.
+Conventions for human contributors and AI coding agents working in this repository. The
+docs site renders this file as its contributing guide.
 
 ## Project
 
@@ -42,7 +43,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
 
 ## Commands
 
-Run everything through pixi. Never call bare `pytest`, `python`, or `pyright`.
+Install [pixi](https://pixi.sh) and run everything through it; each environment is
+created on first use. Never call bare `pytest`, `python`, or `pyright`.
 
 | Task                       | Command                             |
 | -------------------------- | ----------------------------------- |
@@ -89,8 +91,10 @@ the site on every PR and deploys `main` to GitHub Pages.
 - ruff auto-inserts `from __future__ import annotations`.
 - mdformat rewraps markdown to 88 columns during `pixi r lint`, but pre-commit sees only
     git-tracked files, so an untracked doc is skipped.
-- `docs/index.md` only includes `README.md`. Edit the README to change the site's home
-    page.
+- `docs/index.md` only includes `README.md`, and `docs/contributing.md` only includes
+    this file. Edit the source files. Links in both must be absolute URLs: a relative
+    link resolves against the site, where its target does not exist, and the strict
+    build does not catch it.
 - Skills live in `.agents/skills/`. `.claude/skills` is a symlink to it for Claude Code,
     which does not read `.agents/`.
 

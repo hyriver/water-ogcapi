@@ -23,6 +23,8 @@ repos:
     exclude: ^LICENSE|\.(html|csv|txt|svg|py)$
   - id: pretty-format-json
     args: [--autofix, --no-ensure-ascii, --no-sort-keys]
+    # Jupyter rewrites notebooks with 1-space indent on every save.
+    exclude: \.ipynb$
   - id: trailing-whitespace
     args: [--markdown-linebreak-ext=md]
     exclude: \.(html|svg)$

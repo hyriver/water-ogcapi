@@ -60,6 +60,8 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Changelog preview          | `pixi r changelog`                  |
 | Docs, strict build         | `pixi r docs`                       |
 | Docs, live preview         | `pixi r docs-serve`                 |
+| Notebooks, sync and run    | `pixi r nb-run`                     |
+| Notebooks, pair a new one  | `pixi r nb-pair`                    |
 
 Environments: `dev`, `test312`, `test315`, `typecheck`, `lint`, `docs`.
 
@@ -95,6 +97,18 @@ the site on every PR and deploys `main` to GitHub Pages.
     this file. Edit the source files. Links in both must be absolute URLs: a relative
     link resolves against the site, where its target does not exist, and the strict
     build does not catch it.
+- Each example in `docs/examples/` is a notebook paired with a jupytext `py:percent`
+    script; edit either and commit both, the notebook with its outputs. `pixi r nb-run`
+    syncs and executes them in the `dev` environment, which calls the live APIs, so
+    follow the live-api skill.
+- `pixi r docs` converts each notebook into a Markdown page beside it without running
+    it, so docs builds never call the live APIs. The generated `.md` files and
+    `*_files/` folders are git-ignored, apart from `index.md`. The site also publishes
+    the `.ipynb` and `.py` files, so a link to `other.ipynb` downloads the notebook;
+    link `other.md` to reach its page.
+- Each notebook gets a card in `docs/examples/index.md` with a thumbnail in
+    `docs/examples/images/`, following the existing card. The strict build fails if a
+    card links to a notebook that does not exist.
 - Skills live in `.agents/skills/`. `.claude/skills` is a symlink to it for Claude Code,
     which does not read `.agents/`.
 

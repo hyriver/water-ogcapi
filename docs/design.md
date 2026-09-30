@@ -312,11 +312,28 @@ Layering rule for anything new:
 - **Decision:** A docs page whose text has a canonical source elsewhere includes that
     source: the home page includes `README.md`, the contributing page `AGENTS.md`, and
     the license page `LICENSE`. mkdocstrings generates the API reference from the
-    NumPy-style docstrings in `src/`.
+    NumPy-style docstrings in `src/`. Example notebooks live in `docs/examples/`, each
+    paired with a jupytext `py:percent` script for review and committed with its
+    outputs. `pixi r nb-run` executes them locally, and `scripts/convert_notebooks.py`
+    converts them to Markdown pages beside them before each build without running them.
+    `zensical.toml` has no `nav` key, so the nav mirrors `docs/`. The Examples page
+    shows one card per notebook, in a Material `grid cards` block, with a thumbnail
+    committed in `docs/examples/images/`.
 - **Why:** Each text has one source, so the published site matches the repository.
-- **Limits:** The strict build passed with a relative link to `LICENSE` in the README,
-    which has no target on the site, so links in included files must be absolute URLs.
-    Zensical's mkdocstrings support is preliminary and has no backlinks.
+    Zensical renders no notebooks and runs no MkDocs hooks, so conversion is a pixi task
+    that `docs` and `docs-serve` depend on. Running notebooks in the build would call
+    the live APIs from CI (D-14). A page missing from an explicit nav still builds with
+    no warning, even in strict mode, so an explicit nav would hide a new notebook
+    silently.
+- **Rejected:** An explicit `nav`, and running notebooks during the build, for the
+    reasons above.
+- **Limits:** The generated nav sorts pages alphabetically with folders last, so
+    Examples follows License. The strict build passed with a relative link to `LICENSE`
+    in the README, which has no target on the site, so links in included files must be
+    absolute URLs. Zensical's mkdocstrings support is preliminary and has no backlinks.
+    A deleted notebook's generated page stays in a local `docs/examples/` until removed
+    by hand. Cards are kept by hand: the strict build fails on a card whose notebook is
+    missing, and nothing flags a notebook without a card.
 
 ### D-18: The API key travels only in a header
 

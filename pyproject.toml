@@ -37,11 +37,16 @@ dependencies = [
 ]
 optional-dependencies.dev = [
   "git-cliff",
+  "ipykernel",
+  "jupytext",
+  "matplotlib",
+  "nbconvert",
   "pytest",
   "pytest-cov",
 ]
 optional-dependencies.docs = [
   "mkdocstrings-python",
+  "nbconvert",
   "zensical",
 ]
 optional-dependencies.lint = [
@@ -86,10 +91,19 @@ release = { cmd = "git tag -a {{ version }} -m {{ version }} && git push && git 
 [tool.pixi.feature.dev.tasks]
 changelog = "git cliff -c pyproject.toml --unreleased"
 changelog-update = "git cliff -c pyproject.toml -o CHANGELOG.md"
+# Sync the py:percent scripts to their paired notebooks.
+nb-sync = "jupytext --sync docs/examples/*.py"
+# Execute every notebook in place. They call the live APIs.
+nb-execute = "jupyter nbconvert --to notebook --execute --inplace docs/examples/*.ipynb"
+# Sync, then execute: run before committing a notebook.
+nb-run = { depends-on = [ "nb-sync", "nb-execute" ] }
+# One-time pairing of a new .ipynb with a py:percent script.
+nb-pair = "jupytext --set-formats 'ipynb,py:percent' docs/examples/*.ipynb"
 
 [tool.pixi.feature.docs.tasks]
-docs = "zensical build --clean --strict"
-docs-serve = "zensical serve"
+notebooks = "python scripts/convert_notebooks.py"
+docs = { cmd = "zensical build --clean --strict", depends-on = [ "notebooks" ] }
+docs-serve = { cmd = "zensical serve", depends-on = [ "notebooks" ] }
 
 [tool.pixi.feature.lint.tasks]
 lint = "pre-commit run --all-files"
@@ -149,6 +163,15 @@ lint.ignore = [
   "TC003",   # stdlib typing-only imports are cheap, keep simple for docs
   "TRY301",  # raising within try/except is fine for us
 ]
+lint.per-file-ignores."docs/examples/*.{ipynb,py}" = [
+  "B018",   # a bare expression displays a value in a notebook
+  "E402",   # imports sit in the cell that first needs them
+  "ERA001", # jupytext headers look like commented-out code
+  "I002",   # no __future__ import in example notebooks
+  "INP001", # docs/examples is not a package
+  "T201",   # printing is how notebooks show results
+]
+lint.per-file-ignores."scripts/*.py" = [ "INP001" ]
 lint.per-file-ignores."tests/*.py" = [
   "B015",
   "B017",
@@ -181,7 +204,8 @@ lint.isort.required-imports = [ "from __future__ import annotations" ]
 # "gages" / "gages-II" is a USGS dataset and stream-gage product name in
 # water-resources usage, so don't second-guess it as "gauges".
 ignore-words-list = "gage,gages"
-skip = "__pycache__,_build,.mypy_cache,.git,./htmlcov,.pixi,pixi.lock"
+# Notebook outputs hold base64 images that trip codespell.
+skip = "__pycache__,_build,.mypy_cache,.git,./htmlcov,.pixi,pixi.lock,*.ipynb"
 
 [tool.vulture]
 paths = [ "src", "tests" ]
@@ -256,3 +280,8 @@ report.exclude_lines = [
   "pragma: no cover",
 ]
 report.ignore_errors = true
+
+[tool.jupytext]
+formats = "ipynb,py:percent"
+notebook_metadata_filter = "kernelspec,jupytext"
+cell_metadata_filter = "-all"

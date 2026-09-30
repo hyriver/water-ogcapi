@@ -5,6 +5,8 @@ site_url = "https://docs.hyriver.io/water-ogcapi/"
 repo_url = "https://github.com/hyriver/water-ogcapi"
 repo_name = "hyriver/water-ogcapi"
 
+# No nav key: the nav mirrors docs/, so a new example notebook appears without an edit.
+
 [project.theme]
 features = [
   "content.code.copy",
@@ -30,6 +32,7 @@ toggle.name = "Switch to light mode"
 [project.markdown_extensions]
 admonition = {}
 attr_list = {}
+md_in_html = {}
 toc.permalink = true
 pymdownx.highlight.anchor_linenums = true
 pymdownx.inlinehilite = {}

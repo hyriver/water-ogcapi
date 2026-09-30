@@ -59,6 +59,10 @@ ENV/
 
 # Zensical build output
 **/site/
+# Pages generated from the notebooks in docs/examples/ by `pixi r docs`
+/docs/examples/*.md
+!/docs/examples/index.md
+/docs/examples/*_files/
 
 # Misc
 .DS_Store

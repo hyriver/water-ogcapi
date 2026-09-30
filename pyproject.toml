@@ -40,6 +40,9 @@ optional-dependencies.dev = [
   "pytest",
   "pytest-cov",
 ]
+optional-dependencies.docs = [
+  "zensical",
+]
 optional-dependencies.lint = [
   "codespell",
   "pre-commit",
@@ -83,6 +86,10 @@ release = { cmd = "git tag -a {{ version }} -m {{ version }} && git push && git 
 changelog = "git cliff -c pyproject.toml --unreleased"
 changelog-update = "git cliff -c pyproject.toml -o CHANGELOG.md"
 
+[tool.pixi.feature.docs.tasks]
+docs = "zensical build --clean --strict"
+docs-serve = "zensical serve"
+
 [tool.pixi.feature.lint.tasks]
 lint = "pre-commit run --all-files"
 pcupdate = "pre-commit autoupdate"
@@ -116,6 +123,7 @@ test312 = { features = [ "test", "py312" ] }
 test315 = { features = [ "test", "py315" ] }
 typecheck = { features = [ "typecheck", "py314" ] }
 lint = { features = [ "lint", "py314" ], no-default-feature = true }
+docs = { features = [ "docs", "py314" ], no-default-feature = true }
 
 [tool.ruff]
 target-version = "py312"

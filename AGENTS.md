@@ -56,11 +56,15 @@ Run everything through pixi. Never call bare `pytest`, `python`, or `pyright`.
 | Run Python                 | `pixi r -e dev python ...`          |
 | Spell check (writes fixes) | `pixi r spell`                      |
 | Changelog preview          | `pixi r changelog`                  |
+| Docs, strict build         | `pixi r docs`                       |
+| Docs, live preview         | `pixi r docs-serve`                 |
 
-Environments: `dev`, `test312`, `test315`, `typecheck`, `lint`.
+Environments: `dev`, `test312`, `test315`, `typecheck`, `lint`, `docs`.
 
 A change is done when lint, typecheck, and the offline tests on both test312 and test315
-pass. CI (`.github/workflows/ci.yml`) runs exactly these.
+pass, plus `pixi r docs` when it touches `docs/`, `README.md`, or `zensical.toml`.
+`.github/workflows/ci.yml` runs the first three, and `.github/workflows/docs.yml` builds
+the site on every PR and deploys `main` to GitHub Pages.
 
 ## Code style
 
@@ -85,6 +89,8 @@ pass. CI (`.github/workflows/ci.yml`) runs exactly these.
 - ruff auto-inserts `from __future__ import annotations`.
 - mdformat rewraps markdown to 88 columns during `pixi r lint`, but pre-commit sees only
     git-tracked files, so an untracked doc is skipped.
+- `docs/index.md` only includes `README.md`. Edit the README to change the site's home
+    page.
 - Skills live in `.agents/skills/`. `.claude/skills` is a symlink to it for Claude Code,
     which does not read `.agents/`.
 

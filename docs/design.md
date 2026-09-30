@@ -289,6 +289,22 @@ Layering rule for anything new:
     claim, and the defects recorded in L-01 to L-05.
 - **Rejected:** Committing the prototype as a baseline and extending it.
 
+### D-16: Documentation site on Zensical
+
+- **Status:** accepted.
+- **Date:** 2026-09-30.
+- **Decision:** The site builds with Zensical from `zensical.toml` in the pixi `docs`
+    environment. `pixi r docs` runs a strict build, and `.github/workflows/docs.yml`
+    runs it on every PR and deploys `main` to GitHub Pages at
+    `https://docs.hyriver.io/water-ogcapi/`. `docs/index.md` only includes `README.md`
+    through `pymdownx.snippets`, so the home page and the README cannot diverge.
+- **Why:** Chosen by the maintainer. The strict build fails on warnings, so a broken
+    internal link or a missing snippet fails the PR. External URLs are not checked.
+- **Limits:** Zensical was at 0.0.66 when adopted, so config keys may change between
+    releases. Pages deploys only after the repository's Pages source is set to GitHub
+    Actions. The workflow keeps no Zensical build cache, following Zensical's advice for
+    CI.
+
 ### D-18: The API key travels only in a header
 
 - **Status:** accepted.

@@ -57,6 +57,9 @@ ENV/
 .pixi
 .pixi.lock
 
+# Zensical build output
+**/site/
+
 # Misc
 .DS_Store
 junit.xml

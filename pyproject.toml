@@ -175,7 +175,7 @@ ignore-words-list = "gage,gages"
 skip = "__pycache__,_build,.mypy_cache,.git,./htmlcov,.pixi,pixi.lock"
 
 [tool.vulture]
-paths = [ "src" ]
+paths = [ "src", "tests" ]
 ignore_names = [
   "setUp",
   "tearDown",

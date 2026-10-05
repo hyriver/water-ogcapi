@@ -111,6 +111,11 @@ the site on every PR and deploys `main` to GitHub Pages.
     card links to a notebook that does not exist.
 - Skills live in `.agents/skills/`. `.claude/skills` is a symlink to it for Claude Code,
     which does not read `.agents/`.
+- The ruleset on `main` names its required checks by job: `Test (test312)`,
+    `Test (test315)`, `typecheck`, and `lint` from `ci.yml`, and `build` from
+    `docs.yml`. Renaming a job or a matrix environment leaves the old name unreported,
+    so the renaming PR and every PR after it wait forever. Swap the name under
+    `Settings > Rules > Rulesets > Protect main` as that PR merges.
 
 ## Git
 
@@ -119,7 +124,8 @@ the site on every PR and deploys `main` to GitHub Pages.
 - Subject under 72 characters, imperative mood.
 - Every change reaches `main` through a PR from its own branch, named
     `<type>/<short-description>` (`fix/params-keep-url-query`). A ruleset blocks direct
-    pushes, force pushes, and deletion of `main`.
+    pushes, force pushes, and deletion of `main`, and merges a PR only after its CI and
+    docs checks pass.
 - PRs fill in `.github/pull_request_template.md`. A PR names the issue it finishes with
     `Closes #N` in its description, which closes the issue and moves its card on the
     [project board](https://github.com/orgs/hyriver/projects/2) to Done when the PR

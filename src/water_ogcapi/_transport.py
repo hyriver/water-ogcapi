@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
@@ -16,6 +17,7 @@ from urllib.parse import parse_qsl, unquote, unquote_plus, urlencode, urlsplit
 
 import httpx2
 
+from water_ogcapi._logging import logger
 from water_ogcapi.exceptions import RateLimitError, ServiceError
 
 if TYPE_CHECKING:
@@ -224,6 +226,7 @@ def _finalize(resp: httpx2.Response, *, attempts: int) -> Response:
     url = str(resp.url)
     headers = dict(resp.headers.items())
     if resp.status_code < 300 or resp.status_code == 304:
+        logger.debug("GET %s returned HTTP %d after %d attempt(s)", url, resp.status_code, attempts)
         return Response(url=url, status=resp.status_code, headers=headers, content=resp.content)
     if resp.status_code < 400:
         # follow_redirects is off so the caller never leaks credentials to another
@@ -450,15 +453,34 @@ class Transport:
                     # Retrying earlier than asked would burn the remaining attempts
                     # against a window that has not reopened. Hand the wait to the caller.
                     return _finalize(resp, attempts=attempt + 1)
-                await asyncio.sleep(self._delay(attempt) if wait is None else wait)
+                delay = self._delay(attempt) if wait is None else wait
+                logger.log(
+                    logging.WARNING if resp.status_code == 429 else logging.INFO,
+                    "GET %s returned HTTP %d; retry %d of %d in %.1f s",
+                    url,
+                    resp.status_code,
+                    attempt + 1,
+                    self.max_retries,
+                    delay,
+                )
+                await asyncio.sleep(delay)
                 continue
             if final or not transient:
                 # Raised outside the except block: a chained httpx2 error keeps its
                 # request, whose headers hold the API key unredacted.
                 raise ServiceError(failure, url, attempts=attempt + 1)
+            delay = self._delay(attempt)
+            logger.info(
+                "GET %s failed with %s; retry %d of %d in %.1f s",
+                url,
+                failure,
+                attempt + 1,
+                self.max_retries,
+                delay,
+            )
             # ponytail: no jitter, so concurrent retries stay in lockstep.
             # Add it if offset fan-out (docs/design.md D-05) ever retries in bulk.
-            await asyncio.sleep(self._delay(attempt))
+            await asyncio.sleep(delay)
         # Unreachable: the last attempt returns or raises. Keeps the return type total.
         raise AssertionError  # pragma: no cover
 

@@ -366,6 +366,39 @@ Layering rule for anything new:
 - **Limits:** One call can take up to `(max_retries + 1) * timeout` plus the backoff
     waits.
 
+### D-20: Package logger isolated from the root logger
+
+- **Status:** accepted.
+- **Date:** 2026-10-05.
+- **Decision:** `water_ogcapi._logging` defines the `water_ogcapi` logger at DEBUG with
+    `propagate = False` and a stderr handler at WARNING. `configure_logger()`, exported
+    from the package, replaces that setup on each call: an argument left out returns to
+    its default. It writes files as UTF-8, builds the new handlers before removing the
+    old ones so a rejected call changes nothing, and touches only the handlers it named.
+    A lock serializes calls, and a retired handler that fails to close does not stop the
+    swap. The transport logs a retry at INFO, a 429 retry at WARNING, and a successful
+    request at DEBUG. No record carries request headers (Q-08).
+- **Why:** Isolation was chosen by the maintainer: a package that configures the root
+    logger neither captures nor floods these records, and Jupyter shows each record
+    once. Every call is declarative because the template mixed the two: a call that only
+    raised verbosity turned file logging off while the console level carried over. Under
+    a locale that cannot encode a record, such as cp1252 on Windows before Python 3.15,
+    logging drops the record and prints a traceback, hence UTF-8.
+- **Rejected:** loguru and structlog, which add runtime dependencies (D-09) and route
+    records through their own pipelines. No handler plus propagation, the library
+    default in the Python logging HOWTO, for the isolation reason above. Arguments that
+    keep their value between calls, which need a sentinel to turn file logging off.
+- **Limits:** Root handlers never see these records, so AWS Lambda's handler, pytest's
+    `caplog`, and an application's own logging config miss them unless the caller
+    attaches a handler to `logging.getLogger("water_ogcapi")`. The logger stays at
+    DEBUG, so a DEBUG call builds a record even when no handler takes it. Handlers write
+    on the event loop's thread; move file output behind a `QueueHandler` if logging ever
+    stalls offset fan-out. A record logged on another thread while `configure_logger()`
+    swaps handlers can reach the retired file handler, which reopens its file in append
+    mode and leaks that handle.
+- **Check:** `test_logs_name_each_retry_and_keep_the_key_out` and
+    `tests/test_logging.py`.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -525,10 +558,11 @@ Do not state these as fact until a live response confirms them:
 
 ### Q-08: Release security gate
 
-Not built. Scope: env-var key handling, the redaction invariant (D-04), no logging of
-request headers, redirect behavior (D-12), a dependency audit in CI, and a CI check that
-no fixture or committed file contains a key-shaped string. Recorded fixtures carry the
-same credential risk as `QueryResult`, so scrub auth at record time.
+Not built, apart from the check that no log record carries request headers (D-20).
+Scope: env-var key handling, the redaction invariant (D-04), no logging of request
+headers, redirect behavior (D-12), a dependency audit in CI, and a CI check that no
+fixture or committed file contains a key-shaped string. Recorded fixtures carry the same
+credential risk as `QueryResult`, so scrub auth at record time.
 
 ### Q-09: orjson for decoding large responses
 

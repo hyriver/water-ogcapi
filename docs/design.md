@@ -341,7 +341,9 @@ Layering rule for anything new:
 - **Date:** 2026-09-30.
 - **Decision:** The key goes in the `X-Api-Key` request header. `Transport.get` raises
     `ValueError` for an `api_key` query parameter, in any letter case, whether it comes
-    in `params` or already sits in the URL, before sending anything.
+    in `params` or already sits in the URL, before sending anything. It reads query
+    names percent-decoded and split on both `&` and `;`, since some servers accept
+    either separator.
 - **Why:** A query parameter puts the key in `Response.url`, in `ServiceError` messages,
     in a redirect's echoed `Location`, and in the URL httpx2 logs at INFO for every
     request. A header stays out of all four; L-09 covers the error chain.

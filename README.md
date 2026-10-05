@@ -58,7 +58,7 @@ design decisions behind the library. Example notebooks arrive with the query API
 - [ ] An in-memory metadata cache that revalidates with `ETag`.
 - [ ] A quota governor that slows down before the rate limit runs out.
 - [ ] Page-level checkpoint and resume.
-- [ ] A package logger with `configure_logger()`: console level, an optional log file
+- [x] A package logger with `configure_logger()`: console level, an optional log file
     with its own level and mode, and a file-only switch.
 - [ ] Decide whether orjson decodes large responses, as a dependency or an optional
     extra (open question Q-09 in the design decisions).

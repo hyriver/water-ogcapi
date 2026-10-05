@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Any
 import httpx2
 import pytest
 
+from water_ogcapi._logging import logger
 from water_ogcapi._transport import (
     MAX_DELTA_SECONDS,
     MAX_SLEEP,
@@ -300,6 +302,61 @@ def test_transport_error_retries_then_raises() -> None:
         asyncio.run(Transport(transport=httpx2.MockTransport(handler)).get(URL))
     assert len(attempts) == 4, "initial attempt plus three retries"
     assert excinfo.value.attempts == 4
+
+
+class _Collect(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@pytest.mark.usefixtures("no_sleep")
+def test_logs_name_each_retry_and_keep_the_key_out() -> None:
+    """Request headers never reach a log record, ours or httpx2's (D-20, Q-08)."""
+    outcomes: list[httpx2.Response | httpx2.TransportError] = [
+        httpx2.ConnectError("boom"),
+        httpx2.Response(503),
+        httpx2.Response(429, headers={"Retry-After": "1"}),
+        httpx2.Response(200, json={}),
+    ]
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, httpx2.TransportError):
+            outcome.request = request
+            raise outcome
+        return outcome
+
+    collect, http_logger = _Collect(), logging.getLogger("httpx2")
+    level = http_logger.level
+    logger.addHandler(collect)
+    http_logger.addHandler(collect)
+    http_logger.setLevel(logging.DEBUG)
+    try:
+        asyncio.run(
+            Transport(transport=httpx2.MockTransport(handler)).get(
+                f"{URL}?f=json", params={"limit": "5"}, headers={"X-Api-Key": "SECRET"}
+            )
+        )
+    finally:
+        logger.removeHandler(collect)
+        http_logger.removeHandler(collect)
+        http_logger.setLevel(level)
+
+    ours = [r for r in collect.records if r.name == "water_ogcapi"]
+    assert [r.levelname for r in ours] == ["INFO", "INFO", "WARNING", "DEBUG"]
+    messages = [r.getMessage() for r in ours]
+    assert "failed with ConnectError: boom; retry 1 of 3" in messages[0]
+    assert "returned HTTP 503; retry 2 of 3" in messages[1]
+    assert "returned HTTP 429; retry 3 of 3 in 1.0 s" in messages[2]
+    assert messages[3].endswith("?f=json&limit=5 returned HTTP 200 after 4 attempt(s)")
+    assert any(r.name.startswith("httpx2") for r in collect.records)
+    for record in collect.records:
+        assert "SECRET" not in record.getMessage()
+        assert "SECRET" not in repr(vars(record))
 
 
 @pytest.mark.parametrize(

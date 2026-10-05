@@ -347,6 +347,15 @@ def test_key_in_query_is_rejected_before_sending(url: str, params: dict[str, str
     assert "SECRET" not in str(excinfo.value)
 
 
+@pytest.mark.parametrize("url", [f"{URL}?ap\ti_key=SECRET", f"{URL}?api\n_key=SECRET"])
+def test_key_split_by_a_control_character_is_rejected(url: str) -> None:
+    """httpx2 refuses these URLs, and the ServiceError it causes prints the URL, key and all."""
+    mock, seen = responder(httpx2.Response(200, json={}))
+    with pytest.raises(ValueError, match="X-Api-Key header"):
+        asyncio.run(Transport(transport=mock).get(url))
+    assert seen == []
+
+
 def test_timeout_bounds_the_whole_attempt() -> None:
     calls: list[int] = []
 

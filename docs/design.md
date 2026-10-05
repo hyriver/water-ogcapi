@@ -424,7 +424,7 @@ Layering rule for anything new:
 - **Check:** `test_only_connection_failures_are_retried` and
     `test_undecodable_body_is_typed_and_not_retried`.
 
-### L-07: httpx2 header and response quirks
+### L-07: httpx2 request, header, and response quirks
 
 - `Headers.items()` comma-joins repeated headers.
 - Header values decode as ISO-8859-1, so `"²".isdigit()` is `True` while `int("²")`
@@ -433,8 +433,13 @@ Layering rule for anything new:
     be built inside the mock handler.
 - An HTTP-date in `Retry-After` without a zone is read as UTC. Reading it as local time
     puts the wait out by the UTC offset.
-- **Check:** `test_digit_shaped_remaining_does_not_crash` and
-    `test_parse_retry_after_zoneless_date_is_read_as_utc`.
+- `params=` replaces the URL's whole query whenever it is not `None`, even `{}`, so a
+    `next` link passed with params would lose its paging state. `URL.copy_merge_params`
+    keeps the entries but re-encodes them, turning `%FF` in a cursor into `%EF%BF%BD`
+    and `x=1;y=2` into `x=1%3By%3D2`. `Transport.get` appends params to the raw query.
+- **Check:** `test_digit_shaped_remaining_does_not_crash`,
+    `test_parse_retry_after_zoneless_date_is_read_as_utc`, and
+    `test_params_merge_into_the_url_query`.
 
 ### L-08: Connection limits do not bound HTTP/2 concurrency
 

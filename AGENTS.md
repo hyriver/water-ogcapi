@@ -117,8 +117,11 @@ the site on every PR and deploys `main` to GitHub Pages.
 - Conventional Commits: `<type>[optional scope]: <description>`, with type one of
     `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
 - Subject under 72 characters, imperative mood.
-- PRs target `main`. A PR names the issue it finishes with `Closes #N` in its
-    description, which closes the issue and moves its card on the
+- Every change reaches `main` through a PR from its own branch, named
+    `<type>/<short-description>` (`fix/params-keep-url-query`). A ruleset blocks direct
+    pushes, force pushes, and deletion of `main`.
+- PRs fill in `.github/pull_request_template.md`. A PR names the issue it finishes with
+    `Closes #N` in its description, which closes the issue and moves its card on the
     [project board](https://github.com/orgs/hyriver/projects/2) to Done when the PR
     merges.
 - git-cliff generates the changelog from commit messages. Do not edit `CHANGELOG.md` by

@@ -73,7 +73,8 @@ def _reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
         # Fail closed: the InvalidURL error that follows would echo the raw URL.
         leaked = _mentions_credential(url)
     else:
-        query = parse_qsl(parts.query, keep_blank_values=True)
+        # Some servers also split the query on ";", where parse_qsl splits only on "&".
+        query = parse_qsl(parts.query.replace(";", "&"), keep_blank_values=True)
         names |= {name.lower() for name, _ in query}
         # A fragment has no key=value grammar ("#?api_key=", "#view?api_key="), so
         # match the name anywhere in it.

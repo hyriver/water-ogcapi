@@ -311,6 +311,8 @@ def test_transport_errors_keep_the_key_out(exc: httpx2.TransportError) -> None:
         (URL, {"API_KEY": "SECRET"}),
         (f"{URL}?limit=2&api_key=SECRET", None),
         (f"{URL}?API%5FKEY=SECRET", None),
+        (f"{URL}?limit=2;api_key=SECRET", None),
+        (f"{URL}?limit=2;API%5Fkey=SECRET", None),
         (f"{URL}#api_key=SECRET", None),
         (f"{URL}#?api_key=SECRET", None),
         (f"{URL}#section?API%5Fkey=SECRET", None),

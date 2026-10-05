@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any, Self
-from urllib.parse import parse_qsl, unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, unquote_plus, urlencode, urlsplit
 
 import httpx2
 
@@ -81,6 +81,20 @@ def _reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
     if leaked or CREDENTIAL_PARAMS & names:
         msg = "pass the API key in the X-Api-Key header, not as a query parameter"
         raise ValueError(msg)
+
+
+def _merge_query(url: str, params: Mapping[str, str]) -> httpx2.URL:
+    """Append ``params`` to the query in ``url``, keeping its other entries byte for byte.
+
+    httpx2's ``params=`` replaces the whole query, which strips the paging state from a
+    next link, and ``URL.copy_merge_params`` re-encodes it, which turns ``%FF`` in an
+    opaque cursor into ``%EF%BF%BD``. An existing entry named in ``params`` is dropped.
+    """
+    parsed = httpx2.URL(url)
+    query = parsed.query.decode("ascii")
+    entries = query.split("&") if query else []
+    kept = [e for e in entries if unquote_plus(e.partition("=")[0]) not in params]
+    return parsed.copy_with(query="&".join([*kept, urlencode(params)]).encode("ascii"))
 
 
 def _describe(exc: Exception) -> str:
@@ -378,7 +392,8 @@ class Transport:
         url : str
             Absolute URL to fetch.
         params : mapping of str to str, optional
-            Query parameters. Credentials are not allowed here.
+            Query parameters, merged into any query already in ``url``. A name in both
+            takes its value from ``params``. Credentials are not allowed here.
         headers : mapping of str to str, optional
             Request headers, credentials included.
 
@@ -413,9 +428,11 @@ class Transport:
                         # or is still closing; httpx2 would raise a bare RuntimeError.
                         msg = "transport closed while the request waited"
                         raise ServiceError(msg, url, attempts=attempt)
+                    # Parsed inside the try so a malformed URL raises a typed ServiceError.
+                    target = _merge_query(url, params) if params else url
                     # httpx2 times each operation, so a body trickling in under the
                     # read timeout would otherwise hold the permit indefinitely.
-                    resp = await client.get(url, params=params, headers=headers)
+                    resp = await client.get(target, headers=headers)
             except TimeoutError:
                 failure = f"TimeoutError: attempt exceeded {self.timeout} s"
                 transient = True

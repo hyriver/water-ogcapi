@@ -92,6 +92,26 @@ def test_get_returns_detached_response() -> None:
     assert str(seen[0].url) == f"{URL}?limit=2"
 
 
+@pytest.mark.parametrize(
+    ("query", "params", "expected"),
+    [
+        ("f=json&limit=10&offset=20", {"limit": "5"}, b"f=json&offset=20&limit=5"),
+        ("f=json&limit=10&offset=20", {}, b"f=json&limit=10&offset=20"),
+        ("f=json&limit=10&offset=20", None, b"f=json&limit=10&offset=20"),
+        ("cursor=%FF;x=1&flag&a=b=c", {"q": "a b"}, b"cursor=%FF;x=1&flag&a=b=c&q=a+b"),
+        ("&flag&&x=1&", {"q": "1"}, b"&flag&&x=1&&q=1"),
+        ("", {"q": "1"}, b"q=1"),
+    ],
+)
+def test_params_merge_into_the_url_query(
+    query: str, params: dict[str, str] | None, expected: bytes
+) -> None:
+    """A next link keeps its paging state, byte for byte, when params come with it (L-07)."""
+    mock, seen = responder(httpx2.Response(200, json={}))
+    asyncio.run(Transport(transport=mock).get(f"{URL}?{query}", params=params))
+    assert seen[0].url.query == expected
+
+
 def test_request_headers_are_sent() -> None:
     """A dropped key header still succeeds, against the unkeyed quota (L-03)."""
     mock, seen = responder(httpx2.Response(200, json={}))

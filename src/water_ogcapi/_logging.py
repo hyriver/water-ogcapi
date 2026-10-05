@@ -62,7 +62,8 @@ def configure_logger(
     Each call states the whole configuration: an argument left out returns to its
     default, so ``configure_logger(level="DEBUG")`` after ``configure_logger(file=...)``
     turns file logging off. ``configure_logger()`` restores the import-time setup, a
-    console handler on stderr at WARNING.
+    console handler on stderr at WARNING. https://docs.hyriver.io/water-ogcapi/logging/
+    covers applications with their own logging, AWS Lambda, and tests.
 
     Parameters
     ----------

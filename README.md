@@ -42,8 +42,9 @@ describe it.
 
 ## Documentation
 
-The [documentation](https://docs.hyriver.io/water-ogcapi/) has the API reference and the
-design decisions behind the library. Example notebooks arrive with the query API.
+The [documentation](https://docs.hyriver.io/water-ogcapi/) has the API reference, a
+[logging guide](https://docs.hyriver.io/water-ogcapi/logging/), and the design decisions
+behind the library. Example notebooks arrive with the query API.
 
 ## Roadmap
 

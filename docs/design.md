@@ -492,6 +492,50 @@ Layering rule for anything new:
     aggregate and `json()` must apply the same decoder, which an optional orjson (Q-09)
     has to respect. Real NWIS page sizes are unmeasured.
 
+### D-24: A failed page is reported by the request that failed
+
+- **Status:** accepted.
+
+- **Date:** 2026-10-07.
+
+- **Decision:** A failure point is the failed request's URL as sent, query included.
+    Under fan-out the offset sits in that query, so it needs no field of its own. The
+    transport raises every `ServiceError` with that URL, which a timeout or connection
+    failure does not do yet (#7 changes it).
+
+    `iter_pages()` raises `PaginationError` when one or more page requests fail. Its
+    `failures` holds one `ServiceError` per failed request, each with its status,
+    `attempts`, and `retry_after`, plus `remaining` on a `RateLimitError`. It holds no
+    page, since the caller already has every page that was yielded. Under `next`-link
+    traversal it holds one failure, and the pages after it are undiscovered: neither
+    fetched nor failed. Under fan-out (#14) it is raised after every page that succeeded
+    has been yielded, so a middle failure leaves the later successes with the caller
+    (L-02).
+
+    `collect()` raises `PartialResultsError`, a `PaginationError` subclass, when at least
+    one page succeeded. Its `result` is a `QueryResult` of every page that succeeded,
+    with `completeness` `limited` and a failure stop reason (D-22). When no page
+    succeeded, `collect()` raises the `PaginationError`.
+
+    Under `next`-link traversal, each page's `next` link is the resume point after that
+    page, so a caller can checkpoint after every page without waiting for an exception.
+    A page without one ends traversal (D-05), so it leaves nothing to resume. Under
+    fan-out, the resume point is the set of failed and unsent requests, which #14
+    defines. Page-level resume (#21) builds on both.
+
+- **Why:** Offsets exist only under fan-out (D-05), and a URL is the failure point both
+    modes share. A timeout or connection failure currently carries the URL the transport
+    was called with, without the merged `params`, so it cannot replay a first-page
+    request. A serverless function can be stopped without an exception, so the resume
+    point has to exist after each page.
+
+- **Rejected:** Offsets with a fan-out-only error, which gives sequential traversal
+    weaker recovery. `iter_pages()` raising `PartialResultsError` with the fetched
+    pages, which forces it to keep what it streamed (D-02).
+
+- **Limits:** A resume replays against a collection that may have changed, and a cursor
+    in a `next` link may expire.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -626,6 +670,8 @@ a single-item fetch has no pagination at all. Proposal: `iter_pages()` yields `P
 or a `QueryResult` with `pagination=None`. Settle before coding.
 
 ### Q-04: Failure points in `PartialResultsError`
+
+**Status:** answered by D-24.
 
 Offsets exist only under fan-out (D-05). Under `next`-link traversal a failure point is
 a page URL or cursor. Either generalize the field to failed page URLs or document the

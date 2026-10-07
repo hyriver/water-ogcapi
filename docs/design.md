@@ -469,6 +469,29 @@ Layering rule for anything new:
 - **Limits:** `complete` still cannot prove that no feature was swapped between pages
     (D-03).
 
+### D-23: Kept pages hold bytes, so no page shares objects with the aggregate
+
+- **Status:** accepted.
+- **Date:** 2026-10-07.
+- **Decision:** `collect(keep_pages=True)` keeps each page's response bytes in
+    `Page.content` and sets `Page.body` to `None` (D-22). `Page.json()` decodes
+    `content` into a fresh dict on each call and caches nothing, so no kept page shares
+    an object with `QueryResult.geojson`. The bytes are the response body after HTTP
+    content decoding (gzip removed) and before JSON decoding. `params`, `headers`, and
+    `links` are immutable copies; `body` is the one mutable field, and the caller owns
+    it. `repr` shows neither `body` nor `content`.
+- **Why:** Editing the aggregate in place, as a notebook user normalizing properties
+    would, must not rewrite the page evidence. On a synthetic 10,000-feature page of 3.0
+    MB of JSON, the decoded dict took 11.7 MB (tracemalloc), so keeping bytes costs
+    about a quarter of keeping a second decoded copy.
+- **Rejected:** Documenting the aliasing. A `copy.deepcopy` (26 ms on that page) or a
+    second decode (14 ms) at retention, each of which holds a second decoded tree for
+    the life of the result. A cached decoded property, which brings that tree back.
+- **Limits:** Kept bytes still grow with every page, so memory-capped callers stream
+    with `iter_pages()`. Each `json()` call decodes again. The decode that builds the
+    aggregate and `json()` must apply the same decoder, which an optional orjson (Q-09)
+    has to respect. Real NWIS page sizes are unmeasured.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -586,6 +609,8 @@ otherwise. The alternative is a companion package. Return types that change with
 installed environment are rejected as API design.
 
 ### Q-02: Page bodies alias the aggregate
+
+**Status:** answered by D-23.
 
 `frozen=True` does not freeze nested dicts. If `pages[].body` holds the same feature
 dicts as `geojson`, the page evidence can be mutated through the aggregate. Either copy

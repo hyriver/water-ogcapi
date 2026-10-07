@@ -30,6 +30,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
 
 - `src/water_ogcapi/_transport.py` is the only module that imports `httpx2` (D-01).
 - `iter_pages()` is the primitive and `collect()` builds on it (D-02).
+- NWIS pages only through `next` links; `sorted-offset` runs only where a service
+    profile allows it (D-26).
 - Query methods return payload plus evidence (`Page`, `QueryResult`), never a bare
     GeoJSON dict (D-03).
 - Any type that carries request headers or params redacts credentials at construction,

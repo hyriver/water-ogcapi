@@ -807,7 +807,9 @@ Do not state these as fact until a live response confirms them:
 ### Q-08: Release security gate
 
 Partly built. No log record carries request headers (D-20). CI runs `pixi r audit`,
-which resolves the runtime dependencies from PyPI and checks them with pip-audit. The
+which resolves the runtime dependencies from PyPI with uv and checks them with pysentry
+against the PyPA, PyPI, and OSV advisories. Without uv, pysentry audits only the direct
+dependencies at their lower bounds, so `uv` stays in the `lint` environment. The
 `key-shaped-string` pre-commit hook fails lint on any committed text holding a token
 shaped like a USGS key: 40 letters and digits mixing upper case, lower case, and digits.
 It misses an encoded key, a key of another shape, and a key glued to `/`, `-`, or `_`:

@@ -134,7 +134,7 @@ Layering rule for anything new:
 
 ### D-05: Follow `next` links; offset fan-out only where verified
 
-- **Status:** accepted.
+- **Status:** accepted. D-26 names the services that allow fan-out.
 - **Decision:** Pagination follows `next` links by default. Concurrent offset fan-out is
     enabled per service only after that service's result ordering is verified, gated by
     its capability profile (D-13), with count and identifier checks and a sequential
@@ -232,7 +232,7 @@ Layering rule for anything new:
 
 ### D-13: Per-service capability profiles
 
-- **Status:** accepted; values unverified (Q-07).
+- **Status:** accepted; values unverified (Q-07). D-26 replaces the GeoConnex sort key.
 - **Decision:** Each service class declares a profile: auth header convention, page-size
     caps, sort key, whether offset fan-out is verified (D-05), and whether rate-limit
     headers exist (D-06).
@@ -549,6 +549,55 @@ Layering rule for anything new:
     Return types that change with the installed environment (Q-01).
 - **Limits:** conda-forge packages have no extras (D-01), so a conda user installs
     pandas and geopandas alongside the package.
+
+### D-26: Two pagination strategies, picked per service
+
+- **Status:** accepted.
+
+- **Date:** 2026-10-07.
+
+- **Decision:** `iter_pages()` takes a pagination strategy, and each service profile
+    (D-13) names its default and the strategies it allows.
+
+    - `next` follows the server's `next` links one page at a time (D-05). NWIS links carry
+        an opaque `cursor`; FabricData and GeoConnex links carry `offset`. Every service
+        allows it.
+    - `sorted-offset` sorts by the collection's `x-ogc-role: id` property, read from
+        `/queryables`, and requests pages by `offset`, so they can be fetched concurrently
+        with D-05's count and identifier checks. `numberMatched` sets the page count.
+        FabricData and GeoConnex allow it.
+
+    NWIS allows only `next`. Where a profile allows both, the caller picks one per query,
+    so the benchmarks (#24) can compare them. The `x-ogc-role: id` property replaces
+    D-13's fixed `uri` sort key for GeoConnex.
+
+    `sorted-offset` runs on a collection only when its `/queryables` names an
+    `x-ogc-role: id` property and the first page reports `numberMatched`. Otherwise the
+    query falls back to `next` before yielding anything. Offsets step by `limit`, kept
+    at or below the profile's page cap (D-13). A page shorter than `limit` before the
+    last one, a `numberMatched` that differs from the first page's, or an identifier
+    seen twice stops the traversal with a `PaginationError` (D-24). Nothing falls back
+    once a page has been yielded, since a streamed page cannot be taken back (D-02).
+
+- **Why:** On NWIS, `sortby` returns only the first page: following its `offset` link
+    returns 400. USGS confirmed on 2026-10-07 that this is intended, and that callers
+    who need more than 50,000 sorted features sort them locally. The USGS docs guarantee
+    no result order, so NWIS offset pages without `sortby` can overlap or skip. On
+    FabricData `gagesii` (two pages, sorted by `staid`) and GeoConnex `gages` (three
+    pages, sorted by `id`), the offset pages kept their `sortby` order across pages, the
+    same on two runs. Keeping both strategies was the maintainer's choice, so they can
+    be measured against each other.
+
+- **Rejected:** `sortby` to page NWIS, which the server rejects after the first page.
+    Offset fan-out on NWIS without `sortby`, since nothing fixes the order. A fixed
+    `uri` sort key for GeoConnex: `gages` declares `x-ogc-role: id` on `id`.
+
+- **Limits:** `sortby` comes from a draft OGC sorting extension outside Features Core,
+    so a server can drop it in a release it counts as non-breaking. Each host was
+    checked on one collection. The `id` role names the feature identifier, so its values
+    should be unique and non-null; only the identifier check catches a collection where
+    they are not. Whether a `sorted-offset` page costs the server more than a `next`
+    page is unmeasured; #24 measures it.
 
 ## Lessons
 

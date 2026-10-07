@@ -51,6 +51,7 @@ optional-dependencies.docs = [
 ]
 optional-dependencies.lint = [
   "codespell",
+  "pip-audit",
   "pre-commit",
 ]
 optional-dependencies.test = [
@@ -107,6 +108,8 @@ docs-serve = { cmd = "zensical serve", depends-on = [ "notebooks" ] }
 
 [tool.pixi.feature.lint.tasks]
 lint = "pre-commit run --all-files"
+# Resolves the runtime dependencies from PyPI, as a new install would, and checks them.
+audit = "pip-audit ."
 pcupdate = "pre-commit autoupdate"
 spell = "codespell -w"
 

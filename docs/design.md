@@ -818,21 +818,22 @@ the hot path is decoding.
 
 ## Questions for USGS
 
-Each answer would reduce load on USGS servers. Related asks are grouped so each group
-takes one reply.
+Sent on 2026-10-07. The water data team and the FabricData operator answered the same
+day, and live probes settled the questions that were not sent.
 
-1. **Paging.** What can a client count on when paging through a collection? Is result
-    order stable from page to page, and does `sortby` on a unique property make it
-    deterministic? Could collections without one declare an `x-ogc-role: id` property
-    to sort on? Is `offset` supported, and does it stay consistent within a session? Is
-    there a cursor or snapshot token that pins a result set across pages? What is each
-    collection's page-size cap, and how does the API signal a page it cut short?
-1. **Keys and rate limits.** Is the `X-Api-Key` header the supported way to send the
-    key, and does FabricData accept the same key? What are the keyed and unkeyed rate
-    limits, and does a 429 include `Retry-After`?
-1. **Metadata caching.** Could `/collections`, `/queryables`, and `/schema` send `ETag`
-    or `Last-Modified`, and would a conditional request answered with 304 count against
-    the quota?
-1. **Schema and queryables.** Which document is authoritative for a property's type,
-    `schema` or `queryables`? On GeoConnex, `hivis_camera_url` is in `queryables` but
-    not in `schema`.
+1. **Paging.** Answered. On the water data endpoints, `sortby` returns only the first
+    page by design, and callers who need more than 50,000 sorted features sort them
+    locally (D-26). The USGS versioning docs guarantee no result order, `next` links
+    carry an opaque cursor, and no response reports `numberMatched`. A `limit` above
+    50,000 is rejected with a 400.
+1. **Keys and rate limits.** Mostly answered. The water data endpoints honor `X-Api-Key`
+    and report limits to keyed requests in `X-RateLimit-*` headers. FabricData takes no
+    key and has reported its limit in those headers since 2026-10-07. Still open: does
+    a 429 carry `Retry-After`?
+1. **Metadata caching.** Settled by probes and not sent. No `/collections`,
+    `/queryables`, or `/schema` response carries `ETag` or `Last-Modified`, so D-07's
+    revalidation never fires against these hosts.
+1. **Schema and queryables.** Settled by probes and not sent. On the time-series
+    collections, `queryables` adds `id` and the monitoring-location fields to `schema`,
+    and no property in both differs in type. `queryables` lists what can be filtered
+    and sorted; `schema` lists what comes back.

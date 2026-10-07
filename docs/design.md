@@ -600,6 +600,33 @@ Layering rule for anything new:
     they are not. Whether a `sorted-offset` page costs the server more than a `next`
     page is unmeasured; #24 measures it.
 
+### D-27: Python packages come from PyPI
+
+- **Status:** accepted.
+
+- **Date:** 2026-10-07.
+
+- **Decision:** Every pixi environment installs its Python packages from PyPI: the
+    runtime dependencies through the editable `water-ogcapi` entry in
+    `[tool.pixi.pypi-dependencies]`, and the tooling through `[dependency-groups]`.
+    conda-forge supplies Python and system libraries. `[tool.pixi.dependencies]` holds
+    only system libraries such as GDAL or libnetcdf; the project needs none, so the
+    table is absent.
+
+- **Why:** `httpx2` and `h2` sat in `[tool.pixi.dependencies]` as well as in
+    `[project] dependencies`. pixi installed the conda-forge builds and counted them as
+    satisfying the PyPI requirements, so every environment tested conda-forge's packages
+    while `pip install` gets PyPI's wheels, and the `h2` security floor had to be raised
+    in two places. With one source per package, the test environments run the wheels a
+    `pip install` gets.
+
+- **Rejected:** Listing each runtime dependency in both tables, for the reasons above.
+    Tooling as `optional-dependencies`, which publishes `dev`, `lint`, and the other
+    tool sets as installable extras of the package.
+
+- **Limits:** No pixi environment tests the planned conda-forge package, which resolves
+    everything from conda-forge. D-01's separate `h2` entry stays for that recipe.
+
 ### D-28: The roadmap page comes from the GitHub milestones
 
 - **Status:** accepted.

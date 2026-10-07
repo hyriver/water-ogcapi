@@ -46,6 +46,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
     propagate to the root logger (D-20).
 - A public name is removed only after a minor release in which it raises a
     `DeprecationWarning` (D-21).
+- Python packages come from PyPI. `[tool.pixi.dependencies]` holds only system libraries
+    such as GDAL (D-27).
 
 ## Commands
 

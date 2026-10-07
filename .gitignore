@@ -63,6 +63,8 @@ ENV/
 /docs/examples/*.md
 !/docs/examples/index.md
 /docs/examples/*_files/
+# Generated from the GitHub milestones by `pixi r docs`
+/docs/roadmap.md
 
 # Misc
 .DS_Store

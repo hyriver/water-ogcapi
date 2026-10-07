@@ -111,6 +111,21 @@ def _describe(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
 
 
+def _describe_location(location: str) -> str:
+    """Name a redirect target by scheme, host, and path only.
+
+    A gateway can copy a header key into the redirect's query, so userinfo, query, and
+    fragment never reach the message.
+    """
+    try:
+        parts = urlsplit(location)
+    except ValueError:
+        return "an unparsable location"
+    host = parts.netloc.rpartition("@")[2]
+    target = f"{parts.scheme}://{host}{parts.path}" if parts.scheme else parts.path
+    return f"{target} (query omitted)" if parts.query or parts.fragment else target
+
+
 class _RedirectedError(Exception):
     """A redirect, caught before httpx2 parses its ``Location``."""
 
@@ -232,8 +247,9 @@ def _finalize(resp: httpx2.Response, *, attempts: int) -> Response:
         # follow_redirects is off so the caller never leaks credentials to another
         # host. Returning the bodyless redirect as a success would surface later as
         # a JSON decode error instead.
-        location = headers.get("location", "an unspecified location")
-        msg = f"server redirected to {location}"
+        location = headers.get("location")
+        target = _describe_location(location) if location else "an unspecified location"
+        msg = f"server redirected to {target}"
         raise ServiceError(msg, url, status=resp.status_code, attempts=attempts)
     retry_after = parse_retry_after(headers.get("retry-after"), headers.get("date"))
     if resp.status_code == 429:
@@ -425,6 +441,7 @@ class Transport:
         client, sem = self._bind()
         for attempt in range(self.max_retries + 1):
             final = attempt == self.max_retries
+            status: int | None = None
             try:
                 async with sem, asyncio.timeout(self.timeout):
                     if self._client is not client or client.is_closed:
@@ -441,8 +458,8 @@ class Transport:
                 failure = f"TimeoutError: attempt exceeded {self.timeout} s"
                 transient = True
             except _RedirectedError as redirect:
-                msg = f"server redirected to {redirect.location}"
-                raise ServiceError(msg, url, status=redirect.status, attempts=attempt + 1) from None
+                failure = f"server redirected to {_describe_location(redirect.location)}"
+                transient, status = False, redirect.status
             except (httpx2.HTTPError, httpx2.InvalidURL) as exc:
                 failure, transient = _describe(exc), _is_transient(exc)
             else:
@@ -467,8 +484,9 @@ class Transport:
                 continue
             if final or not transient:
                 # Raised outside the except block: a chained httpx2 error keeps its
-                # request, whose headers hold the API key unredacted.
-                raise ServiceError(failure, url, attempts=attempt + 1)
+                # request, whose headers hold the API key, and a redirect keeps its raw
+                # Location.
+                raise ServiceError(failure, url, status=status, attempts=attempt + 1)
             delay = self._delay(attempt)
             logger.info(
                 "GET %s failed with %s; retry %d of %d in %.1f s",

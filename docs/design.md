@@ -755,17 +755,21 @@ the hot path is decoding.
 
 ## Questions for USGS
 
-Each has a concrete ask, and each answer would reduce load on USGS servers.
+Each answer would reduce load on USGS servers. Related asks are grouped so each group
+takes one reply.
 
-1. Is result order stable? Does `sortby` on a unique property make paging deterministic?
-1. What are the rate-limit tiers, and does `Retry-After` accompany a 429?
-1. Does a conditional request answered with 304 count against the quota?
-1. What are the per-collection page-size caps, and how is truncation signaled?
-1. Does every queryable appear in `schema`, and which document is authoritative for a
-    property's type? On GeoConnex, `hivis_camera_url` is in `queryables` but not in
-    `schema`.
-1. Can `/collections`, `/queryables`, and `/schema` send `ETag` or `Last-Modified`?
-1. Can collections that lack it declare `x-ogc-role: id`?
-1. Can each collection state whether `offset` is supported and consistent within a
-    session?
-1. Is there a cursor or snapshot token that pins a result set across pages?
+1. **Paging.** What can a client count on when paging through a collection? Is result
+    order stable from page to page, and does `sortby` on a unique property make it
+    deterministic? Could collections without one declare an `x-ogc-role: id` property
+    to sort on? Is `offset` supported, and does it stay consistent within a session? Is
+    there a cursor or snapshot token that pins a result set across pages? What is each
+    collection's page-size cap, and how does the API signal a page it cut short?
+1. **Keys and rate limits.** Is the `X-Api-Key` header the supported way to send the
+    key, and does FabricData accept the same key? What are the keyed and unkeyed rate
+    limits, and does a 429 include `Retry-After`?
+1. **Metadata caching.** Could `/collections`, `/queryables`, and `/schema` send `ETag`
+    or `Last-Modified`, and would a conditional request answered with 304 count against
+    the quota?
+1. **Schema and queryables.** Which document is authoritative for a property's type,
+    `schema` or `queryables`? On GeoConnex, `hivis_camera_url` is in `queryables` but
+    not in `schema`.

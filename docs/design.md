@@ -76,7 +76,8 @@ Layering rule for anything new:
 
 ### D-03: Query methods return payload plus evidence
 
-- **Status:** accepted. Two specification gaps remain open (Q-02, Q-03).
+- **Status:** accepted. D-22 and D-23 settle Q-03 and Q-02; where the sketch below
+    differs from them, they win.
 
 - **Decision:** `iter_pages()` yields frozen `Page` objects and `collect()` returns a
     frozen `QueryResult`:
@@ -423,6 +424,51 @@ Layering rule for anything new:
     series. A FabricData or GeoConnex change can still force a minor bump while NWIS is
     stable.
 
+### D-22: Which operation returns which type
+
+- **Status:** accepted.
+
+- **Date:** 2026-10-07.
+
+- **Decision:** A `Page` is one response document, and a `QueryResult` is an aggregate.
+
+    | Operation      | Returns       | `Page.body`              | `Page.content`                    |
+    | -------------- | ------------- | ------------------------ | --------------------------------- |
+    | `iter_pages()` | yields `Page` | the decoded document     | the response bytes                |
+    | item fetch     | `Page`        | the decoded Feature      | the response bytes                |
+    | `collect()`    | `QueryResult` | `None` on each kept page | bytes only with `keep_pages=True` |
+
+    Every `Page` carries, whatever its body: `url` (the request as sent, query included),
+    `params` (redacted), `status`, `headers` (the redacted allowlist, `Content-Crs`
+    included), `links`, `fetched_at`, `number_matched` and `number_returned` as the
+    server reported them (`None` when absent), and `feature_count`, the features
+    received. A body is a Feature or a FeatureCollection, told apart by its `type`, and
+    nothing promises a `features` member.
+
+    Only `QueryResult.pagination` carries `page_count` and `completeness`, and it is never
+    `None`. Its counts describe what was fetched, so filtering `geojson` afterward
+    changes none of them. `number_matched` is the value every reporting page agreed on;
+    pages that disagree set it to `None` and `completeness` to `unknown`. `completeness`
+    reads `complete` when traversal reached the end and every check passed, `limited`
+    when it stopped early on a caller limit or a failure, with the stop reason recorded
+    beside it, and `unknown` when it ended without evidence either way. An early stop
+    wins: a result that stopped early reads `limited` even when its pages disagreed, and
+    `number_matched` of `None` still records the disagreement.
+
+- **Why:** `iter_pages()` cannot know the final page count while streaming, and an item
+    fetch has no pagination. Returning a `Page` for an item reuses its evidence, CRS
+    headers included, without inventing pagination. Per-page counts live on `Page` so
+    they survive when `collect()` drops bodies.
+
+- **Rejected:** A `QueryResult` with `pagination=None` for an item fetch, which makes
+    every `collect()` caller narrow an optional and invites treating a Feature as a
+    one-feature collection. A separate item type, whose evidence fields would drift from
+    those of `Page`. Taking the first or last page's `numberMatched`, which hides a
+    collection that changed mid-traversal.
+
+- **Limits:** `complete` still cannot prove that no feature was swapped between pages
+    (D-03).
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -546,6 +592,8 @@ dicts as `geojson`, the page evidence can be mutated through the aggregate. Eith
 on retention or document that bodies alias.
 
 ### Q-03: Which operation produces which fields
+
+**Status:** answered by D-22.
 
 `iter_pages()` cannot know the final `page_count` or `completeness` while streaming, and
 a single-item fetch has no pagination at all. Proposal: `iter_pages()` yields `Page`,

@@ -42,6 +42,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
 - The API key travels only in the `X-Api-Key` header, never as a query parameter (D-18).
 - Log records never carry request headers, and the `water_ogcapi` logger does not
     propagate to the root logger (D-20).
+- A public name is removed only after a minor release in which it raises a
+    `DeprecationWarning` (D-21).
 
 ## Commands
 

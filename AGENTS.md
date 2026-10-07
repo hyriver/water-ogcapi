@@ -51,6 +51,7 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Task                       | Command                             |
 | -------------------------- | ----------------------------------- |
 | Lint (pre-commit)          | `pixi r lint`                       |
+| Dependency audit           | `pixi r audit`                      |
 | Type check                 | `pixi r typecheck`                  |
 | Test, offline (3.12)       | `pixi r -e test312 test`            |
 | Test, offline (3.15)       | `pixi r -e test315 test`            |

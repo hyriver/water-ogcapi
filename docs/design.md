@@ -558,11 +558,15 @@ Do not state these as fact until a live response confirms them:
 
 ### Q-08: Release security gate
 
-Not built, apart from the check that no log record carries request headers (D-20).
-Scope: env-var key handling, the redaction invariant (D-04), no logging of request
-headers, redirect behavior (D-12), a dependency audit in CI, and a CI check that no
-fixture or committed file contains a key-shaped string. Recorded fixtures carry the same
-credential risk as `QueryResult`, so scrub auth at record time.
+Partly built. No log record carries request headers (D-20). CI runs `pixi r audit`,
+which resolves the runtime dependencies from PyPI and checks them with pip-audit. The
+`key-shaped-string` pre-commit hook fails lint on any committed text holding a token
+shaped like a USGS key: 40 letters and digits mixing upper case, lower case, and digits.
+It misses an encoded key, a key of another shape, and a key glued to `/`, `-`, or `_`:
+that boundary keeps base64 images in notebook outputs from matching. Left to review:
+env-var key handling, the redaction invariant (D-04), and redirect behavior (D-12).
+Recorded fixtures carry the same credential risk as `QueryResult`, so scrub auth at
+record time.
 
 ### Q-09: orjson for decoding large responses
 

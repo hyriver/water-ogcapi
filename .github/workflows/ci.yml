@@ -50,3 +50,5 @@ jobs:
       with:
         environments: lint
     - run: pixi run lint
+    # Needs network: resolves the runtime dependencies from PyPI and checks their advisories.
+    - run: pixi run audit

@@ -153,6 +153,24 @@ def test_redirect_raises_instead_of_passing_through() -> None:
     assert excinfo.value.status == 301, "a bodyless 3xx must not read as success"
 
 
+@pytest.mark.parametrize("status", [307, 300])
+def test_redirect_keeps_the_key_out(status: int) -> None:
+    # A gateway can copy the header key into the redirect's query.
+    location = "http://user:SECRET@example.com/collections/?f=json&api_key=SECRET#SECRET"
+    mock, _ = responder(httpx2.Response(status, headers={"Location": location}))
+    transport = Transport(transport=mock, max_retries=0)
+    with pytest.raises(
+        ServiceError, match=r"redirected to http://example\.com/collections/ "
+    ) as excinfo:
+        asyncio.run(transport.get(URL, headers={"X-Api-Key": "SECRET"}))
+    error = excinfo.value
+    assert error.status == status
+    assert "SECRET" not in str(error)
+    assert "SECRET" not in repr(error)
+    assert error.__cause__ is None
+    assert error.__context__ is None, "the context keeps the raw Location"
+
+
 @pytest.mark.usefixtures("no_sleep")
 def test_malformed_redirect_raises_once_with_its_status() -> None:
     mock, seen = responder(httpx2.Response(301, headers={"Location": "https://e.test:bad/x"}))

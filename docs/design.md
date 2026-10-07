@@ -222,10 +222,11 @@ Layering rule for anything new:
 
 - **Status:** accepted.
 - **Decision:** `follow_redirects=False`. A 3xx other than 304 raises `ServiceError`
-    naming the `Location`. A 304 is returned as a response, since D-07 revalidation
-    needs it. A response hook raises on a redirect before httpx2 parses its `Location`:
-    httpx2 builds the follow-up request even with redirects off, and a malformed
-    `Location` would otherwise raise a retryable `RemoteProtocolError`.
+    naming the `Location` by scheme, host, and path only (L-11). A 304 is returned as a
+    response, since D-07 revalidation needs it. A response hook raises on a redirect
+    before httpx2 parses its `Location`: httpx2 builds the follow-up request even with
+    redirects off, and a malformed `Location` would otherwise raise a retryable
+    `RemoteProtocolError`.
 - **Why:** httpx2 strips `Authorization` across hosts but not a custom key header, so
     following a redirect would send the key to another host. Returning the bodyless
     redirect as a success would surface later as a JSON decode error.
@@ -657,6 +658,17 @@ Layering rule for anything new:
 - **Check:** `test_parse_retry_after_scalars`, `test_parse_count`, and
     `test_huge_remaining_count_stays_typed`.
 
+### L-11: A redirect target carried the key
+
+- **What happened:** A server answered a request that sent the key in `X-Api-Key` with a
+    redirect whose `Location` held the key as a query parameter. The transport copied
+    that `Location` into the `ServiceError` message, and raising inside the `except`
+    block kept the raw `Location` in `__context__`.
+- **Rule:** An error names a redirect target by scheme, host, and path only, and is
+    raised outside any `except` block whose exception holds request or response data
+    (L-09).
+- **Check:** `test_redirect_keeps_the_key_out`.
+
 ## Open questions
 
 ### Q-01: How frame conversion ships
@@ -726,8 +738,10 @@ shaped like a USGS key: 40 letters and digits mixing upper case, lower case, and
 It misses an encoded key, a key of another shape, and a key glued to `/`, `-`, or `_`:
 that boundary keeps base64 images in notebook outputs from matching. Left to review:
 env-var key handling, the redaction invariant (D-04), and redirect behavior (D-12).
-Recorded fixtures carry the same credential risk as `QueryResult`, so scrub auth at
-record time.
+Every error raised in `Transport.get` keeps a traceback frame whose `headers` local
+holds the caller's key, so an error reporter that captures frame locals needs its own
+scrubbing. Recorded fixtures carry the same credential risk as `QueryResult`, so scrub
+auth at record time.
 
 ### Q-09: orjson for decoding large responses
 

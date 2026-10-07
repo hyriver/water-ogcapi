@@ -48,22 +48,8 @@ behind the library. Example notebooks arrive with the query API.
 
 ## Roadmap
 
-- [ ] Service classes for NWIS, FabricData, and GeoConnex.
-- [ ] Queries by bbox, CQL2 spatial predicates, CQL2-JSON and CQL2-Text, identifier
-    filters, and direct item fetch.
-- [ ] Stream results page by page, or collect them into one result.
-- [ ] Return raw GeoJSON together with the evidence of how it was fetched: request URLs,
-    status codes, headers, links, and pagination state.
-- [ ] Redact API keys from every result and error.
-- [ ] A synchronous wrapper that works inside Jupyter.
-- [ ] An in-memory metadata cache that revalidates with `ETag`.
-- [ ] A quota governor that slows down before the rate limit runs out.
-- [ ] Page-level checkpoint and resume.
-- [x] A package logger with `configure_logger()`: console level, an optional log file
-    with its own level and mode, and a file-only switch.
-- [ ] Decide whether orjson decodes large responses, as a dependency or an optional
-    extra (open question Q-09 in the design decisions).
-- [ ] Release on PyPI and conda-forge.
+The [roadmap](https://docs.hyriver.io/water-ogcapi/roadmap/) shows the progress on each
+GitHub milestone, regenerated daily from the milestone issues.
 
 ## Contributing
 

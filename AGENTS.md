@@ -113,6 +113,9 @@ the site on every PR and deploys `main` to GitHub Pages.
     `*_files/` folders are git-ignored, apart from `index.md`. The site also publishes
     the `.ipynb` and `.py` files, so a link to `other.ipynb` downloads the notebook;
     link `other.md` to reach its page.
+- `pixi r docs` also writes the git-ignored `docs/roadmap.md` from the GitHub milestones
+    and issues, so a docs build fails without network access. Past the anonymous limit
+    of 60 requests an hour, set `GITHUB_TOKEN`.
 - Each notebook gets a card in `docs/examples/index.md` with a thumbnail in
     `docs/examples/images/`, following the existing card. The strict build fails if a
     card links to a notebook that does not exist.

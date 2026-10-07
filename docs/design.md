@@ -600,6 +600,32 @@ Layering rule for anything new:
     they are not. Whether a `sorted-offset` page costs the server more than a `next`
     page is unmeasured; #24 measures it.
 
+### D-28: The roadmap page comes from the GitHub milestones
+
+- **Status:** accepted.
+
+- **Date:** 2026-10-07.
+
+- **Decision:** `scripts/roadmap.py` writes `docs/roadmap.md` before each docs build
+    from the repository's GitHub milestones and their issues: one section per milestone
+    with a `<progress>` bar, the open issues listed, and the closed ones folded into
+    `<details>`. Pull requests are left out. `docs.yml` also runs daily, so the deployed
+    page follows issue changes without a commit. `README.md` links to the page and keeps
+    no checklist of its own.
+
+- **Why:** The milestones already track the work, so the page follows D-17 with one
+    source per text. The build fails when GitHub is unreachable, by the maintainer's
+    choice, so a deployed page never shows a stub.
+
+- **Rejected:** A committed page that a scheduled job rewrites between marker comments,
+    as pysentry.com does: the ruleset blocks pushes to `main`, so every refresh would
+    need a PR. Fetching from the browser at page load, which needs JavaScript and spends
+    each visitor's anonymous GitHub quota of 60 requests an hour.
+
+- **Limits:** GitHub's milestone counters include pull requests, so its counts can run
+    higher than the page's. A local build past 60 requests an hour needs a
+    `GITHUB_TOKEN`.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

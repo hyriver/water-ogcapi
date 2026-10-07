@@ -103,8 +103,10 @@ nb-pair = "jupytext --set-formats 'ipynb,py:percent' docs/examples/*.ipynb"
 
 [tool.pixi.feature.docs.tasks]
 notebooks = "python scripts/convert_notebooks.py"
-docs = { cmd = "zensical build --clean --strict", depends-on = [ "notebooks" ] }
-docs-serve = { cmd = "zensical serve", depends-on = [ "notebooks" ] }
+# Fetches the GitHub milestones, so docs builds need network access.
+roadmap = "python scripts/roadmap.py"
+docs = { cmd = "zensical build --clean --strict", depends-on = [ "notebooks", "roadmap" ] }
+docs-serve = { cmd = "zensical serve", depends-on = [ "notebooks", "roadmap" ] }
 
 [tool.pixi.feature.lint.tasks]
 lint = "pre-commit run --all-files"

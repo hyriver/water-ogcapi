@@ -536,6 +536,20 @@ Layering rule for anything new:
 - **Limits:** A resume replays against a collection that may have changed, and a cursor
     in a `next` link may expire.
 
+### D-25: Frame conversion ships as an optional extra
+
+- **Status:** accepted.
+- **Date:** 2026-10-07.
+- **Decision:** A `water-ogcapi[pandas]` extra adds a helper that returns a GeoDataFrame
+    when any feature has a non-null geometry and a DataFrame otherwise. The core never
+    imports pandas or geopandas (D-09), so the helper imports them when called.
+- **Why:** Chosen by the maintainer. The core stays small, and a frame is one call away
+    for callers who want one.
+- **Rejected:** A companion package, which splits releases and docs for one helper.
+    Return types that change with the installed environment (Q-01).
+- **Limits:** conda-forge packages have no extras (D-01), so a conda user installs
+    pandas and geopandas alongside the package.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -646,6 +660,8 @@ Layering rule for anything new:
 ## Open questions
 
 ### Q-01: How frame conversion ships
+
+**Status:** answered by D-25.
 
 Core stays pandas-free (D-09). The proposal is a `water-ogcapi[pandas]` extra with a
 helper that returns a GeoDataFrame when any geometry is non-null and a DataFrame

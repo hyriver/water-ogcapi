@@ -51,8 +51,11 @@ optional-dependencies.docs = [
 ]
 optional-dependencies.lint = [
   "codespell",
-  "pip-audit",
   "pre-commit",
+  "pysentry-rs",
+  # pysentry resolves transitive dependencies through uv; without it, it audits only the
+  # direct dependencies' lower bounds.
+  "uv",
 ]
 optional-dependencies.test = [
   "coverage[toml]",
@@ -111,7 +114,7 @@ docs-serve = { cmd = "zensical serve", depends-on = [ "notebooks", "roadmap" ] }
 [tool.pixi.feature.lint.tasks]
 lint = "pre-commit run --all-files"
 # Resolves the runtime dependencies from PyPI, as a new install would, and checks them.
-audit = "pip-audit ."
+audit = "pysentry-rs --exclude-extra --fail-on low ."
 pcupdate = "pre-commit autoupdate"
 spell = "codespell -w"
 

@@ -399,6 +399,30 @@ Layering rule for anything new:
 - **Check:** `test_logs_name_each_retry_and_keep_the_key_out` and
     `tests/test_logging.py`.
 
+### D-21: Versioning and deprecation policy
+
+- **Status:** accepted.
+- **Date:** 2026-10-07.
+- **Decision:** Versions are `MAJOR.MINOR.PATCH`, read from git tags by hatch-vcs. The
+    public API is every name in `water_ogcapi.__all__` and in the `__all__` of a public
+    module such as `water_ogcapi.exceptions`, with the parameters and return types their
+    docstrings document; `_`-prefixed modules are private. While the major version is 0,
+    a minor release may break the public API and a patch release never does. A breaking
+    change is committed with `!` after its type (`feat!:`), which git-cliff marks
+    `[**breaking**]` in the changelog. A public name slated for removal raises a
+    `DeprecationWarning` from the caller's line for at least one minor release before it
+    goes. The package stays on 0.x until USGS serves the NWIS API under a path other
+    than `/ogcapi/v0`. After 1.0, a breaking change needs a new major version.
+- **Why:** USGS documents v0 as still under development, with an interface that may
+    change. A 1.0 that promised a stable API over that would need a 2.0 at the first
+    upstream change that reaches the service classes. Callers on 0.x pin the minor
+    version, which keeps patch fixes flowing to them.
+- **Rejected:** Shipping 1.0 once the library's own types stop changing, for the reason
+    above. CalVer, which hides whether a release breaks anything.
+- **Limits:** USGS may keep v0 through the whole support period, so 0.x may be the only
+    series. A FabricData or GeoConnex change can still force a minor bump while NWIS is
+    stable.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -542,6 +566,8 @@ of the network tests, plus a committed OpenAPI snapshot diffed on a schedule. A 
 should also name the API snapshot it supports.
 
 ### Q-06: Versioning policy
+
+**Status:** answered by D-21.
 
 0.x semantics, what 1.0 means relative to USGS stabilizing the API, and a deprecation
 policy.

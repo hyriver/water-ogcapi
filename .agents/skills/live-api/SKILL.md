@@ -20,6 +20,14 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
     server may echo query parameters into the `next` links of the response body.
 - Scrub at record time, before anything is written to disk. Store no request headers.
 - GeoConnex takes no key. Never send it one.
+- A server can echo the key back: a redirect's `Location` has carried it as a query
+    parameter. Pipe every probe's output through a filter that replaces the key's value,
+    and request a base URL with its trailing slash, since the bare form redirects.
+
+```bash
+<probe command> 2>&1 | python3 -c 'import os, sys; k = os.environ["USGS_API_KEY"]; sys.stdout.writelines(l.replace(k, "REDACTED") for l in sys.stdin)'
+```
+
 - Before finishing, scan for the current key. The command fails loudly when the variable
     is unset or empty, prints file names only, and keeps the key off the command line.
     No output means the current key is not in the working tree; it cannot find old or

@@ -2975,7 +2975,7 @@ packages:
 - pypi: ./
   name: water-ogcapi
   requires_dist:
-  - h2>=4,<5
+  - h2>=4.4.1,<5
   - httpx2>=2.12
   - git-cliff ; extra == 'dev'
   - ipykernel ; extra == 'dev'

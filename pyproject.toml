@@ -35,21 +35,33 @@ dependencies = [
   "h2>=4.4.1,<5",
   "httpx2>=2.12",
 ]
-optional-dependencies.dev = [
+urls.Changelog = "https://github.com/hyriver/water-ogcapi/releases"
+urls.CI = "https://github.com/hyriver/water-ogcapi/actions"
+urls.Homepage = "https://github.com/hyriver/water-ogcapi"
+urls.Issues = "https://github.com/hyriver/water-ogcapi/issues"
+
+[dependency-groups]
+dev = [
   "git-cliff",
   "ipykernel",
   "jupytext",
   "matplotlib",
   "nbconvert",
+  { include-group = "test" },
+  { include-group = "typecheck" },
+]
+test = [
+  "coverage[toml]",
   "pytest",
   "pytest-cov",
+  "pytest-sugar",
 ]
-optional-dependencies.docs = [
+docs = [
   "mkdocstrings-python",
   "nbconvert",
   "zensical",
 ]
-optional-dependencies.lint = [
+lint = [
   "codespell",
   "pre-commit",
   "pysentry-rs",
@@ -57,18 +69,9 @@ optional-dependencies.lint = [
   # direct dependencies' lower bounds.
   "uv",
 ]
-optional-dependencies.test = [
-  "coverage[toml]",
-  "pytest-cov",
-  "pytest-sugar",
-]
-optional-dependencies.typecheck = [
+typecheck = [
   "pyright",
 ]
-urls.Changelog = "https://github.com/hyriver/water-ogcapi/releases"
-urls.CI = "https://github.com/hyriver/water-ogcapi/actions"
-urls.Homepage = "https://github.com/hyriver/water-ogcapi"
-urls.Issues = "https://github.com/hyriver/water-ogcapi/issues"
 
 [tool.hatch]
 version.source = "vcs"

@@ -654,6 +654,32 @@ Layering rule for anything new:
     higher than the page's. A local build past 60 requests an hour needs a
     `GITHUB_TOKEN`.
 
+### D-29: What a `Page` keeps of a request and response
+
+- **Status:** accepted.
+- **Date:** 2026-10-08.
+- **Decision:** `Page` redacts in its constructor and again when unpickled. Its `url`
+    and each `Link.href` mask the value of a credential query parameter (`api_key`, read
+    percent-decoded, in any letter case, after `&` or `;`) as `REDACTED`, and drop
+    userinfo and fragment. Other query entries keep their bytes, so a cursor still
+    replays. `params` masks credential values the same way. `headers` keeps `age`,
+    `cache-control`, `content-crs`, `content-type`, `date`, `etag`, `last-modified`,
+    `retry-after`, `x-api-umbrella-request-id`, `x-ratelimit-limit`, and
+    `x-ratelimit-remaining`, with lowercase names, and drops the rest. `params` and
+    `headers` are read-only mappings. `QueryResult` holds no headers or params of its
+    own, so its pages carry its redaction.
+- **Why:** Each kept header has a consumer: CRS provenance (#22), the metadata cache
+    (D-07), the quota governor (D-06), and the gateway's request id, which identifies a
+    request in a report to USGS. A masked value keeps the evidence that a credential was
+    sent.
+- **Rejected:** Dropping a credential entry from the URL, which hides that it was sent.
+    Redacting `body`, `content`, or `geojson`, which rewrites the payload D-03 keeps
+    verbatim.
+- **Limits:** Redaction goes by name, so a key under another parameter name passes
+    through, and so does a key inside a body. A server echoing a query-form key into its
+    `next` links would put it in `body`; D-18 keeps the key out of the query, so no
+    server receives one to echo.
+
 ### D-30: Live checks of the Q-07 API facts
 
 - **Status:** accepted.

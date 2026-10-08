@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import json
 import pickle
-from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -54,6 +54,8 @@ def make_result(*pages: Page) -> QueryResult:
         (f"https://user:{SECRET}@example.com/c", "https://example.com/c"),
         (f"{URL}#api_key={SECRET}", URL),
         ("https://[::1/c", REDACTED),
+        # Returned as given: a rebuild would lowercase the scheme and drop the bare "?".
+        ("HTTPS://example.com/items?", "HTTPS://example.com/items?"),
     ],
 )
 def test_redact_url(url: str, expected: str) -> None:
@@ -93,15 +95,37 @@ def test_no_credential_in_repr_pickle_or_any_field() -> None:
     "clone", [copy.copy, copy.deepcopy, lambda p: pickle.loads(pickle.dumps(p))]
 )
 def test_page_copies_stay_read_only(clone: Any) -> None:
-    page = clone(make_page(params={"f": "json"}))
-    assert type(page.params) is MappingProxyType
-    assert type(page.headers) is MappingProxyType
-    with pytest.raises(TypeError):
-        page.params["f"] = "html"
-    with pytest.raises(TypeError):
-        page.headers["etag"] = "x"
+    page = clone(make_page(params={"f": "json"}, links=[Link(href=URL)]))
+    assert dict(page.params) == {"f": "json"}
+    assert type(page.links) is tuple
+    changes = [
+        lambda: page.params.__setitem__("f", "html"),
+        lambda: page.params.update(f="html"),
+        lambda: page.params.pop("f"),
+        page.params.clear,
+        lambda: page.headers.setdefault("etag", "x"),
+        lambda: page.headers.__ior__({"etag": "x"}),
+    ]
+    for change in changes:
+        with pytest.raises(TypeError, match="read-only"):
+            change()
+    assert dict(page.params) == {"f": "json"}
     with pytest.raises(dataclasses.FrozenInstanceError):
         page.url = "https://example.com"
+
+
+def test_asdict_and_json_work() -> None:
+    page = make_page(params={"api_key": SECRET, "f": "json"}, links=[Link(href=URL, rel="self")])
+    record = dataclasses.asdict(make_result(page))
+    assert record["pages"][0]["params"] == {"api_key": REDACTED, "f": "json"}
+    assert SECRET not in json.dumps(record)
+
+
+def test_rejects_raw_links_and_pages() -> None:
+    with pytest.raises(TypeError, match="links must hold only Link"):
+        make_page(links=[{"href": f"{URL}?api_key={SECRET}"}])
+    with pytest.raises(TypeError, match="pages must hold only Page"):
+        make_result(f"{URL}?api_key={SECRET}")  # pyright: ignore[reportArgumentType]
 
 
 def test_json_decodes_a_new_object_each_call() -> None:

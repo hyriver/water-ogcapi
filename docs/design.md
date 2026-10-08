@@ -681,7 +681,9 @@ Layering rule for anything new:
 - **Limits:** Redaction goes by name, so a key under another parameter name passes
     through, and so does a key inside a body. A server echoing a query-form key into its
     `next` links would put it in `body`; D-18 keeps the key out of the query string, so
-    no server receives a query-form key to echo.
+    no server receives a query-form key to echo. The read-only dicts guard their own
+    methods; `dict.__setitem__(page.params, ...)` or a second `__init__` call still
+    writes, as `object.__setattr__` does on any frozen dataclass.
 
 ### D-30: Live checks of the Q-07 API facts
 

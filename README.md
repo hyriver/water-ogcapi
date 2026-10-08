@@ -19,7 +19,7 @@ and nothing is released yet.
 
 | Service    | Base URL                             |
 | ---------- | ------------------------------------ |
-| NWIS       | `api.waterdata.usgs.gov/ogcapi/v0`   |
+| NWIS       | `api.waterdata.usgs.gov/ogcapi/v1`   |
 | FabricData | `api.water.usgs.gov/fabric/pygeoapi` |
 | GeoConnex  | `reference.geoconnex.us`             |
 

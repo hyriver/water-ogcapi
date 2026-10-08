@@ -233,7 +233,8 @@ Layering rule for anything new:
 
 ### D-13: Per-service capability profiles
 
-- **Status:** accepted; values unverified (Q-07). D-26 replaces the GeoConnex sort key.
+- **Status:** accepted; D-30 sets the values and drops the FabricData key. D-26 replaces
+    the GeoConnex sort key.
 - **Decision:** Each service class declares a profile: auth header convention, page-size
     caps, sort key, whether offset fan-out is verified (D-05), and whether rate-limit
     headers exist (D-06).
@@ -339,7 +340,7 @@ Layering rule for anything new:
 
 ### D-18: The API key travels only in a header
 
-- **Status:** accepted.
+- **Status:** accepted; D-30 confirms NWIS honors the header.
 - **Date:** 2026-09-30.
 - **Decision:** The key goes in the `X-Api-Key` request header. `Transport.get` raises
     `ValueError` for an `api_key` query parameter, in any letter case, whether it comes
@@ -653,6 +654,52 @@ Layering rule for anything new:
     higher than the page's. A local build past 60 requests an hour needs a
     `GITHUB_TOKEN`.
 
+### D-30: Live checks of the Q-07 API facts
+
+- **Status:** accepted.
+
+- **Date:** 2026-10-08.
+
+- **Decision:** Probes on 2026-10-07 and 2026-10-08 and the fixture recording
+    (`tests/fixtures/README.md`) settle each Q-07 item.
+
+    | Fact                               | Verdict      | Evidence                                                                                                                                                                               |
+    | ---------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | NWIS honors the key in `X-Api-Key` | confirmed    | Keyed responses carry `X-RateLimit-*` headers, and a new key's first response read `Remaining: 3999`. Unkeyed responses carry none.                                                    |
+    | A lowercase `api_key` header       | not tested   | The USGS keys page names only `X-Api-Key` and the `api_key` query parameter.                                                                                                           |
+    | NWIS limits for a key              | confirmed    | `X-RateLimit-Limit` reads 4000 on metadata endpoints and 1000 on `/items`. The keys page counts requests per hour.                                                                     |
+    | NWIS limit without a key           | inconclusive | Unkeyed responses carry no `X-RateLimit-*` headers.                                                                                                                                    |
+    | FabricData limit                   | inconclusive | `X-RateLimit-Limit: 300` on keyed and unkeyed responses alike, with no window stated. `Remaining` fell from 299 to 291 over nine unkeyed requests.                                     |
+    | `Retry-After` on a 429             | inconclusive | Never provoked. The docs are silent and USGS has not answered.                                                                                                                         |
+    | Services sending `X-RateLimit-*`   | confirmed    | NWIS on keyed responses only, FabricData on every response since 2026-10-07, GeoConnex on none of 11.                                                                                  |
+    | NWIS page cap                      | confirmed    | `limit=50001` returns 400 "Limit of 50000 exceeded".                                                                                                                                   |
+    | FabricData page cap                | confirmed    | The OpenAPI document declares `limit` up to 1000, default 10, and `limit=1001` returns 400.                                                                                            |
+    | GeoConnex page cap                 | partly       | The OpenAPI document declares `limit` up to 10,000, default 500. `limit=10001` returned 200 on a query matching 157 features, so whether a larger result is cut at 10,000 is untested. |
+
+    The profiles (D-13) take these values. NWIS sends the key in `X-Api-Key` (D-18) to
+    `https://api.waterdata.usgs.gov/ogcapi/v1/`, trailing slash included, and caps pages
+    at 50,000. FabricData sends no key and caps pages at 1,000. GeoConnex caps pages at
+    10,000. The quota governor (D-06) reads the headers on NWIS and FabricData and uses
+    its static default on GeoConnex. The GeoConnex `hu02` collection holds 22 regions,
+    `01` to `22`, so D-14's count of 21 two-digit HUCs is one short.
+
+- **Why:** FabricData reported the same limit with and without the key, so no response
+    showed the key doing anything there, and the maintainer chose to send none on
+    2026-10-07. The USGS versioning page names v1 as current, and `/ogcapi/v0/` still
+    answers with the same landing document. The bare `/ogcapi/v1` answers 307 to
+    `http://` with the header key copied into the query (L-11), and the form with the
+    trailing slash returns 200.
+
+- **Rejected:** D-13's plan for FabricData to use the NWIS key convention, which sends a
+    credential where no response showed an effect.
+
+- **Limits:** Only NWIS documents its window. FabricData's is unknown, and the
+    maintainer's reading is 300 a minute. `Remaining` is approximate: it rose between
+    consecutive NWIS requests on 2026-10-07. The 10,000 cap keeps GeoConnex requests at
+    or below the declared maximum, so the untested behavior above it is never reached.
+    Every value here can change without notice, and only the drift check (Q-05) would
+    see it.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -822,6 +869,8 @@ should also name the API snapshot it supports.
 policy.
 
 ### Q-07: Unverified API facts
+
+**Status:** answered by D-30.
 
 Do not state these as fact until a live response confirms them:
 

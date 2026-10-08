@@ -51,13 +51,13 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
 
 - NWIS: monitoring location `01646500` (Potomac River near Washington, DC), and a small
     bounding box around Washington, DC.
-- GeoConnex: the 21 two-digit HUCs.
+- GeoConnex: the 22 two-digit HUCs in `hu02`, `01` to `22`.
 
 ## Fixtures
 
 - Record from real responses. Keep the status, the response headers, and the body. Keep
     the request URL and params with credentials removed.
-- Record the request date with each fixture. The NWIS API is v0 and USGS may change it.
+- Record the request date with each fixture. The NWIS API is v1 and USGS may change it.
 - If `tests/fixtures/` does not exist yet, propose a layout before creating one.
 - Note which services send `X-RateLimit-*` headers. The quota logic depends on it.
 

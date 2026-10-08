@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field, fields
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast
 from urllib.parse import unquote_plus, urlsplit, urlunsplit
 
 from water_ogcapi._transport import CREDENTIAL_PARAMS
@@ -66,14 +65,43 @@ def redact_url(url: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, query, ""))
 
 
-def _redact_params(params: Mapping[str, str]) -> MappingProxyType[str, str]:
-    return MappingProxyType(
+class _ReadOnlyDict(dict[str, str]):
+    """A ``dict`` that raises ``TypeError`` on any change.
+
+    It pickles, copies, and works with ``dataclasses.asdict`` and ``json.dumps``.
+    """
+
+    __slots__ = ()
+
+    def _refuse(self: object, *_args: object, **_kwargs: object) -> NoReturn:
+        msg = "this mapping is read-only"
+        raise TypeError(msg)
+
+    clear = pop = popitem = setdefault = update = _refuse
+
+    __setitem__ = __delitem__ = __ior__ = _refuse
+
+    def __reduce__(self) -> tuple[type[_ReadOnlyDict], tuple[dict[str, str]]]:
+        # The default reduction refills the copy through __setitem__.
+        return (type(self), (dict(self),))
+
+
+def _redact_params(params: Mapping[str, str]) -> _ReadOnlyDict:
+    return _ReadOnlyDict(
         {k: REDACTED if k.lower() in CREDENTIAL_PARAMS else v for k, v in params.items()}
     )
 
 
-def _keep_headers(headers: Mapping[str, str]) -> MappingProxyType[str, str]:
-    return MappingProxyType({k.lower(): v for k, v in headers.items() if k.lower() in KEPT_HEADERS})
+def _keep_headers(headers: Mapping[str, str]) -> _ReadOnlyDict:
+    return _ReadOnlyDict({k.lower(): v for k, v in headers.items() if k.lower() in KEPT_HEADERS})
+
+
+def _all_of[T](items: tuple[object, ...], kind: type[T], name: str) -> tuple[T, ...]:
+    # Runtime check for untyped callers: a raw link dict would skip href redaction.
+    if not all(isinstance(item, kind) for item in items):
+        msg = f"{name} must hold only {kind.__name__} objects"
+        raise TypeError(msg)
+    return cast("tuple[T, ...]", items)
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,7 +183,7 @@ class Page:
         object.__setattr__(self, "url", redact_url(self.url))
         object.__setattr__(self, "params", _redact_params(self.params))
         object.__setattr__(self, "headers", _keep_headers(self.headers))
-        object.__setattr__(self, "links", tuple(self.links))
+        object.__setattr__(self, "links", _all_of(tuple(self.links), Link, "links"))
 
     def json(self) -> Any:
         """Decode ``content`` into a new object on every call (D-23).
@@ -169,17 +197,6 @@ class Page:
             msg = "this page kept no content; collect(keep_pages=True) keeps it"
             raise ValueError(msg)
         return json.loads(self.content)
-
-    def __getstate__(self) -> dict[str, Any]:
-        # mappingproxy does not pickle.
-        state = {f.name: getattr(self, f.name) for f in fields(self)}
-        state["params"], state["headers"] = dict(self.params), dict(self.headers)
-        return state
-
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        for name, value in state.items():
-            object.__setattr__(self, name, value)
-        self.__post_init__()
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,4 +259,4 @@ class QueryResult:
     pagination: Pagination
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "pages", tuple(self.pages))
+        object.__setattr__(self, "pages", _all_of(tuple(self.pages), Page, "pages"))

@@ -5,11 +5,27 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 
 from water_ogcapi._logging import configure_logger
-from water_ogcapi._results import Link, Page, Pagination, QueryResult
+from water_ogcapi._results import (
+    Completeness,
+    Link,
+    Page,
+    Pagination,
+    QueryResult,
+    StopReason,
+)
 
 try:
     __version__ = version("water-ogcapi")
 except PackageNotFoundError:
     __version__ = "0.0.0+unknown"
 
-__all__ = ["Link", "Page", "Pagination", "QueryResult", "__version__", "configure_logger"]
+__all__ = [
+    "Completeness",
+    "Link",
+    "Page",
+    "Pagination",
+    "QueryResult",
+    "StopReason",
+    "__version__",
+    "configure_logger",
+]

@@ -404,7 +404,7 @@ Layering rule for anything new:
 
 ### D-21: Versioning and deprecation policy
 
-- **Status:** accepted.
+- **Status:** accepted; D-31 records that its 1.0 condition is met.
 - **Date:** 2026-10-07.
 - **Decision:** Versions are `MAJOR.MINOR.PATCH`, read from git tags by hatch-vcs. The
     public API is every name in `water_ogcapi.__all__` and in the `__all__` of a public
@@ -699,6 +699,23 @@ Layering rule for anything new:
     or below the declared maximum, so the untested behavior above it is never reached.
     Every value here can change without notice, and only the drift check (Q-05) would
     see it.
+
+### D-31: 1.0 no longer waits on NWIS
+
+- **Status:** accepted.
+- **Date:** 2026-10-08.
+- **Decision:** D-21's condition for leaving 0.x is met: USGS serves NWIS under
+    `/ogcapi/v1`, and the package targets it (D-30). The package may release 1.0 once
+    the maintainer judges its own public API settled. D-21's version scheme and
+    deprecation rule stand.
+- **Why:** D-21 held 0.x because USGS documented v0 as under development. The USGS
+    versioning page names v1 current and promises no breaking changes within a version,
+    with a new version running alongside the old one for a while. Chosen by the
+    maintainer.
+- **Rejected:** Moving the trigger to the next NWIS path, which holds 0.x for as long as
+    v1 lasts.
+- **Limits:** FabricData (pygeoapi 0.23.4) and GeoConnex (pygeoapi 0.24.dev0) publish no
+    versioning promise, so a change there can still force a major release after 1.0.
 
 ## Lessons
 

@@ -1,0 +1,307 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/schema?f=json",
+    "params": {
+      "f": "json"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:18 GMT",
+      "content-type": "application/schema+json; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
+      "age": "16887",
+      "api-version": "1.9.8",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 8ead054384c1626556ee4410cad35692.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSf ])",
+      "x-amz-cf-id": "02ik14jH6LOeEgDN6vK13tXpgKixGlZtuWHheof0WgTVyFRQRo1BgQ==",
+      "x-amz-cf-pop": "HIO52-P1",
+      "x-api-umbrella-request-id": "d13hq7p5g4tiji1eicog",
+      "x-build-version": "1.9.8-41c07339",
+      "x-cache": "Hit from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "4000",
+      "x-ratelimit-remaining": "3997",
+      "x-vcap-request-id": "65ecca41-616f-4924-52e9-b880a8a9b9d7",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "type": "object",
+      "title": "Monitoring locations",
+      "properties": {
+        "geometry": {
+          "format": "geometry-any",
+          "x-ogc-role": "primary-geometry"
+        },
+        "id": {
+          "type": "string",
+          "title": "Monitoring location ID",
+          "example": "USGS-09380000",
+          "description": "A unique identifier representing a single monitoring location. This corresponds to the `monitoring_location_id` field in other endpoints. Monitoring location IDs are created by combining the agency code of the agency responsible for the monitoring location (e.g. USGS) with the ID number of the monitoring location (e.g. 02238500), separated by a hyphen (e.g. USGS-02238500).\n",
+          "x-ogc-role": "id"
+        },
+        "agency_code": {
+          "type": "string",
+          "title": "Agency code",
+          "example": "USGS",
+          "description": "The agency that is reporting the data. Agency codes are fixed values assigned by the National Water Information System (NWIS). A list of agency codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/agency-codes/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/agency-codes/items).\n"
+        },
+        "agency_name": {
+          "type": "string",
+          "title": "Agency name",
+          "example": "U.S. Geological Survey",
+          "description": "The name of the agency that is reporting the data.\n"
+        },
+        "monitoring_location_number": {
+          "type": "string",
+          "title": "Monitoring location number",
+          "example": "09380000",
+          "description": "Each monitoring location in the USGS data base has a unique 8- to 15-digit identification number.\n"
+        },
+        "monitoring_location_name": {
+          "type": "string",
+          "title": "Monitoring location name",
+          "example": "Colorado River at Lees Ferry, AZ",
+          "description": "This is the official name of the monitoring location in the database. For well information this can be a district-assigned local number.\n"
+        },
+        "district_code": {
+          "type": "string",
+          "title": "District code",
+          "example": "04",
+          "description": "The Water Science Centers (WSCs) across the United States use the FIPS state code as the district code. In some case, monitoring locations and samples may be managed by a water science center that is adjacent to the state in which the monitoring location actually resides. For example a monitoring location may have a district code of 30 which translates to Montana, but the state code could be 56 for Wyoming because that is where the monitoring location actually is located.\n"
+        },
+        "country_code": {
+          "type": "string",
+          "title": "Country code",
+          "example": "US",
+          "description": "The code for the country in which the monitoring location is located.\n"
+        },
+        "country_name": {
+          "type": "string",
+          "title": "Country name",
+          "example": "United States of America",
+          "description": "The name of the country in which the monitoring location is located.\n"
+        },
+        "state_code": {
+          "type": "string",
+          "title": "State code",
+          "example": "04",
+          "description": "State code. A [two-digit ANSI code](https://www2.census.gov/geo/docs/reference/state.txt) (formerly FIPS code) as defined by the American National Standards Institute, to define States and equivalents. A three-digit ANSI code is used to define counties and county equivalents. [A lookup table is available.](https://www.census.gov/library/reference/code-lists/ansi.html#states) The only countries with political subdivisions other than the US are Mexico and Canada. The Mexican states have US state codes ranging from 81-86 and Canadian provinces have state codes ranging from 90-98.\n"
+        },
+        "state_name": {
+          "type": "string",
+          "title": "State name",
+          "example": "Arizona",
+          "description": "The name of the state or state equivalent in which the monitoring location is located.\n"
+        },
+        "county_code": {
+          "type": "string",
+          "title": "County code",
+          "example": "005",
+          "description": "The code for the county or county equivalent (parish, borough, etc.) in which the monitoring location is located. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/counties/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/counties/items).\n"
+        },
+        "county_name": {
+          "type": "string",
+          "title": "County name",
+          "example": "Coconino County",
+          "description": "The name of the county or county equivalent (parish, borough, etc.) in which the monitoring location is located. [A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/counties/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/counties/items).\n"
+        },
+        "minor_civil_division_code": {
+          "type": "string",
+          "title": "Minor civil division code",
+          "example": "01465",
+          "description": "Codes for primary governmental or administrative divisions of the county or county equivalent in which the monitoring location is located.\n"
+        },
+        "site_type_code": {
+          "type": "string",
+          "title": "Monitoring location type code",
+          "example": "ST",
+          "description": "A code describing the hydrologic setting of the monitoring location. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/site-types/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/site-types/items).\n"
+        },
+        "site_type": {
+          "type": "string",
+          "title": "Monitoring location type",
+          "example": "Stream",
+          "description": "A description of the hydrologic setting of the monitoring location. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/site-types/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/site-types/items).\n"
+        },
+        "hydrologic_unit_code": {
+          "type": "string",
+          "title": "Hydrologic unit code (HUC)",
+          "example": "15010001",
+          "description": "The hydrologic unit code (HUC) for the monitoring location. Supports prefix matching — querying with a shorter HUC (e.g. \"04\") matches all locations within that hydrologic region.\n"
+        },
+        "basin_code": {
+          "type": "string",
+          "title": "Basin code",
+          "example": "01",
+          "description": "The Basin Code or \"drainage basin code\" is a two-digit code that further subdivides the 8-digit hydrologic-unit code. The drainage basin code is defined by the USGS State Office where the monitoring location is located.\n"
+        },
+        "altitude": {
+          "type": "number",
+          "title": "Altitude",
+          "example": "930.63",
+          "description": "Altitude of the monitoring location referenced to the specified Vertical Datum.\n"
+        },
+        "altitude_accuracy": {
+          "type": "number",
+          "title": "Altitude accuracy",
+          "example": "0.16",
+          "description": "Accuracy of the altitude, in feet. An accuracy of +/- 0.1 foot would be entered as “.1”. Many altitudes are interpolated from the contours on topographic maps; accuracies determined in this way are generally entered as one-half of the contour interval.\n"
+        },
+        "altitude_method_code": {
+          "type": "string",
+          "title": "Altitude method code",
+          "example": "X",
+          "description": "Codes representing the method used to measure altitude.\n"
+        },
+        "altitude_method_name": {
+          "type": "string",
+          "title": "Altitude method name",
+          "example": "GNSS2 - Level 2 Quality Survey Grade Global Navigation Satellite System",
+          "description": "The name of the method used to measure altitude.\n"
+        },
+        "vertical_datum": {
+          "type": "string",
+          "title": "Vertical datum",
+          "example": "NAVD88",
+          "description": "The datum used to determine altitude and vertical position at the monitoring location. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/altitude-datums/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/altitude-datums/items).\n"
+        },
+        "vertical_datum_name": {
+          "type": "string",
+          "title": "Vertical datum name",
+          "example": "North American Vertical Datum of 1988",
+          "description": "The datum used to determine altitude and vertical position at the monitoring location. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/altitude-datums/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/altitude-datums/items).\n"
+        },
+        "horizontal_positional_accuracy_code": {
+          "type": "string",
+          "title": "Horizontal positional accuracy code",
+          "example": "S",
+          "description": "Indicates the accuracy of the latitude longitude values. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-accuracy-codes/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-accuracy-codes/items).\n"
+        },
+        "horizontal_positional_accuracy": {
+          "type": "string",
+          "title": "Horizontal positional accuracy",
+          "example": "Accurate to + or - 1 sec.",
+          "description": "Indicates the accuracy of the latitude longitude values. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-accuracy-codes/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-accuracy-codes/items).\n"
+        },
+        "horizontal_position_method_code": {
+          "type": "string",
+          "title": "Horizontal position method code",
+          "example": "N",
+          "description": "Indicates the method used to determine latitude longitude values. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-method-codes/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-method-codes/items).\n"
+        },
+        "horizontal_position_method_name": {
+          "type": "string",
+          "title": "Horizontal position method name",
+          "example": "Interpolated from digital map",
+          "description": "Indicates the method used to determine latitude longitude values. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-method-codes/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-method-codes/items).\n"
+        },
+        "original_horizontal_datum": {
+          "type": "string",
+          "title": "Original horizontal datum",
+          "example": "NAD83",
+          "description": "Coordinates are published in EPSG:4326 / WGS84 / World Geodetic System 1984. This field indicates the original datum used to determine coordinates before they were converted. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-datum-codes/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-datum-codes/items).\n"
+        },
+        "original_horizontal_datum_name": {
+          "type": "string",
+          "title": "Original horizontal datum name",
+          "example": "North American Datum of 1983",
+          "description": "Coordinates are published in EPSG:4326 / WGS84 / World Geodetic System 1984. This field indicates the original datum used to determine coordinates before they were converted. A list of codes is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-datum-codes/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/coordinate-datum-codes/items).\n"
+        },
+        "drainage_area": {
+          "type": "number",
+          "title": "Drainage area",
+          "example": "1338",
+          "description": "The area enclosed by a topographic divide from which direct surface runoff from precipitation normally drains by gravity into the stream above that point.\n"
+        },
+        "contributing_drainage_area": {
+          "type": "number",
+          "title": "Contributing drainage area",
+          "example": "1338",
+          "description": "The contributing drainage area of a lake, stream, wetland, or estuary monitoring location, in square miles. This item should be present only if the contributing area is different from the total drainage area. This situation can occur when part of the drainage area consists of very porous soil or depressions that either allow all runoff to enter the groundwater or traps the water in ponds so that rainfall does not contribute to runoff. A transbasin diversion can also affect the total drainage area.\n"
+        },
+        "time_zone_abbreviation": {
+          "type": "string",
+          "title": "Time zone abbreviation",
+          "example": "MST",
+          "description": "A short code describing the time zone used by a monitoring location.\n"
+        },
+        "uses_daylight_savings": {
+          "type": "string",
+          "title": "Uses daylight savings flag",
+          "example": "Y",
+          "description": "A flag indicating whether or not a monitoring location uses daylight savings.\n"
+        },
+        "construction_date": {
+          "type": "string",
+          "title": "Construction date",
+          "example": "19630101",
+          "description": "Date the well was completed.\n"
+        },
+        "aquifer_code": {
+          "type": "string",
+          "title": "Aquifer code",
+          "example": "300GRNT",
+          "description": "Local aquifers in the USGS water resources data base are identified by a geohydrologic unit code (a three-digit number related to the age of the formation, followed by a 4 or 5 character abbreviation for the geologic unit or aquifer name).\n"
+        },
+        "national_aquifer_code": {
+          "type": "string",
+          "title": "National aquifer code",
+          "example": "N100CMBRINM",
+          "description": "National aquifers are the principal aquifers or aquifer systems in the United States, defined as regionally extensive aquifers or aquifer systems that have the potential to be used as a source of potable water. Not all groundwater monitoring locations can be associated with a National Aquifer. Such monitoring locations will not be retrieved using this search criteria. A list of National aquifer codes and names is available at [https://api.waterdata.usgs.gov/ogcapi/v1/collections/national-aquifer-codes/items](https://api.waterdata.usgs.gov/ogcapi/v1/collections/national-aquifer-codes/items).\n"
+        },
+        "aquifer_type_code": {
+          "type": "string",
+          "title": "Aquifer type code",
+          "example": "U",
+          "description": "Describes the confinement status of an aquifer at the monitoring location. A confined aquifer is an aquifer below the land surface that is saturated with water. A water table--or unconfined--aquifer is an aquifer whose upper water surface (water table) is at atmospheric pressure, and thus is able to rise and fall.\n"
+        },
+        "well_constructed_depth": {
+          "type": "number",
+          "title": "Well constructed depth",
+          "example": "150",
+          "description": "The depth of the finished well, in feet below land surface datum. Note: Not all groundwater monitoring locations have information on Well Depth. Such monitoring locations will not be retrieved using this search criteria.\n"
+        },
+        "hole_constructed_depth": {
+          "type": "number",
+          "title": "Hole constructed depth",
+          "example": "160",
+          "description": "The total depth to which the hole is drilled, in feet below land surface datum. Note: Not all groundwater monitoring locations have information on Hole Depth. Such monitoring locations will not be retrieved using this search criteria.\n"
+        },
+        "depth_source_code": {
+          "type": "string",
+          "title": "Depth source code",
+          "example": "D",
+          "description": "A code indicating the source of water-level data.\n"
+        },
+        "revision_note": {
+          "type": "string",
+          "title": "Revision note",
+          "example": "Drainage area revised.",
+          "description": "Approved water data are considered published record, but on occasion changes or deletions (revisions) must be made to data after they are approved. Data revisions are rare because of USGS quality assurance practices, including documentation of all data before they are officially approved. This field contains text explanations for data revisions at this monitoring location. Changes to data also are indicated with revision qualifier codes alongside the data. Text explanations before 2017 are not necessarily available online, but can be requested.\n"
+        },
+        "revision_created": {
+          "type": "string",
+          "title": "Date revision created",
+          "example": "2017-11-13T06:00:00+00:00",
+          "description": "The date a revision statement was created.\n"
+        },
+        "revision_modified": {
+          "type": "string",
+          "title": "Date revision modified",
+          "example": "2024-06-14T13:30:29+00:00",
+          "description": "The most recent date a revision statement was modified.\n"
+        }
+      },
+      "$schema": "http://json-schema.org/draft/2019-09/schema",
+      "$id": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/schema"
+    }
+  }
+}

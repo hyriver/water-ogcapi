@@ -1,0 +1,170 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.water.usgs.gov/fabric/pygeoapi/collections/gagesii/items?f=json&offset=5&bbox=-77.12,38.80,-76.91,38.99&limit=5",
+    "params": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:31 GMT",
+      "content-type": "application/json",
+      "age": "4",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 e765e4220a4552156eaeff06c1304e0c.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSf ])",
+      "x-amz-cf-id": "meZYS3ZESxo7-ppjho73hdLIAX1vqRwCaROHw31cnglluqoNCAwnDA==",
+      "x-amz-cf-pop": "HIO52-P4",
+      "x-api-umbrella-request-id": "d13hq9rqjosbp60831jg",
+      "x-cache": "Miss from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "300",
+      "x-ratelimit-remaining": "293",
+      "x-vcap-request-id": "c924a68a-ef33-4e7f-7bca-85067d1d8aa5",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "ogc_fid": 1117,
+            "id": null,
+            "staid": "01651800",
+            "staname": "WATTS BRANCH AT WASHINGTON, DC",
+            "class": "Non-ref",
+            "aggecoregi": "SEPlains",
+            "drain_sqkm": 8.559,
+            "huc02": "02",
+            "lat_gage": 38.901111,
+            "lng_gage": -76.942194,
+            "state": "DC",
+            "hcdn_2009": null,
+            "active09": "yes",
+            "flyrs1900": 17,
+            "flyrs1950": 17,
+            "flyrs1990": 17
+          },
+          "id": "01651800",
+          "geometry": {
+            "type": "MultiPoint",
+            "coordinates": [
+              [
+                -76.94219626560022,
+                38.90111878965137
+              ]
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "ogc_fid": 1118,
+            "id": null,
+            "staid": "01652500",
+            "staname": "FOURMILE RUN AT ALEXANDRIA, VA",
+            "class": "Non-ref",
+            "aggecoregi": "SEPlains",
+            "drain_sqkm": 34.5501,
+            "huc02": "02",
+            "lat_gage": 38.843333,
+            "lng_gage": -77.085861,
+            "state": "VA",
+            "hcdn_2009": null,
+            "active09": "yes",
+            "flyrs1900": 34,
+            "flyrs1950": 34,
+            "flyrs1990": 11
+          },
+          "id": "01652500",
+          "geometry": {
+            "type": "MultiPoint",
+            "coordinates": [
+              [
+                -77.08586340680932,
+                38.843341072641245
+              ]
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "ogc_fid": 1119,
+            "id": null,
+            "staid": "01653000",
+            "staname": "CAMERON RUN AT ALEXANDRIA, VA",
+            "class": "Non-ref",
+            "aggecoregi": "SEPlains",
+            "drain_sqkm": 87.3063,
+            "huc02": "02",
+            "lat_gage": 38.806502,
+            "lng_gage": -77.109701,
+            "state": "VA",
+            "hcdn_2009": null,
+            "active09": "yes",
+            "flyrs1900": 47,
+            "flyrs1950": 47,
+            "flyrs1990": 20
+          },
+          "id": "01653000",
+          "geometry": {
+            "type": "MultiPoint",
+            "coordinates": [
+              [
+                -77.10970341198137,
+                38.806509864315125
+              ]
+            ]
+          }
+        }
+      ],
+      "numberReturned": 3,
+      "numberMatched": 8,
+      "links": [
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=json&bbox=-77.12,38.80,-76.91,38.99&limit=5"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=jsonld&bbox=-77.12,38.80,-76.91,38.99&limit=5"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=html&bbox=-77.12,38.80,-76.91,38.99&limit=5"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=5"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "prev",
+          "title": "Items (prev)",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=json&offset=0&bbox=-77.12,38.80,-76.91,38.99&limit=5"
+        },
+        {
+          "type": "application/json",
+          "title": "Gages-II Gages",
+          "rel": "collection",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:31.124225Z"
+    }
+  }
+}

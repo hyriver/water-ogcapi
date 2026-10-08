@@ -1,0 +1,161 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.water.usgs.gov/fabric/pygeoapi/collections/gagesii?f=json",
+    "params": {
+      "f": "json"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:20 GMT",
+      "content-type": "application/json",
+      "age": "210468",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 ba53e0bccc2d60bfa0ca7719c7526e16.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSf ])",
+      "x-amz-cf-id": "67eiqkvOI-2N6ds1Jt8x_-lJRrGrJoQ5vfWHxiMt0ddDdvX2hh_BJQ==",
+      "x-amz-cf-pop": "HIO52-P4",
+      "x-api-umbrella-request-id": "d13hq87ct19otoljd5og",
+      "x-cache": "Hit from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "300",
+      "x-ratelimit-remaining": "299",
+      "x-vcap-request-id": "6e53db8e-3049-4305-52fd-8f99fa0ab8d6",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "id": "gagesii",
+      "links": [
+        {
+          "type": "text/html",
+          "rel": "cite-as",
+          "title": "Gagesii Landing Page DOI https://doi.org/10.5066/P96CPHOT",
+          "href": "https://doi.org/10.5066/P96CPHOT",
+          "hreflang": "en-US"
+        },
+        {
+          "type": "application/json",
+          "rel": "root",
+          "title": "The landing page of this server as JSON",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi?f=json"
+        },
+        {
+          "type": "text/html",
+          "rel": "root",
+          "title": "The landing page of this server as HTML",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi?f=html"
+        },
+        {
+          "type": "application/json",
+          "rel": "self",
+          "title": "This document as JSON",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii?f=json"
+        },
+        {
+          "type": "application/ld+json",
+          "rel": "alternate",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii?f=jsonld"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii?f=html"
+        },
+        {
+          "type": "application/schema+json",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/schema",
+          "title": "Schema of collection in JSON",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/schema?f=json"
+        },
+        {
+          "type": "text/html",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/schema",
+          "title": "Schema of collection in HTML",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/schema?f=html"
+        },
+        {
+          "type": "application/schema+json",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/queryables",
+          "title": "Queryables for this collection as JSON",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/queryables?f=json"
+        },
+        {
+          "type": "text/html",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/queryables",
+          "title": "Queryables for this collection as HTML",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/queryables?f=html"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "items",
+          "title": "Items as GeoJSON",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=json"
+        },
+        {
+          "type": "application/ld+json",
+          "rel": "items",
+          "title": "Items as RDF (GeoJSON-LD)",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=jsonld"
+        },
+        {
+          "type": "text/html",
+          "rel": "items",
+          "title": "Items as HTML",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=html"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "items",
+          "title": "Items as CSV",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=csv"
+        },
+        {
+          "type": "application/json",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/tilesets-vector",
+          "title": "Tiles as JSON",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/tiles?f=json"
+        },
+        {
+          "type": "text/html",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/tilesets-vector",
+          "title": "Tiles as HTML",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/tiles?f=html"
+        }
+      ],
+      "title": "Gages-II Gages",
+      "description": "Geospatial Attributes of Gages for Evaluating Streamflow, Version II - https://doi.org/10.5066/P96CPHOT",
+      "keywords": [
+        "gages",
+        "gages-II",
+        "gagesii",
+        "gages2"
+      ],
+      "extent": {
+        "spatial": {
+          "bbox": [
+            [
+              -163.68,
+              18,
+              -65.69,
+              70.48
+            ]
+          ],
+          "crs": "http://www.opengis.net/def/crs/EPSG/0/4269"
+        }
+      },
+      "itemType": "feature",
+      "crs": [
+        "http://www.opengis.net/def/crs/OGC/1.3/CRS83",
+        "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+      ],
+      "storageCrs": "http://www.opengis.net/def/crs/OGC/1.3/CRS83"
+    }
+  }
+}

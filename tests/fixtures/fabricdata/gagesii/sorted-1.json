@@ -1,0 +1,237 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.water.usgs.gov/fabric/pygeoapi/collections/gagesii/items?f=json&bbox=-77.12%2C38.80%2C-76.91%2C38.99&limit=5&sortby=staid",
+    "params": {
+      "f": "json",
+      "bbox": "-77.12,38.80,-76.91,38.99",
+      "limit": "5",
+      "sortby": "staid"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:34 GMT",
+      "content-type": "application/json",
+      "age": "3",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 d71a9f9985c04c59760fd5574a6fe436.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSf ])",
+      "x-amz-cf-id": "4ZPuo26iYEOb8I_OtFluZEnYNgJ_dqMoZhv2rpaOynFsCFmPM-wvRw==",
+      "x-amz-cf-pop": "HIO52-P4",
+      "x-api-umbrella-request-id": "d13hqas5ejhonft7iin0",
+      "x-cache": "Miss from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "300",
+      "x-ratelimit-remaining": "292",
+      "x-vcap-request-id": "2e0a9268-1c1c-4598-7fc6-e6d2932f3044",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "ogc_fid": 1108,
+            "id": null,
+            "staid": "01646550",
+            "staname": "LITTLE FALLS BRANCH NEAR BETHESDA, MD",
+            "class": "Non-ref",
+            "aggecoregi": "SEPlains",
+            "drain_sqkm": 10.5219,
+            "huc02": "02",
+            "lat_gage": 38.957611,
+            "lng_gage": -77.108312,
+            "state": "MD",
+            "hcdn_2009": null,
+            "active09": null,
+            "flyrs1900": 31,
+            "flyrs1950": 26,
+            "flyrs1990": 0
+          },
+          "id": "01646550",
+          "geometry": {
+            "type": "MultiPoint",
+            "coordinates": [
+              [
+                -77.10831412079376,
+                38.95761839483606
+              ]
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "ogc_fid": 1110,
+            "id": null,
+            "staid": "01648000",
+            "staname": "ROCK CREEK AT SHERRILL DRIVE WASHINGTON, DC",
+            "class": "Non-ref",
+            "aggecoregi": "SEPlains",
+            "drain_sqkm": 136.8279,
+            "huc02": "02",
+            "lat_gage": 38.9725,
+            "lng_gage": -77.04,
+            "state": "DC",
+            "hcdn_2009": null,
+            "active09": "yes",
+            "flyrs1900": 80,
+            "flyrs1950": 60,
+            "flyrs1990": 20
+          },
+          "id": "01648000",
+          "geometry": {
+            "type": "MultiPoint",
+            "coordinates": [
+              [
+                -77.04000230043317,
+                38.972507800389785
+              ]
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "ogc_fid": 1113,
+            "id": null,
+            "staid": "01649500",
+            "staname": "NORTH EAST BRANCH ANACOSTIA RIVER AT RIVERDALE, MD",
+            "class": "Non-ref",
+            "aggecoregi": "SEPlains",
+            "drain_sqkm": 188.0622,
+            "huc02": "02",
+            "lat_gage": 38.96025,
+            "lng_gage": -76.925972,
+            "state": "MD",
+            "hcdn_2009": null,
+            "active09": "yes",
+            "flyrs1900": 71,
+            "flyrs1950": 60,
+            "flyrs1990": 20
+          },
+          "id": "01649500",
+          "geometry": {
+            "type": "MultiPoint",
+            "coordinates": [
+              [
+                -76.92597448415266,
+                38.96025780217785
+              ]
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "ogc_fid": 1115,
+            "id": null,
+            "staid": "01650800",
+            "staname": "SLIGO CREEK NEAR TAKOMA PARK, MD",
+            "class": "Non-ref",
+            "aggecoregi": "SEPlains",
+            "drain_sqkm": 16.7013,
+            "huc02": "02",
+            "lat_gage": 38.986222,
+            "lng_gage": -77.004861,
+            "state": "MD",
+            "hcdn_2009": null,
+            "active09": "yes",
+            "flyrs1900": 1,
+            "flyrs1950": 1,
+            "flyrs1990": 1
+          },
+          "id": "01650800",
+          "geometry": {
+            "type": "MultiPoint",
+            "coordinates": [
+              [
+                -77.00486329032732,
+                38.986229804465104
+              ]
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "ogc_fid": 1116,
+            "id": null,
+            "staid": "01651000",
+            "staname": "NW BRANCH ANACOSTIA RIVER NEAR HYATTSVILLE, MD",
+            "class": "Non-ref",
+            "aggecoregi": "SEPlains",
+            "drain_sqkm": 127.8054,
+            "huc02": "02",
+            "lat_gage": 38.952333,
+            "lng_gage": -76.966056,
+            "state": "MD",
+            "hcdn_2009": null,
+            "active09": "yes",
+            "flyrs1900": 71,
+            "flyrs1950": 60,
+            "flyrs1990": 20
+          },
+          "id": "01651000",
+          "geometry": {
+            "type": "MultiPoint",
+            "coordinates": [
+              [
+                -76.96605783616027,
+                38.95234112908951
+              ]
+            ]
+          }
+        }
+      ],
+      "numberReturned": 5,
+      "numberMatched": 8,
+      "links": [
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=json&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=staid"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=jsonld&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=staid"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=html&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=staid"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=staid"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "next",
+          "title": "Items (next)",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/items?f=json&offset=5&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=staid"
+        },
+        {
+          "type": "application/json",
+          "title": "Gages-II Gages",
+          "rel": "collection",
+          "href": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:34.889545Z"
+    }
+  }
+}

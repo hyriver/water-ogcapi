@@ -1,0 +1,101 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://reference.geoconnex.us/?f=json",
+    "params": {
+      "f": "json"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-powered-by": "pygeoapi 0.25.dev0",
+      "content-language": "en-US",
+      "x-cloud-trace-context": "3b49f5ef2a548b56ad0930087b66ace8",
+      "date": "Thu, 08 Oct 2026 16:59:38 GMT",
+      "server": "Google Frontend",
+      "expires": "Thu, 08 Oct 2026 16:59:38 GMT",
+      "cache-control": "private",
+      "vary": "Accept-Encoding, Origin",
+      "x-cache": "Miss from cloudfront",
+      "via": "1.1 b508a0e8744edb82beb1add8f2f035d4.cloudfront.net (CloudFront)",
+      "x-amz-cf-pop": "ORD58-P2",
+      "x-amz-cf-id": "-SBBP22FoejUz0mI-QBMq6qDuBczXiyMBBHNKSt_FY4j6g9tZUe-uw=="
+    },
+    "body": {
+      "links": [
+        {
+          "rel": "about",
+          "type": "text/html",
+          "title": "Geoconnex Reference Service",
+          "href": "https://github.com/internetofwater/reference.geoconnex.us"
+        },
+        {
+          "rel": "self",
+          "type": "application/json",
+          "title": "This document as JSON",
+          "href": "https://reference.geoconnex.us?f=json"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://reference.geoconnex.us?f=jsonld"
+        },
+        {
+          "rel": "alternate",
+          "type": "text/html",
+          "title": "This document as HTML",
+          "href": "https://reference.geoconnex.us?f=html",
+          "hreflang": "en-US"
+        },
+        {
+          "rel": "service-desc",
+          "type": "application/vnd.oai.openapi+json;version=3.0",
+          "title": "The OpenAPI definition as JSON",
+          "href": "https://reference.geoconnex.us/openapi"
+        },
+        {
+          "rel": "service-doc",
+          "type": "text/html",
+          "title": "The OpenAPI definition as HTML",
+          "href": "https://reference.geoconnex.us/openapi?f=html",
+          "hreflang": "en-US"
+        },
+        {
+          "rel": "conformance",
+          "type": "application/json",
+          "title": "Conformance",
+          "href": "https://reference.geoconnex.us/conformance"
+        },
+        {
+          "rel": "data",
+          "type": "application/json",
+          "title": "Collections",
+          "href": "https://reference.geoconnex.us/collections"
+        },
+        {
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/processes",
+          "type": "application/json",
+          "title": "Processes",
+          "href": "https://reference.geoconnex.us/processes"
+        },
+        {
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/tiling-schemes",
+          "type": "application/json",
+          "title": "The list of supported tiling schemes as JSON",
+          "href": "https://reference.geoconnex.us/TileMatrixSets?f=json"
+        },
+        {
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/tiling-schemes",
+          "type": "text/html",
+          "title": "The list of supported tiling schemes as HTML",
+          "href": "https://reference.geoconnex.us/TileMatrixSets?f=html"
+        }
+      ],
+      "title": "Geoconnex Reference Service",
+      "description": "Provides reference for community features in geoconnex.us"
+    }
+  }
+}

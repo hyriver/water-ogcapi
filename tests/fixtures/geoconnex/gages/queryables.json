@@ -1,0 +1,120 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://reference.geoconnex.us/collections/gages/queryables?f=json",
+    "params": {
+      "f": "json"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/schema+json; charset=utf-8",
+      "x-powered-by": "pygeoapi 0.25.dev0",
+      "content-language": "en-US",
+      "x-cloud-trace-context": "9693cc0674701968604ec6addd321913",
+      "date": "Thu, 08 Oct 2026 16:59:39 GMT",
+      "server": "Google Frontend",
+      "expires": "Thu, 08 Oct 2026 16:59:39 GMT",
+      "cache-control": "private",
+      "vary": "Accept-Encoding, Origin",
+      "x-cache": "Miss from cloudfront",
+      "via": "1.1 b508a0e8744edb82beb1add8f2f035d4.cloudfront.net (CloudFront)",
+      "x-amz-cf-pop": "ORD58-P2",
+      "x-amz-cf-id": "iAKHNcLpXfAFXs37ntIqB7acwts6ZBiA4QirPwyfXGYAuaizEdDi5w=="
+    },
+    "body": {
+      "type": "object",
+      "title": "Reference Gages",
+      "properties": {
+        "geometry": {
+          "format": "geometry-any",
+          "x-ogc-role": "primary-geometry"
+        },
+        "fid": {
+          "title": "fid",
+          "type": "integer"
+        },
+        "id": {
+          "title": "id",
+          "type": "integer",
+          "x-ogc-role": "id"
+        },
+        "uri": {
+          "title": "uri",
+          "type": "string"
+        },
+        "name": {
+          "title": "name",
+          "type": "string"
+        },
+        "description": {
+          "title": "description",
+          "type": "string"
+        },
+        "subjectof": {
+          "title": "subjectof",
+          "type": "string"
+        },
+        "provider": {
+          "title": "provider",
+          "type": "string"
+        },
+        "provider_id": {
+          "title": "provider_id",
+          "type": "string"
+        },
+        "nhdpv2_reachcode": {
+          "title": "nhdpv2_reachcode",
+          "type": "string"
+        },
+        "nhdpv2_reach_measure": {
+          "title": "nhdpv2_reach_measure",
+          "type": "number"
+        },
+        "nhdpv2_comid": {
+          "title": "nhdpv2_comid",
+          "type": "number"
+        },
+        "nhdpv2_totdasqkm": {
+          "title": "nhdpv2_totdasqkm",
+          "type": "number"
+        },
+        "nhdpv2_link_source": {
+          "title": "nhdpv2_link_source",
+          "type": "string"
+        },
+        "nhdpv2_offset_m": {
+          "title": "nhdpv2_offset_m",
+          "type": "number"
+        },
+        "gage_totdasqkm": {
+          "title": "gage_totdasqkm",
+          "type": "number"
+        },
+        "dasqkm_diff": {
+          "title": "dasqkm_diff",
+          "type": "number"
+        },
+        "mainstem_uri": {
+          "title": "mainstem_uri",
+          "type": "string"
+        },
+        "nws_url": {
+          "title": "nws_url",
+          "type": "string"
+        },
+        "hivis_camera_url": {
+          "title": "hivis_camera_url",
+          "type": "string"
+        },
+        "cluster": {
+          "title": "cluster",
+          "type": "string"
+        }
+      },
+      "$schema": "http://json-schema.org/draft/2019-09/schema",
+      "$id": "https://reference.geoconnex.us/collections/gages/queryables?f=json"
+    }
+  }
+}

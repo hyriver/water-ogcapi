@@ -1,0 +1,278 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://reference.geoconnex.us/collections/gages/items?f=json&bbox=-77.12%2C38.80%2C-76.91%2C38.99&limit=5&sortby=id",
+    "params": {
+      "f": "json",
+      "bbox": "-77.12,38.80,-76.91,38.99",
+      "limit": "5",
+      "sortby": "id"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-powered-by": "pygeoapi 0.25.dev0",
+      "content-language": "en-US",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "x-cloud-trace-context": "62fe14cd47a0cbe37c3176a4cf8f5237",
+      "date": "Thu, 08 Oct 2026 16:59:39 GMT",
+      "server": "Google Frontend",
+      "expires": "Thu, 08 Oct 2026 16:59:39 GMT",
+      "cache-control": "private",
+      "vary": "Accept-Encoding, Origin",
+      "x-cache": "Miss from cloudfront",
+      "via": "1.1 b508a0e8744edb82beb1add8f2f035d4.cloudfront.net (CloudFront)",
+      "x-amz-cf-pop": "ORD58-P2",
+      "x-amz-cf-id": "JVgZAaCDRkW0pGnqIMlzsA66oWi3uNZouZAAyo2-fe8s4T2MPwb5aA=="
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 1677,
+            "id": 1001719,
+            "uri": "https://geoconnex.us/ref/gages/1001719",
+            "name": "TRIB TO ANACOSTIA R ABV GOOD HOPE ROAD AT WASH, DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-0165182550: TRIB TO ANACOSTIA R ABV GOOD HOPE ROAD AT WASH, DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-0165182550",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-0165182550",
+            "nhdpv2_reachcode": null,
+            "nhdpv2_reach_measure": null,
+            "nhdpv2_comid": null,
+            "nhdpv2_totdasqkm": null,
+            "nhdpv2_link_source": null,
+            "nhdpv2_offset_m": null,
+            "gage_totdasqkm": 0.6,
+            "dasqkm_diff": null,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1001719,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -76.97658003100737,
+              38.8639168481706
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 2601,
+            "id": 1002680,
+            "uri": "https://geoconnex.us/ref/gages/1002680",
+            "name": "POPE BRANCH AT FAIRLAWN AVE AT WASHINGTON, DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01651817: POPE BRANCH AT FAIRLAWN AVE AT WASHINGTON, DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01651817",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01651817",
+            "nhdpv2_reachcode": null,
+            "nhdpv2_reach_measure": null,
+            "nhdpv2_comid": null,
+            "nhdpv2_totdasqkm": null,
+            "nhdpv2_link_source": null,
+            "nhdpv2_offset_m": null,
+            "gage_totdasqkm": 0.9,
+            "dasqkm_diff": null,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1002680,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -76.96661616227853,
+              38.877600211662575
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 2671,
+            "id": 1002752,
+            "uri": "https://geoconnex.us/ref/gages/1002752",
+            "name": "EAST CREEK TRIB NR DALECARLIA RES AT WASHINGTON DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-0164656550: EAST CREEK TRIB NR DALECARLIA RES AT WASHINGTON DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-0164656550",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-0164656550",
+            "nhdpv2_reachcode": null,
+            "nhdpv2_reach_measure": null,
+            "nhdpv2_comid": null,
+            "nhdpv2_totdasqkm": null,
+            "nhdpv2_link_source": null,
+            "nhdpv2_offset_m": null,
+            "gage_totdasqkm": 0.9,
+            "dasqkm_diff": null,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": "https://geoconnex.us/ref/gages/1102092"
+          },
+          "id": 1002752,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.10527494231647,
+              38.93972238259839
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 4818,
+            "id": 1005017,
+            "uri": "https://geoconnex.us/ref/gages/1005017",
+            "name": "UNMED TRIB TO ANACOSTIA R BLW FT DUPONT AT WASH DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01651810: UNMED TRIB TO ANACOSTIA R BLW FT DUPONT AT WASH DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01651810",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01651810",
+            "nhdpv2_reachcode": "02070010001218",
+            "nhdpv2_reach_measure": 9.7314,
+            "nhdpv2_comid": 22338127.0,
+            "nhdpv2_totdasqkm": 403.2,
+            "nhdpv2_link_source": "https://github.com/internetofwater/ref_gages",
+            "nhdpv2_offset_m": 394.410512656717,
+            "gage_totdasqkm": 1.8,
+            "dasqkm_diff": 401.4,
+            "mainstem_uri": "https://geoconnex.us/ref/mainstems/2153643",
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1005017,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -76.96399677382988,
+              38.882111320855294
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 4924,
+            "id": 1005130,
+            "uri": "https://geoconnex.us/ref/gages/1005130",
+            "name": "NASH RUN AT WASHINGTON, DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01651740: NASH RUN AT WASHINGTON, DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01651740",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01651740",
+            "nhdpv2_reachcode": "02070010001135",
+            "nhdpv2_reach_measure": 100.0,
+            "nhdpv2_comid": 22338115.0,
+            "nhdpv2_totdasqkm": 2.5,
+            "nhdpv2_link_source": "https://github.com/internetofwater/ref_gages",
+            "nhdpv2_offset_m": 376.741328936737,
+            "gage_totdasqkm": 1.8,
+            "dasqkm_diff": 0.7,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1005130,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -76.9421079401411,
+              38.91033358413319
+            ]
+          }
+        }
+      ],
+      "numberReturned": 5,
+      "numberMatched": 157,
+      "links": [
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=jsonld&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=html&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as csv",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "alternate",
+          "title": "This document as jsonfg",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=jsonfg&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/zip",
+          "rel": "alternate",
+          "title": "This document as shp",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=shp&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geopackage+sqlite3",
+          "rel": "alternate",
+          "title": "This document as gpkg",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=gpkg&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/vnd.google-earth.kml+xml",
+          "rel": "alternate",
+          "title": "This document as kml",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=kml&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/vnd.apache.parquet",
+          "rel": "alternate",
+          "title": "This document as parquet",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=parquet&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "next",
+          "title": "Items (next)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json&offset=5&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/json",
+          "title": "Reference Gages",
+          "rel": "collection",
+          "href": "https://reference.geoconnex.us/collections/gages"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:39.795726Z"
+    }
+  }
+}

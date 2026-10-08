@@ -1,0 +1,279 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://reference.geoconnex.us/collections/gages/items?f=json&offset=5&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id",
+    "params": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-powered-by": "pygeoapi 0.25.dev0",
+      "content-language": "en-US",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "x-cloud-trace-context": "db9abe5124d13114065029208d556270",
+      "date": "Thu, 08 Oct 2026 16:59:40 GMT",
+      "server": "Google Frontend",
+      "expires": "Thu, 08 Oct 2026 16:59:40 GMT",
+      "cache-control": "private",
+      "vary": "Accept-Encoding, Origin",
+      "x-cache": "Miss from cloudfront",
+      "via": "1.1 b508a0e8744edb82beb1add8f2f035d4.cloudfront.net (CloudFront)",
+      "x-amz-cf-pop": "ORD58-P2",
+      "x-amz-cf-id": "qPxJ9DLLAvvLetwhrY0a1x6IrzPeZIyQHdInDf7fUML_zxylLK0-cA=="
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 5199,
+            "id": 1005422,
+            "uri": "https://geoconnex.us/ref/gages/1005422",
+            "name": "DONALDSON RUN AT MILITARY RD AT ARLINGTON, VA",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01647500: DONALDSON RUN AT MILITARY RD AT ARLINGTON, VA",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01647500",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01647500",
+            "nhdpv2_reachcode": "02070010001027",
+            "nhdpv2_reach_measure": 52.1374,
+            "nhdpv2_comid": 22338557.0,
+            "nhdpv2_totdasqkm": 2.7,
+            "nhdpv2_link_source": "https://github.com/internetofwater/ref_gages",
+            "nhdpv2_offset_m": 26.4223689887246,
+            "gage_totdasqkm": 1.9,
+            "dasqkm_diff": 0.8,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1005422,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.11358695039092,
+              38.91122263431737
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 6201,
+            "id": 1006497,
+            "uri": "https://geoconnex.us/ref/gages/1006497",
+            "name": "DOCTORS RUN AT ARLINGTON, VA",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01652430: DOCTORS RUN AT ARLINGTON, VA",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01652430",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01652430",
+            "nhdpv2_reachcode": "02070010001017",
+            "nhdpv2_reach_measure": 72.6383,
+            "nhdpv2_comid": 22340297.0,
+            "nhdpv2_totdasqkm": 3.7,
+            "nhdpv2_link_source": "https://github.com/internetofwater/ref_gages",
+            "nhdpv2_offset_m": 17.3439829182972,
+            "gage_totdasqkm": 2.4,
+            "dasqkm_diff": 1.3,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1006497,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.10219787540316,
+              38.86177901141527
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 6462,
+            "id": 1006774,
+            "uri": "https://geoconnex.us/ref/gages/1006774",
+            "name": "HICKEY RUN AT NATIONAL ARBORETUM AT WASHINGTON, DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01651770: HICKEY RUN AT NATIONAL ARBORETUM AT WASHINGTON, DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01651770",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01651770",
+            "nhdpv2_reachcode": null,
+            "nhdpv2_reach_measure": null,
+            "nhdpv2_comid": null,
+            "nhdpv2_totdasqkm": null,
+            "nhdpv2_link_source": null,
+            "nhdpv2_offset_m": null,
+            "gage_totdasqkm": 2.6,
+            "dasqkm_diff": null,
+            "mainstem_uri": null,
+            "nws_url": "https://water.noaa.gov/gauges/NAHD2",
+            "hivis_camera_url": "https://apps.usgs.gov/hivis/camera/DC_Hickey_Run_at_National_Arboretum_at_Washington",
+            "cluster": null
+          },
+          "id": 1006774,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -76.9688579984969,
+              38.916111340134
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 6596,
+            "id": 1006917,
+            "uri": "https://geoconnex.us/ref/gages/1006917",
+            "name": "TAYLOR RUN AT ALEXANDRIA, VA",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01653410: TAYLOR RUN AT ALEXANDRIA, VA",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01653410",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01653410",
+            "nhdpv2_reachcode": "02070010001014",
+            "nhdpv2_reach_measure": 41.586,
+            "nhdpv2_comid": 22339093.0,
+            "nhdpv2_totdasqkm": 3.5,
+            "nhdpv2_link_source": "https://github.com/internetofwater/ref_gages",
+            "nhdpv2_offset_m": 51.9515482875757,
+            "gage_totdasqkm": 2.6,
+            "dasqkm_diff": 0.9,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1006917,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.07497470287197,
+              38.80844659110842
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 7394,
+            "id": 1007784,
+            "uri": "https://geoconnex.us/ref/gages/1007784",
+            "name": "MILL CREEK TRIB NR DALECARLIA RES AT WASHINGTON DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01646563: MILL CREEK TRIB NR DALECARLIA RES AT WASHINGTON DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01646563",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01646563",
+            "nhdpv2_reachcode": null,
+            "nhdpv2_reach_measure": null,
+            "nhdpv2_comid": null,
+            "nhdpv2_totdasqkm": null,
+            "nhdpv2_link_source": null,
+            "nhdpv2_offset_m": null,
+            "gage_totdasqkm": 3.1,
+            "dasqkm_diff": null,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1007784,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.10444156710557,
+              38.945555752011
+            ]
+          }
+        }
+      ],
+      "numberReturned": 5,
+      "numberMatched": 157,
+      "links": [
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=jsonld&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=html&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as csv",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "alternate",
+          "title": "This document as jsonfg",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=jsonfg&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/zip",
+          "rel": "alternate",
+          "title": "This document as shp",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=shp&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geopackage+sqlite3",
+          "rel": "alternate",
+          "title": "This document as gpkg",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=gpkg&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/vnd.google-earth.kml+xml",
+          "rel": "alternate",
+          "title": "This document as kml",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=kml&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/vnd.apache.parquet",
+          "rel": "alternate",
+          "title": "This document as parquet",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=parquet&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "prev",
+          "title": "Items (prev)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json&offset=0&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "next",
+          "title": "Items (next)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json&offset=10&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/json",
+          "title": "Reference Gages",
+          "rel": "collection",
+          "href": "https://reference.geoconnex.us/collections/gages"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:40.083699Z"
+    }
+  }
+}

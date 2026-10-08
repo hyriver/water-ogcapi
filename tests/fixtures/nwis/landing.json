@@ -1,0 +1,110 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.waterdata.usgs.gov/ogcapi/v1/?f=json",
+    "params": {
+      "f": "json"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:18 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
+      "age": "0",
+      "api-version": "1.9.8",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 50cc3f0b039433daebdf343a3f4489ae.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSf ])",
+      "x-amz-cf-id": "MgX9ItUv-rG8-J25AU-GPYSbUcrS2AmiXE3KuwoHgONBmmqAoHK_zg==",
+      "x-amz-cf-pop": "HIO52-P1",
+      "x-api-umbrella-request-id": "d13hq7lj1rufo66kqoqg",
+      "x-build-version": "1.9.8-41c07339",
+      "x-cache": "Miss from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "4000",
+      "x-ratelimit-remaining": "3999",
+      "x-vcap-request-id": "c6a847f2-cbee-487a-5cb8-28292a80b19b",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "links": [
+        {
+          "rel": "about",
+          "type": "text/html",
+          "title": "USGS Water Data APIs",
+          "href": "https://api.waterdata.usgs.gov"
+        },
+        {
+          "rel": "self",
+          "type": "application/json",
+          "title": "This document as JSON",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1?f=json"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1?f=jsonld"
+        },
+        {
+          "rel": "alternate",
+          "type": "text/html",
+          "title": "This document as HTML",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1?f=html",
+          "hreflang": "en-US"
+        },
+        {
+          "rel": "service-desc",
+          "type": "application/vnd.oai.openapi+json;version=3.0",
+          "title": "The OpenAPI definition as JSON",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/openapi"
+        },
+        {
+          "rel": "service-doc",
+          "type": "text/html",
+          "title": "The OpenAPI definition as HTML",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/openapi?f=html",
+          "hreflang": "en-US"
+        },
+        {
+          "rel": "conformance",
+          "type": "application/json",
+          "title": "Conformance",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/conformance"
+        },
+        {
+          "rel": "data",
+          "type": "application/json",
+          "title": "Collections",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections"
+        },
+        {
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/processes",
+          "type": "application/json",
+          "title": "Processes",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/processes"
+        },
+        {
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/tiling-schemes",
+          "type": "application/json",
+          "title": "The list of supported tiling schemes as JSON",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/TileMatrixSets?f=json"
+        },
+        {
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/tiling-schemes",
+          "type": "text/html",
+          "title": "The list of supported tiling schemes as HTML",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/TileMatrixSets?f=html"
+        }
+      ],
+      "title": "USGS Water Data APIs",
+      "description": "The United States Geological Survey (USGS) collects water data at monitoring locations across the United States using both automated sensors and manual data collection. These APIs provide access to that data, alongside metadata about data collections and monitoring locations, in standardized machine-readable formats.\n"
+    }
+  }
+}

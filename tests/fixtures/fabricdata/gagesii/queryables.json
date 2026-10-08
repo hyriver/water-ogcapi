@@ -1,0 +1,108 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.water.usgs.gov/fabric/pygeoapi/collections/gagesii/queryables?f=json",
+    "params": {
+      "f": "json"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:20 GMT",
+      "content-type": "application/schema+json",
+      "age": "176511",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "via": "1.1 2d69093e294db929b26be80ccee94472.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSf ])",
+      "x-amz-cf-id": "wrhJfmYHx2yKEgT9_dFpjR5inHkU-IXyKQduE_vTjIOtHJIpoMUT5Q==",
+      "x-amz-cf-pop": "HIO52-P4",
+      "x-api-umbrella-request-id": "d13hq882n9aq5bh5l3pg",
+      "x-cache": "Hit from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "300",
+      "x-ratelimit-remaining": "298",
+      "x-vcap-request-id": "f447c0b1-016e-4eda-54b3-ef92d3061839",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "type": "object",
+      "title": "Gages-II Gages",
+      "properties": {
+        "geometry": {
+          "format": "geometry-any",
+          "x-ogc-role": "primary-geometry"
+        },
+        "ogc_fid": {
+          "title": "ogc_fid",
+          "type": "integer"
+        },
+        "id": {
+          "title": "id",
+          "type": "string"
+        },
+        "staid": {
+          "title": "staid",
+          "type": "string",
+          "x-ogc-role": "id"
+        },
+        "staname": {
+          "title": "staname",
+          "type": "string"
+        },
+        "class": {
+          "title": "class",
+          "type": "string"
+        },
+        "aggecoregi": {
+          "title": "aggecoregi",
+          "type": "string"
+        },
+        "drain_sqkm": {
+          "title": "drain_sqkm",
+          "type": "number"
+        },
+        "huc02": {
+          "title": "huc02",
+          "type": "string"
+        },
+        "lat_gage": {
+          "title": "lat_gage",
+          "type": "number"
+        },
+        "lng_gage": {
+          "title": "lng_gage",
+          "type": "number"
+        },
+        "state": {
+          "title": "state",
+          "type": "string"
+        },
+        "hcdn_2009": {
+          "title": "hcdn_2009",
+          "type": "string"
+        },
+        "active09": {
+          "title": "active09",
+          "type": "string"
+        },
+        "flyrs1900": {
+          "title": "flyrs1900",
+          "type": "integer"
+        },
+        "flyrs1950": {
+          "title": "flyrs1950",
+          "type": "integer"
+        },
+        "flyrs1990": {
+          "title": "flyrs1990",
+          "type": "integer"
+        }
+      },
+      "$schema": "http://json-schema.org/draft/2019-09/schema",
+      "$id": "https://api.water.usgs.gov:443/fabric/pygeoapi/collections/gagesii/queryables?f=json"
+    }
+  }
+}

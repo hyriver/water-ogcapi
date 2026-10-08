@@ -1,0 +1,150 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?cursor=MzY5MzNmNjQtNmY2OS00YTVjLWIyZTItZWI1NDk2NjVlYjM2&monitoring_location_id=USGS-01646500&parameter_code=00060&datetime=2026-09-01%2F2026-09-30&limit=3&f=json",
+    "params": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:19 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
+      "age": "0",
+      "api-version": "1.9.8",
+      "cache-control": "public, max-age=3600",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 88a7ff956a5b49ec3a35abfc0027af12.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSfW])",
+      "x-amz-cf-id": "q6RCrjzmFE-MnE84awjMbuwW-T5yD_lu_WGijTRZk3BACPiVKcqtpg==",
+      "x-amz-cf-pop": "HIO52-P1",
+      "x-api-umbrella-request-id": "d13hq828r36hsq7irvtg",
+      "x-build-version": "1.9.8-41c07339",
+      "x-cache": "Miss from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "1000",
+      "x-ratelimit-remaining": "988",
+      "x-vcap-request-id": "a6489957-9a27-4136-7e63-8ac35e2fa46e",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "time_series_id": "2cf409b0d9694c01828f5d4ff14586a5",
+            "monitoring_location_id": "USGS-01646500",
+            "parameter_code": "00060",
+            "statistic_id": "00003",
+            "time": "2026-09-01",
+            "value": "2320",
+            "unit_of_measure": "ft^3/s",
+            "approval_status": "Provisional",
+            "qualifier": null,
+            "last_modified": "2026-09-02T07:08:28.996577+00:00"
+          },
+          "id": "4011249a-3c4d-4299-8d9b-f5a2d39845a0",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.12763888888888,
+              38.949777777777776
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "time_series_id": "2cf409b0d9694c01828f5d4ff14586a5",
+            "monitoring_location_id": "USGS-01646500",
+            "parameter_code": "00060",
+            "statistic_id": "00003",
+            "time": "2026-09-22",
+            "value": "2640",
+            "unit_of_measure": "ft^3/s",
+            "approval_status": "Provisional",
+            "qualifier": null,
+            "last_modified": "2026-09-23T07:07:55.466930+00:00"
+          },
+          "id": "49e4b9bf-6fe8-4cac-87fd-e992d1a6f5c5",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.12763888888888,
+              38.949777777777776
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "time_series_id": "2cf409b0d9694c01828f5d4ff14586a5",
+            "monitoring_location_id": "USGS-01646500",
+            "parameter_code": "00060",
+            "statistic_id": "00003",
+            "time": "2026-09-28",
+            "value": "3800",
+            "unit_of_measure": "ft^3/s",
+            "approval_status": "Provisional",
+            "qualifier": null,
+            "last_modified": "2026-09-29T07:08:17.284720+00:00"
+          },
+          "id": "551c6aab-0e5d-4219-b502-a5e3f68320cf",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.12763888888888,
+              38.949777777777776
+            ]
+          }
+        }
+      ],
+      "numberReturned": 3,
+      "links": [
+        {
+          "rel": "next",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?cursor=NTUxYzZhYWItMGU1ZC00MjE5LWI1MDItYTVlM2Y2ODMyMGNm&monitoring_location_id=USGS-01646500&parameter_code=00060&datetime=2026-09-01%2F2026-09-30&limit=3&f=json",
+          "type": "application/geo+json",
+          "title": "Items (next)"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?f=json&monitoring_location_id=USGS-01646500&parameter_code=00060&datetime=2026-09-01%2F2026-09-30&limit=3"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?f=jsonld&monitoring_location_id=USGS-01646500&parameter_code=00060&datetime=2026-09-01%2F2026-09-30&limit=3"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?f=html&monitoring_location_id=USGS-01646500&parameter_code=00060&datetime=2026-09-01%2F2026-09-30&limit=3"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?f=csv&monitoring_location_id=USGS-01646500&parameter_code=00060&datetime=2026-09-01%2F2026-09-30&limit=3"
+        },
+        {
+          "type": "application/json",
+          "title": "Daily values",
+          "rel": "collection",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:19.742880Z"
+    }
+  }
+}

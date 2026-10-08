@@ -1,0 +1,249 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?cursor=TUQwMDctMzg1ODQyMDc3MDU1MzAx&bbox=-77.12,38.80,-76.91,38.99&limit=3&f=json",
+    "params": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:18 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
+      "age": "0",
+      "api-version": "1.9.8",
+      "cache-control": "public, max-age=3600",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 a87682502db4b394cc6ba84510da9f98.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSfW])",
+      "x-amz-cf-id": "JNvu4cTBXgnfnIbQt_XT7OCQs4V77nuhLjsEpdJZZpUKR3QqPtFETg==",
+      "x-amz-cf-pop": "HIO52-P1",
+      "x-api-umbrella-request-id": "d13hq7r0jhns1jheaseg",
+      "x-build-version": "1.9.8-41c07339",
+      "x-cache": "Miss from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "1000",
+      "x-ratelimit-remaining": "996",
+      "x-vcap-request-id": "3262e3a0-e6ec-4d7b-6a90-100720cb97f8",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "USEPA-385353076573301",
+            "agency_code": "USEPA",
+            "agency_name": "U.S. Environmental Protection Agency",
+            "monitoring_location_number": "385353076573301",
+            "monitoring_location_name": "DC90S001",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "11",
+            "state_name": "District of Columbia",
+            "county_code": "001",
+            "county_name": "District of Columbia",
+            "minor_civil_division_code": null,
+            "site_type_code": "ST",
+            "site_type": "Stream",
+            "hydrologic_unit_code": "020700100204",
+            "basin_code": null,
+            "altitude": null,
+            "altitude_accuracy": null,
+            "altitude_method_code": null,
+            "altitude_method_name": null,
+            "vertical_datum": null,
+            "vertical_datum_name": null,
+            "horizontal_positional_accuracy_code": "S",
+            "horizontal_positional_accuracy": "Accurate to + or - 1 sec.",
+            "horizontal_position_method_code": "M",
+            "horizontal_position_method_name": "Interpolated from map",
+            "original_horizontal_datum": "NAD27",
+            "original_horizontal_datum_name": "North American Datum of 1927",
+            "drainage_area": null,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": null,
+            "national_aquifer_code": null,
+            "aquifer_type_code": null,
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "USEPA-385353076573301",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -76.9588636539185,
+              38.8981674463929
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "USGS-01646550",
+            "agency_code": "USGS",
+            "agency_name": "U.S. Geological Survey",
+            "monitoring_location_number": "01646550",
+            "monitoring_location_name": "LITTLE FALLS BRANCH NEAR BETHESDA, MD",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "24",
+            "state_name": "Maryland",
+            "county_code": "031",
+            "county_name": "Montgomery County",
+            "minor_civil_division_code": null,
+            "site_type_code": "ST",
+            "site_type": "Stream",
+            "hydrologic_unit_code": "020700081005",
+            "basin_code": null,
+            "altitude": 169.32,
+            "altitude_accuracy": 0.01,
+            "altitude_method_code": "L",
+            "altitude_method_name": "Level or other surveyed method.",
+            "vertical_datum": "NGVD29",
+            "vertical_datum_name": "National Geodetic Vertical Datum of 1929",
+            "horizontal_positional_accuracy_code": "S",
+            "horizontal_positional_accuracy": "Accurate to + or - 1 sec.",
+            "horizontal_position_method_code": "M",
+            "horizontal_position_method_name": "Interpolated from MAP.",
+            "original_horizontal_datum": "NAD27",
+            "original_horizontal_datum_name": "North American Datum of 1927",
+            "drainage_area": 4.1,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": null,
+            "national_aquifer_code": null,
+            "aquifer_type_code": null,
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "USGS-01646550",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.1083117719245,
+              38.9576106143618
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "USGS-01646562",
+            "agency_code": "USGS",
+            "agency_name": "U.S. Geological Survey",
+            "monitoring_location_number": "01646562",
+            "monitoring_location_name": "DALECARLIA/POTOMAC R WATER INTAKE NEAR BETHESDA MD",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "24",
+            "state_name": "Maryland",
+            "county_code": "031",
+            "county_name": "Montgomery County",
+            "minor_civil_division_code": null,
+            "site_type_code": "FA-OF",
+            "site_type": "Outfall",
+            "hydrologic_unit_code": "020700081005",
+            "basin_code": null,
+            "altitude": 145.0,
+            "altitude_accuracy": 10.0,
+            "altitude_method_code": "N",
+            "altitude_method_name": "Interpolated from Digital Elevation Model",
+            "vertical_datum": "NGVD29",
+            "vertical_datum_name": "National Geodetic Vertical Datum of 1929",
+            "horizontal_positional_accuracy_code": "S",
+            "horizontal_positional_accuracy": "Accurate to + or - 1 sec.",
+            "horizontal_position_method_code": "M",
+            "horizontal_position_method_name": "Interpolated from MAP.",
+            "original_horizontal_datum": "NAD83",
+            "original_horizontal_datum_name": "North American Datum of 1983",
+            "drainage_area": null,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": null,
+            "national_aquifer_code": null,
+            "aquifer_type_code": null,
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "USGS-01646562",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.1152777777778,
+              38.9452777777778
+            ]
+          }
+        }
+      ],
+      "numberReturned": 3,
+      "links": [
+        {
+          "rel": "next",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?cursor=VVNHUy0wMTY0NjU2Mg&bbox=-77.12,38.80,-76.91,38.99&limit=3&f=json",
+          "type": "application/geo+json",
+          "title": "Items (next)"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=json&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=jsonld&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=html&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "application/json",
+          "title": "Monitoring locations",
+          "rel": "collection",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:18.852670Z"
+    }
+  }
+}

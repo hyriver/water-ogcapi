@@ -1,0 +1,100 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://reference.geoconnex.us/collections/gages/schema?f=json",
+    "params": {
+      "f": "json"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/schema+json; charset=utf-8",
+      "x-powered-by": "pygeoapi 0.25.dev0",
+      "content-language": "en-US",
+      "x-cloud-trace-context": "42c4090012285dddd2a08b587c6af279",
+      "date": "Thu, 08 Oct 2026 16:59:39 GMT",
+      "server": "Google Frontend",
+      "expires": "Thu, 08 Oct 2026 16:59:39 GMT",
+      "cache-control": "private",
+      "vary": "Accept-Encoding, Origin",
+      "x-cache": "Miss from cloudfront",
+      "via": "1.1 b508a0e8744edb82beb1add8f2f035d4.cloudfront.net (CloudFront)",
+      "x-amz-cf-pop": "ORD58-P2",
+      "x-amz-cf-id": "_49FIgKTzRwhfiNwrVZ9S3r89D28S-3FVrh-LBeE8oXw4jXQTCRnIA=="
+    },
+    "body": {
+      "type": "object",
+      "title": "Reference Gages",
+      "properties": {
+        "geometry": {
+          "format": "geometry-any",
+          "x-ogc-role": "primary-geometry"
+        },
+        "fid": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "integer",
+          "x-ogc-role": "id"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "subjectof": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "provider_id": {
+          "type": "string"
+        },
+        "nhdpv2_reachcode": {
+          "type": "string"
+        },
+        "nhdpv2_reach_measure": {
+          "type": "number"
+        },
+        "nhdpv2_comid": {
+          "type": "number"
+        },
+        "nhdpv2_totdasqkm": {
+          "type": "number"
+        },
+        "nhdpv2_link_source": {
+          "type": "string"
+        },
+        "nhdpv2_offset_m": {
+          "type": "number"
+        },
+        "gage_totdasqkm": {
+          "type": "number"
+        },
+        "dasqkm_diff": {
+          "type": "number"
+        },
+        "mainstem_uri": {
+          "type": "string"
+        },
+        "nws_url": {
+          "type": "string"
+        },
+        "hivis_camera_url": {
+          "type": "string"
+        },
+        "cluster": {
+          "type": "string"
+        }
+      },
+      "$schema": "http://json-schema.org/draft/2019-09/schema",
+      "$id": "https://reference.geoconnex.us/collections/gages/schema"
+    }
+  }
+}

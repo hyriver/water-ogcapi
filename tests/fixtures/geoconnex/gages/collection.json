@@ -1,0 +1,199 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://reference.geoconnex.us/collections/gages?f=json",
+    "params": {
+      "f": "json"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-powered-by": "pygeoapi 0.25.dev0",
+      "content-language": "en-US",
+      "x-cloud-trace-context": "80d5b2769eb25bfed2a08b587c6afb0b",
+      "date": "Thu, 08 Oct 2026 16:59:39 GMT",
+      "server": "Google Frontend",
+      "expires": "Thu, 08 Oct 2026 16:59:39 GMT",
+      "cache-control": "private",
+      "vary": "Accept-Encoding, Origin",
+      "x-cache": "Miss from cloudfront",
+      "via": "1.1 b508a0e8744edb82beb1add8f2f035d4.cloudfront.net (CloudFront)",
+      "x-amz-cf-pop": "ORD58-P2",
+      "x-amz-cf-id": "-aQlUaCzjoD8RrsSps-i9r9-Gr9rqUGDt1n43E_1uIQ44-IjtF2i2g=="
+    },
+    "body": {
+      "id": "gages",
+      "links": [
+        {
+          "type": "text/html",
+          "rel": "canonical",
+          "title": "Data source",
+          "href": "https://github.com/internetofwater/ref_gages",
+          "hreflang": "en-US"
+        },
+        {
+          "type": "application/json",
+          "rel": "root",
+          "title": "The landing page of this server as JSON",
+          "href": "https://reference.geoconnex.us?f=json"
+        },
+        {
+          "type": "text/html",
+          "rel": "root",
+          "title": "The landing page of this server as HTML",
+          "href": "https://reference.geoconnex.us?f=html"
+        },
+        {
+          "type": "application/json",
+          "rel": "self",
+          "title": "This document as JSON",
+          "href": "https://reference.geoconnex.us/collections/gages?f=json"
+        },
+        {
+          "type": "application/ld+json",
+          "rel": "alternate",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://reference.geoconnex.us/collections/gages?f=jsonld"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://reference.geoconnex.us/collections/gages?f=html"
+        },
+        {
+          "type": "application/schema+json",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/schema",
+          "title": "Schema of collection in JSON",
+          "href": "https://reference.geoconnex.us/collections/gages/schema?f=json"
+        },
+        {
+          "type": "text/html",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/schema",
+          "title": "Schema of collection in HTML",
+          "href": "https://reference.geoconnex.us/collections/gages/schema?f=html"
+        },
+        {
+          "type": "application/schema+json",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/queryables",
+          "title": "Queryables for this collection as JSON",
+          "href": "https://reference.geoconnex.us/collections/gages/queryables?f=json"
+        },
+        {
+          "type": "text/html",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/queryables",
+          "title": "Queryables for this collection as HTML",
+          "href": "https://reference.geoconnex.us/collections/gages/queryables?f=html"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "items",
+          "title": "Items as GeoJSON",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json"
+        },
+        {
+          "type": "application/ld+json",
+          "rel": "items",
+          "title": "Items as RDF (GeoJSON-LD)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=jsonld"
+        },
+        {
+          "type": "text/html",
+          "rel": "items",
+          "title": "Items as HTML",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=html"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "items",
+          "title": "Items as CSV",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=csv"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "items",
+          "title": "Items as csv",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=csv"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "items",
+          "title": "Items as jsonfg",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=jsonfg"
+        },
+        {
+          "type": "application/zip",
+          "rel": "items",
+          "title": "Items as shp",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=shp"
+        },
+        {
+          "type": "application/geopackage+sqlite3",
+          "rel": "items",
+          "title": "Items as gpkg",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=gpkg"
+        },
+        {
+          "type": "application/vnd.google-earth.kml+xml",
+          "rel": "items",
+          "title": "Items as kml",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=kml"
+        },
+        {
+          "type": "application/vnd.apache.parquet",
+          "rel": "items",
+          "title": "Items as parquet",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=parquet"
+        },
+        {
+          "type": "application/json",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/tilesets-vector",
+          "title": "Tiles as JSON",
+          "href": "https://reference.geoconnex.us/collections/gages/tiles?f=json"
+        },
+        {
+          "type": "text/html",
+          "rel": "http://www.opengis.net/def/rel/ogc/1.0/tilesets-vector",
+          "title": "Tiles as HTML",
+          "href": "https://reference.geoconnex.us/collections/gages/tiles?f=html"
+        }
+      ],
+      "title": "Reference Gages",
+      "description": "United States Community Contributed Reference Stream Gages",
+      "keywords": [
+        "Stream Gages",
+        "USGS"
+      ],
+      "extent": {
+        "spatial": {
+          "bbox": [
+            [
+              -170,
+              15,
+              -51,
+              72
+            ]
+          ],
+          "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+        },
+        "temporal": {
+          "interval": [
+            [
+              null,
+              null
+            ]
+          ]
+        }
+      },
+      "itemType": "feature",
+      "crs": [
+        "http://www.opengis.net/def/crs/OGC/1.3/CRS84",
+        "http://www.opengis.net/def/crs/OGC/1.3/CRS83",
+        "http://www.opengis.net/def/crs/EPSG/0/3857"
+      ],
+      "storageCrs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+    }
+  }
+}

@@ -1,0 +1,253 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=json&bbox=-77.12%2C38.80%2C-76.91%2C38.99&limit=3",
+    "params": {
+      "f": "json",
+      "bbox": "-77.12,38.80,-76.91,38.99",
+      "limit": "3"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:18 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
+      "age": "0",
+      "api-version": "1.9.8",
+      "cache-control": "public, max-age=3600",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 304b956e2039e07753fa39109152d594.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSfW])",
+      "x-amz-cf-id": "oq8EG8o_s70fpsZZUoWI0kNFSu_C6ZhYPUqvVMEXMdqbnSL8W1TuXA==",
+      "x-amz-cf-pop": "HIO52-P1",
+      "x-api-umbrella-request-id": "d13hq7ptb0rb7ep6r5c0",
+      "x-build-version": "1.9.8-41c07339",
+      "x-cache": "Miss from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "1000",
+      "x-ratelimit-remaining": "996",
+      "x-vcap-request-id": "04a59f33-395f-4784-7c46-f6a0ede7becf",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "MD007-384820076563701",
+            "agency_code": "MD007",
+            "agency_name": "Maryland Department of the Environment (MDE)",
+            "monitoring_location_number": "384820076563701",
+            "monitoring_location_name": "PG2013G001",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "24",
+            "state_name": "Maryland",
+            "county_code": "033",
+            "county_name": "Prince George's County",
+            "minor_civil_division_code": null,
+            "site_type_code": "GW",
+            "site_type": "Well",
+            "hydrologic_unit_code": "020700100303",
+            "basin_code": null,
+            "altitude": null,
+            "altitude_accuracy": null,
+            "altitude_method_code": null,
+            "altitude_method_name": null,
+            "vertical_datum": null,
+            "vertical_datum_name": null,
+            "horizontal_positional_accuracy_code": "U",
+            "horizontal_positional_accuracy": "Unknown or unspecified.",
+            "horizontal_position_method_code": "U",
+            "horizontal_position_method_name": "Unknown",
+            "original_horizontal_datum": "NAD83",
+            "original_horizontal_datum_name": "North American Datum of 1983",
+            "drainage_area": null,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": "110QRNR",
+            "national_aquifer_code": "S100NATLCP",
+            "aquifer_type_code": "U",
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "MD007-384820076563701",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -76.9436111111111,
+              38.8055555555556
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "MD007-385839077055701",
+            "agency_code": "MD007",
+            "agency_name": "Maryland Department of the Environment (MDE)",
+            "monitoring_location_number": "385839077055701",
+            "monitoring_location_name": "MO2010G001",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "24",
+            "state_name": "Maryland",
+            "county_code": "031",
+            "county_name": "Montgomery County",
+            "minor_civil_division_code": null,
+            "site_type_code": "GW",
+            "site_type": "Well",
+            "hydrologic_unit_code": "020700081005",
+            "basin_code": null,
+            "altitude": null,
+            "altitude_accuracy": null,
+            "altitude_method_code": null,
+            "altitude_method_name": null,
+            "vertical_datum": null,
+            "vertical_datum_name": null,
+            "horizontal_positional_accuracy_code": "M",
+            "horizontal_positional_accuracy": "Accurate to + or - 1 min.",
+            "horizontal_position_method_code": "U",
+            "horizontal_position_method_name": "Unknown",
+            "original_horizontal_datum": "NAD83",
+            "original_horizontal_datum_name": "North American Datum of 1983",
+            "drainage_area": null,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": null,
+            "national_aquifer_code": null,
+            "aquifer_type_code": null,
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "MD007-385839077055701",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.0991666666667,
+              38.9775
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "MD007-385842077055301",
+            "agency_code": "MD007",
+            "agency_name": "Maryland Department of the Environment (MDE)",
+            "monitoring_location_number": "385842077055301",
+            "monitoring_location_name": "MO2012G004",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "24",
+            "state_name": "Maryland",
+            "county_code": "031",
+            "county_name": "Montgomery County",
+            "minor_civil_division_code": null,
+            "site_type_code": "GW",
+            "site_type": "Well",
+            "hydrologic_unit_code": "020700081005",
+            "basin_code": null,
+            "altitude": null,
+            "altitude_accuracy": null,
+            "altitude_method_code": null,
+            "altitude_method_name": null,
+            "vertical_datum": null,
+            "vertical_datum_name": null,
+            "horizontal_positional_accuracy_code": "U",
+            "horizontal_positional_accuracy": "Unknown or unspecified.",
+            "horizontal_position_method_code": "U",
+            "horizontal_position_method_name": "Unknown",
+            "original_horizontal_datum": "NAD83",
+            "original_horizontal_datum_name": "North American Datum of 1983",
+            "drainage_area": null,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": "300LPLC",
+            "national_aquifer_code": "N400PDMBRX",
+            "aquifer_type_code": null,
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "MD007-385842077055301",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.0980555555555,
+              38.9783333333333
+            ]
+          }
+        }
+      ],
+      "numberReturned": 3,
+      "links": [
+        {
+          "rel": "next",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?cursor=TUQwMDctMzg1ODQyMDc3MDU1MzAx&bbox=-77.12,38.80,-76.91,38.99&limit=3&f=json",
+          "type": "application/geo+json",
+          "title": "Items (next)"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=json&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=jsonld&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=html&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "application/json",
+          "title": "Monitoring locations",
+          "rel": "collection",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:18.693589Z"
+    }
+  }
+}

@@ -1,0 +1,279 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://reference.geoconnex.us/collections/gages/items?f=json&offset=10&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id",
+    "params": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-powered-by": "pygeoapi 0.25.dev0",
+      "content-language": "en-US",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "x-cloud-trace-context": "b2a94790e63e834d9d119eda4b55f1f4",
+      "date": "Thu, 08 Oct 2026 16:59:40 GMT",
+      "server": "Google Frontend",
+      "expires": "Thu, 08 Oct 2026 16:59:40 GMT",
+      "cache-control": "private",
+      "vary": "Accept-Encoding, Origin",
+      "x-cache": "Miss from cloudfront",
+      "via": "1.1 b508a0e8744edb82beb1add8f2f035d4.cloudfront.net (CloudFront)",
+      "x-amz-cf-pop": "ORD58-P2",
+      "x-amz-cf-id": "lbpQHEA6jVqSqBRNlAg7EUQYEJndVFEvESrjFEKipILH8msf0wC81Q=="
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 8003,
+            "id": 1008430,
+            "uri": "https://geoconnex.us/ref/gages/1008430",
+            "name": "LUCKY RUN AT ARLINGTON, VA",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01652470: LUCKY RUN AT ARLINGTON, VA",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01652470",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01652470",
+            "nhdpv2_reachcode": null,
+            "nhdpv2_reach_measure": null,
+            "nhdpv2_comid": null,
+            "nhdpv2_totdasqkm": null,
+            "nhdpv2_link_source": null,
+            "nhdpv2_offset_m": null,
+            "gage_totdasqkm": 3.4,
+            "dasqkm_diff": null,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1008430,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.10414236184545,
+              38.8426126300533
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 8054,
+            "id": 1008486,
+            "uri": "https://geoconnex.us/ref/gages/1008486",
+            "name": "LONG BRANCH AT SOUTH GLEBE ROAD NR ALEXANDRIA, VA",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01652525: LONG BRANCH AT SOUTH GLEBE ROAD NR ALEXANDRIA, VA",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01652525",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01652525",
+            "nhdpv2_reachcode": "02070010001018",
+            "nhdpv2_reach_measure": 1.7366,
+            "nhdpv2_comid": 22338847.0,
+            "nhdpv2_totdasqkm": 3.6,
+            "nhdpv2_link_source": "https://github.com/internetofwater/ref_gages",
+            "nhdpv2_offset_m": 8.4332238819152,
+            "gage_totdasqkm": 3.4,
+            "dasqkm_diff": 0.2,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1008486,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.07108574964022,
+              38.8445571359512
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 14644,
+            "id": 1015993,
+            "uri": "https://geoconnex.us/ref/gages/1015993",
+            "name": "POTOMAC RIVER AT CHAIN BRIDGE, AT WASHINGTON, DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01646580: POTOMAC RIVER AT CHAIN BRIDGE, AT WASHINGTON, DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01646580",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01646580",
+            "nhdpv2_reachcode": "02070010001234",
+            "nhdpv2_reach_measure": 12.7085,
+            "nhdpv2_comid": 22340529.0,
+            "nhdpv2_totdasqkm": 29967.0,
+            "nhdpv2_link_source": "https://github.com/internetofwater/ref_gages",
+            "nhdpv2_offset_m": 74.0779783618537,
+            "gage_totdasqkm": 29966.2,
+            "dasqkm_diff": 0.799999999999272,
+            "mainstem_uri": "https://geoconnex.us/ref/mainstems/2152216",
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1015993,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.11692037044267,
+              38.92955566289902
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 14945,
+            "id": 1016349,
+            "uri": "https://geoconnex.us/ref/gages/1016349",
+            "name": "POTOMAC RIVER BEL OXON CREEK AT WASHINGTON, DC",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01652589: POTOMAC RIVER BEL OXON CREEK AT WASHINGTON, DC",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01652589",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01652589",
+            "nhdpv2_reachcode": null,
+            "nhdpv2_reach_measure": null,
+            "nhdpv2_comid": null,
+            "nhdpv2_totdasqkm": null,
+            "nhdpv2_link_source": null,
+            "nhdpv2_offset_m": null,
+            "gage_totdasqkm": 30769.1,
+            "dasqkm_diff": null,
+            "mainstem_uri": null,
+            "nws_url": null,
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1016349,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.02636187762498,
+              38.80178017430635
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "fid": 15698,
+            "id": 1017238,
+            "uri": "https://geoconnex.us/ref/gages/1017238",
+            "name": "FOURMILE RUN AT ALEXANDRIA, VA",
+            "description": "USGS NWIS Stream/River/Lake Site USGS-01652500: FOURMILE RUN AT ALEXANDRIA, VA",
+            "subjectof": "https://waterdata.usgs.gov/monitoring-location/USGS-01652500",
+            "provider": "https://waterdata.usgs.gov",
+            "provider_id": "USGS-01652500",
+            "nhdpv2_reachcode": "02070010001016",
+            "nhdpv2_reach_measure": 42.578,
+            "nhdpv2_comid": 22340313.0,
+            "nhdpv2_totdasqkm": 36.7,
+            "nhdpv2_link_source": "https://doi.org/10.5066/P9J5CK2Y",
+            "nhdpv2_offset_m": 1.28511616954549,
+            "gage_totdasqkm": 32.6,
+            "dasqkm_diff": 4.1,
+            "mainstem_uri": null,
+            "nws_url": "https://water.noaa.gov/gauges/AFRV2",
+            "hivis_camera_url": null,
+            "cluster": null
+          },
+          "id": 1017238,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.08585809892374,
+              38.84333334391889
+            ]
+          }
+        }
+      ],
+      "numberReturned": 5,
+      "numberMatched": 157,
+      "links": [
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=jsonld&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=html&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as csv",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "alternate",
+          "title": "This document as jsonfg",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=jsonfg&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/zip",
+          "rel": "alternate",
+          "title": "This document as shp",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=shp&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geopackage+sqlite3",
+          "rel": "alternate",
+          "title": "This document as gpkg",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=gpkg&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/vnd.google-earth.kml+xml",
+          "rel": "alternate",
+          "title": "This document as kml",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=kml&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/vnd.apache.parquet",
+          "rel": "alternate",
+          "title": "This document as parquet",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=parquet&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "prev",
+          "title": "Items (prev)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json&offset=5&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "next",
+          "title": "Items (next)",
+          "href": "https://reference.geoconnex.us/collections/gages/items?f=json&offset=15&bbox=-77.12,38.80,-76.91,38.99&limit=5&sortby=id"
+        },
+        {
+          "type": "application/json",
+          "title": "Reference Gages",
+          "rel": "collection",
+          "href": "https://reference.geoconnex.us/collections/gages"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:40.376029Z"
+    }
+  }
+}

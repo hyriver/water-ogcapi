@@ -1,0 +1,249 @@
+{
+  "recorded": "2026-10-08",
+  "request": {
+    "url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?cursor=VVNHUy0wMTY0NjU2Mg&bbox=-77.12,38.80,-76.91,38.99&limit=3&f=json",
+    "params": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Thu, 08 Oct 2026 16:59:19 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
+      "age": "1",
+      "api-version": "1.9.8",
+      "cache-control": "public, max-age=3600",
+      "content-crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>",
+      "content-language": "en-US",
+      "referrer-policy": "origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding, Accept-Encoding",
+      "via": "1.1 b6cdb2111444305bd4957a473b711ad6.cloudfront.net (CloudFront), https/1.1 api-umbrella (ApacheTrafficServer [cMsSfW])",
+      "x-amz-cf-id": "SOiOPRk4_t1K5KR2R54dP1qmcN1oU5RG4I3WvGL5lUalSNd9s9ycbA==",
+      "x-amz-cf-pop": "HIO52-P1",
+      "x-api-umbrella-request-id": "d13hq7s8stkimr8vu5kg",
+      "x-build-version": "1.9.8-41c07339",
+      "x-cache": "Miss from cloudfront",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit": "1000",
+      "x-ratelimit-remaining": "995",
+      "x-vcap-request-id": "02ec6af5-52d0-4b06-5672-3105880af56c",
+      "x-xss-protection": "1; mode=block",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "body": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "USGS-01646563",
+            "agency_code": "USGS",
+            "agency_name": "U.S. Geological Survey",
+            "monitoring_location_number": "01646563",
+            "monitoring_location_name": "MILL CREEK TRIB NR DALECARLIA RES AT WASHINGTON DC",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "11",
+            "state_name": "District of Columbia",
+            "county_code": "001",
+            "county_name": "District of Columbia",
+            "minor_civil_division_code": "50000",
+            "site_type_code": "ST",
+            "site_type": "Stream",
+            "hydrologic_unit_code": "020700081005",
+            "basin_code": null,
+            "altitude": 165.0,
+            "altitude_accuracy": 10.0,
+            "altitude_method_code": "N",
+            "altitude_method_name": "Interpolated from Digital Elevation Model",
+            "vertical_datum": "NGVD29",
+            "vertical_datum_name": "National Geodetic Vertical Datum of 1929",
+            "horizontal_positional_accuracy_code": "S",
+            "horizontal_positional_accuracy": "Accurate to + or - 1 sec.",
+            "horizontal_position_method_code": "M",
+            "horizontal_position_method_name": "Interpolated from map",
+            "original_horizontal_datum": "NAD83",
+            "original_horizontal_datum_name": "North American Datum of 1983",
+            "drainage_area": 1.18,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": null,
+            "national_aquifer_code": null,
+            "aquifer_type_code": null,
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "USGS-01646563",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.1044444444444,
+              38.9455555555556
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "USGS-01646564",
+            "agency_code": "USGS",
+            "agency_name": "U.S. Geological Survey",
+            "monitoring_location_number": "01646564",
+            "monitoring_location_name": "MILL CREEK AT DALECARLIA RES NEAR CHEVY CHASE, MD",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "24",
+            "state_name": "Maryland",
+            "county_code": "031",
+            "county_name": "Montgomery County",
+            "minor_civil_division_code": null,
+            "site_type_code": "ST",
+            "site_type": "Stream",
+            "hydrologic_unit_code": "020700081005",
+            "basin_code": null,
+            "altitude": 155.0,
+            "altitude_accuracy": 1.0,
+            "altitude_method_code": "M",
+            "altitude_method_name": "Interpolated from topographic map.",
+            "vertical_datum": "NGVD29",
+            "vertical_datum_name": "National Geodetic Vertical Datum of 1929",
+            "horizontal_positional_accuracy_code": "1",
+            "horizontal_positional_accuracy": "Accurate to + or - .1 sec (Differentially-Corrected GPS).",
+            "horizontal_position_method_code": "G",
+            "horizontal_position_method_name": "Mapping grade GPS unit (handheld accuracy range 12 to 40 ft)",
+            "original_horizontal_datum": "NAD83",
+            "original_horizontal_datum_name": "North American Datum of 1983",
+            "drainage_area": null,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": null,
+            "national_aquifer_code": null,
+            "aquifer_type_code": null,
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "USGS-01646564",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.1078888888889,
+              38.9456388888889
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "id": "USGS-01646565",
+            "agency_code": "USGS",
+            "agency_name": "U.S. Geological Survey",
+            "monitoring_location_number": "01646565",
+            "monitoring_location_name": "EAST CREEK NR DALECARLIA RES AT WASHINGTON, DC",
+            "district_code": "24",
+            "country_code": "US",
+            "country_name": "United States of America",
+            "state_code": "11",
+            "state_name": "District of Columbia",
+            "county_code": "001",
+            "county_name": "District of Columbia",
+            "minor_civil_division_code": null,
+            "site_type_code": "ST",
+            "site_type": "Stream",
+            "hydrologic_unit_code": "020700081005",
+            "basin_code": null,
+            "altitude": 199.0,
+            "altitude_accuracy": 1.0,
+            "altitude_method_code": "M",
+            "altitude_method_name": "Interpolated from topographic map.",
+            "vertical_datum": "NAVD88",
+            "vertical_datum_name": "North American Vertical Datum of 1988",
+            "horizontal_positional_accuracy_code": "1",
+            "horizontal_positional_accuracy": "Accurate to + or - .1 sec (Differentially-Corrected GPS).",
+            "horizontal_position_method_code": "G",
+            "horizontal_position_method_name": "Mapping grade GPS unit (handheld accuracy range 12 to 40 ft)",
+            "original_horizontal_datum": "NAD83",
+            "original_horizontal_datum_name": "North American Datum of 1983",
+            "drainage_area": null,
+            "contributing_drainage_area": null,
+            "time_zone_abbreviation": "EST",
+            "uses_daylight_savings": "Y",
+            "construction_date": null,
+            "aquifer_code": null,
+            "national_aquifer_code": null,
+            "aquifer_type_code": null,
+            "well_constructed_depth": null,
+            "hole_constructed_depth": null,
+            "depth_source_code": null,
+            "revision_note": null,
+            "revision_created": null,
+            "revision_modified": null
+          },
+          "id": "USGS-01646565",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.1053055555555,
+              38.9397777777778
+            ]
+          }
+        }
+      ],
+      "numberReturned": 3,
+      "links": [
+        {
+          "rel": "next",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?cursor=VVNHUy0wMTY0NjU2NQ&bbox=-77.12,38.80,-76.91,38.99&limit=3&f=json",
+          "type": "application/geo+json",
+          "title": "Items (next)"
+        },
+        {
+          "type": "application/geo+json",
+          "rel": "self",
+          "title": "This document as GeoJSON",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=json&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "rel": "alternate",
+          "type": "application/ld+json",
+          "title": "This document as RDF (JSON-LD)",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=jsonld&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "text/html",
+          "rel": "alternate",
+          "title": "This document as HTML",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=html&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "text/csv; charset=utf-8",
+          "rel": "alternate",
+          "title": "This document as CSV",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=csv&bbox=-77.12,38.80,-76.91,38.99&limit=3"
+        },
+        {
+          "type": "application/json",
+          "title": "Monitoring locations",
+          "rel": "collection",
+          "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations"
+        }
+      ],
+      "timeStamp": "2026-10-08T16:59:18.999458Z"
+    }
+  }
+}

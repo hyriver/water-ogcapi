@@ -87,8 +87,10 @@ platforms = [ "linux-64", "osx-64", "osx-arm64", "win-64" ]
 water-ogcapi = { path = ".", editable = true }
 
 [tool.pixi.tasks]
-release = { cmd = "git tag -a {{ version }} -m {{ version }} && git push && git push --tags", args = [
+# Tags only a commit already on origin/main. An optional notes file becomes the tag message.
+release = { cmd = "git fetch origin main && git merge-base --is-ancestor HEAD origin/main && git tag -a {{ version }} {% if notes %}-F {{ notes }}{% else %}-m {{ version }}{% endif %} && git push origin refs/tags/{{ version }}", args = [
   { arg = "version" },
+  { arg = "notes", default = "" },
 ] }
 
 [tool.pixi.feature.dev.tasks]
@@ -238,7 +240,7 @@ ignore_decorators = [
 min_confidence = 80
 
 [tool.pyproject-fmt]
-expand_tables = [ "tool.pixi" ]
+expand_tables = [ "tool.git-cliff", "tool.pixi" ]
 
 [tool.pyright]
 pythonVersion = "3.12"
@@ -290,6 +292,57 @@ report.exclude_lines = [
   "pragma: no cover",
 ]
 report.ignore_errors = true
+
+[tool.git-cliff]
+[tool.git-cliff.changelog]
+header = """
+# Changelog
+"""
+# The tag message is the release summary; tags whose message only repeats the version skip it.
+body = '''{%- macro remote_url() -%}
+  https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}
+{%- endmacro -%}
+{% if version -%}
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## [Unreleased]
+{% endif -%}
+{% if message and message | trim != version %}
+{{ message | trim }}
+{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{%- for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | split(pat="\n") | first | upper_first | trim }}{% if commit.breaking %} (**breaking**){% endif %}{% if commit.remote.pr_number %} in [#{{ commit.remote.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.remote.pr_number }}){% else %} ([{{ commit.id | truncate(length=7, end="") }}]({{ self::remote_url() }}/commit/{{ commit.id }})){% endif %}
+{%- endfor %}
+{% endfor %}
+'''
+trim = true
+
+[tool.git-cliff.git]
+conventional_commits = true
+filter_unconventional = true
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^perf", group = "Changed" },
+  { message = "^refactor", group = "Changed" },
+  { message = "^revert", group = "Fixed" },
+  { message = "^style", group = "Changed" },
+  { message = "^docs", skip = true },
+  { message = "^test", skip = true },
+  { message = "^chore", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^build", skip = true },
+  { message = "^Merge", skip = true },
+]
+protect_breaking_commits = true
+tag_pattern = "v[0-9].*"
+sort_commits = "newest"
+
+[tool.git-cliff.remote]
+github.owner = "hyriver"
+github.repo = "water-ogcapi"
 
 [tool.jupytext]
 formats = "ipynb,py:percent"

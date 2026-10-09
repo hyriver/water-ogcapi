@@ -761,8 +761,12 @@ Layering rule for anything new:
     environment through PyPI trusted publishing. The upload waits for both the build and
     the release notes. Every action is pinned to a commit SHA, each job gets only the
     permissions it uses, and no job restores a cache. The GitHub releases page is the
-    changelog. The first tag is the first version people are asked to test: usable, with
-    the tutorials in place.
+    changelog. A release candidate such as `v0.1.0rc1` claims the PyPI name early; the
+    first final release is the first version people are asked to test, usable and with
+    the tutorials in place. A pre-release tag publishes the same way, marked as a
+    pre-release on GitHub with its tag message as the notes. git-cliff's `tag_pattern`
+    matches only `vX.Y.Z`, so a final release's notes start at the previous final and
+    cover every commit since, release candidates included.
 - **Why:** Trusted publishing stores no PyPI token: PyPI accepts a short-lived OIDC
     token issued only to this repository, this workflow file, and the `pypi`
     environment. A PyPI version number is spent once uploaded, so a failed summary has
@@ -772,14 +776,17 @@ Layering rule for anything new:
     other HyRiver packages.
 - **Rejected:** A PyPI API token in a repository secret, which stays valid until someone
     revokes it. A tracked `CHANGELOG.md`, which needs a commit on `main` before every
-    tag. A placeholder `0.0.1` to claim the PyPI name early, which publishes a version
-    nobody can use; chosen by the maintainer.
+    tag. A final `0.0.1` to claim the name, which presents an unusable version as a
+    release; the maintainer chose a release candidate. git-cliff's `ignore_tags` for
+    release candidates, which still started a final's notes at the release candidate.
 - **Limits:** The `pypi` environment has no required reviewer and no ruleset protects
     `v*` tags, so anyone with write access can publish by pushing a tag. The GitHub
     release is created before the upload, so a failed upload leaves a release with no
-    package on PyPI. A PyPI pending publisher reserves no name, so another account can
-    register `water-ogcapi` before the first release, which invalidates the pending
-    publisher.
+    package on PyPI. A PyPI pending publisher reserves no name, so until the release
+    candidate uploads, another account can register `water-ogcapi` and invalidate it.
+    While a release candidate is the only version, `pip install water-ogcapi` and uv
+    install it, since both take a pre-release when no final version exists; the README
+    says it is not usable yet.
 
 ## Lessons
 

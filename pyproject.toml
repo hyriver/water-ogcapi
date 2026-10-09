@@ -337,7 +337,8 @@ commit_parsers = [
   { message = "^Merge", skip = true },
 ]
 protect_breaking_commits = true
-tag_pattern = "v[0-9].*"
+# Only final versions count, so a final's notes start at the previous final, past any rc.
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
 sort_commits = "newest"
 
 [tool.git-cliff.remote]

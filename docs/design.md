@@ -906,6 +906,18 @@ Layering rule for anything new:
     (L-09).
 - **Check:** `test_redirect_keeps_the_key_out`.
 
+### L-12: The first tag failed at the upload check
+
+- **What happened:** `v0.1.0rc1` built and got its GitHub pre-release, then the upload
+    failed. `pypa/gh-action-pypi-publish` v1.14.0, pinned from a template, checks
+    distributions with Twine 6.1.0 and packaging 25.0, which reject the
+    `Metadata-Version: 2.5` that hatchling writes. v1.14.2 bundles Twine 7.0.0 and
+    packaging 26.2, which accept it. Nothing before the tag ran the action's own check.
+- **Rule:** Pin a publishing action to its latest release, and run its bundled checker
+    on a local build before the first tag.
+- **Check:** `uvx --with packaging==<pin> twine==<pin> check dist/*`, with the versions
+    from the action's `requirements/runtime.txt`.
+
 ## Open questions
 
 ### Q-01: How frame conversion ships

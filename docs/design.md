@@ -756,17 +756,19 @@ Layering rule for anything new:
     `origin/main`, then creates an annotated tag whose message is the release summary
     and pushes only that tag. The push runs `.github/workflows/release.yml`: git-cliff
     writes the GitHub release notes, headed by the tag message, from the commits since
-    the previous tag; `uv build` builds the sdist and wheel; and
-    `pypa/gh-action-pypi-publish` uploads them with PEP 740 attestations from the `pypi`
-    environment through PyPI trusted publishing. The upload waits for both the build and
-    the release notes. Every action is pinned to a commit SHA, each job gets only the
-    permissions it uses, and no job restores a cache. The GitHub releases page is the
-    changelog. A release candidate such as `v0.1.0rc1` claims the PyPI name early; the
-    first final release is the first version people are asked to test, usable and with
-    the tutorials in place. A pre-release tag publishes the same way, marked as a
-    pre-release on GitHub with its tag message as the notes. git-cliff's `tag_pattern`
-    matches only `vX.Y.Z`, so a final release's notes start at the previous final and
-    cover every commit since, release candidates included.
+    the previous tag; `uv build` builds the sdist and wheel, and each one must install
+    alone, import, and report the tag's version; `astral-sh/attest-action` writes PEP
+    740 attestations; and `uv publish` uploads both from the `pypi` environment through
+    PyPI trusted publishing, following Astral's `trusted-publishing-examples`. Only tags
+    shaped like PEP 440 final, `rc`, `a`, or `b` versions run it. The upload waits for
+    both the build and the release notes. Every action is pinned to a commit SHA, each
+    job gets only the permissions it uses, and no job restores a cache. The GitHub
+    releases page is the changelog. A release candidate such as `v0.1.0rc1` claims the
+    PyPI name early; the first final release is the first version people are asked to
+    test, usable and with the tutorials in place. A pre-release tag publishes the same
+    way, marked as a pre-release on GitHub with its tag message as the notes.
+    git-cliff's `tag_pattern` matches only `vX.Y.Z`, so a final release's notes start at
+    the previous final and cover every commit since, release candidates included.
 - **Why:** Trusted publishing stores no PyPI token: PyPI accepts a short-lived OIDC
     token issued only to this repository, this workflow file, and the `pypi`
     environment. A PyPI version number is spent once uploaded, so a failed summary has
@@ -913,10 +915,11 @@ Layering rule for anything new:
     distributions with Twine 6.1.0 and packaging 25.0, which reject the
     `Metadata-Version: 2.5` that hatchling writes. v1.14.2 bundles Twine 7.0.0 and
     packaging 26.2, which accept it. Nothing before the tag ran the action's own check.
-- **Rule:** Pin a publishing action to its latest release, and run its bundled checker
-    on a local build before the first tag.
-- **Check:** `uvx --with packaging==<pin> twine==<pin> check dist/*`, with the versions
-    from the action's `requirements/runtime.txt`.
+- **Rule:** Pin release tooling to its latest release, and exercise the upload path on a
+    local build before the first tag. D-32 now uploads with `uv publish`, the tool that
+    built the distributions.
+- **Check:** `uv publish --dry-run --trusted-publishing never --token dummy dist/*` on a
+    local `uv build`.
 
 ## Open questions
 

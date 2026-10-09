@@ -100,8 +100,9 @@ the site on every PR and deploys `main` to GitHub Pages.
     unused function arguments, and unreachable code. Unused functions, classes, and
     local variables score 60% and pass.
 - ruff auto-inserts `from __future__ import annotations`.
-- mdformat rewraps markdown to 88 columns during `pixi r lint`, but pre-commit sees only
-    git-tracked files, so an untracked doc is skipped.
+- mdformat rewraps markdown to 88 columns during `pixi r lint`. pre-commit's
+    `--all-files` sees only git-tracked files, so `pixi r lint` runs
+    `scripts/lint_untracked.py` after it to lint untracked, non-ignored files by name.
 - `docs/index.md` only includes `README.md`, and `docs/contributing.md` only includes
     this file. Edit the source files. Links in both must be absolute URLs: a relative
     link resolves against the site, where its target does not exist, and the strict

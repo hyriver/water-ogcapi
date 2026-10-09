@@ -748,6 +748,35 @@ Layering rule for anything new:
 - **Limits:** FabricData (pygeoapi 0.23.4) and GeoConnex (pygeoapi 0.24.dev0) publish no
     versioning promise, so a change there can still force a major release after 1.0.
 
+### D-32: Releases publish from a `v` tag through trusted publishing
+
+- **Status:** accepted.
+- **Date:** 2026-10-09.
+- **Decision:** `pixi r release vX.Y.Z [notes-file]` refuses unless `HEAD` is already on
+    `origin/main`, then creates an annotated tag whose message is the release summary
+    and pushes only that tag. The push runs `.github/workflows/release.yml`: git-cliff
+    writes the GitHub release notes, headed by the tag message, from the commits since
+    the previous tag; `uv build` builds the sdist and wheel; and
+    `pypa/gh-action-pypi-publish` uploads them with PEP 740 attestations from the `pypi`
+    environment through PyPI trusted publishing. The upload waits for both the build and
+    the release notes. Every action is pinned to a commit SHA, each job gets only the
+    permissions it uses, and no job restores a cache. The GitHub releases page is the
+    changelog.
+- **Why:** Trusted publishing stores no PyPI token: PyPI accepts a short-lived OIDC
+    token issued only to this repository, this workflow file, and the `pypi`
+    environment. A PyPI version number is spent once uploaded, so a failed summary has
+    to stop the upload. Tagging only a merged commit keeps an unreviewed commit from
+    reaching GitHub through its tag. SHA pins and the absent cache keep a moved action
+    tag or a poisoned cache out of the job that publishes. The `v` prefix matches the
+    other HyRiver packages.
+- **Rejected:** A PyPI API token in a repository secret, which stays valid until someone
+    revokes it. A tracked `CHANGELOG.md`, which needs a commit on `main` before every
+    tag.
+- **Limits:** The `pypi` environment has no required reviewer and no ruleset protects
+    `v*` tags, so anyone with write access can publish by pushing a tag. The GitHub
+    release is created before the upload, so a failed upload leaves a release with no
+    package on PyPI.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

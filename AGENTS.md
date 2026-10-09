@@ -144,8 +144,8 @@ the site on every PR and deploys `main` to GitHub Pages.
     merges.
 - git-cliff generates the changelog from commit messages. Do not edit `CHANGELOG.md` by
     hand.
-- `pixi r release <version>` tags and pushes to the remote. Run it only when a
-    maintainer asks.
+- `pixi r release v<version> [notes-file]` tags and pushes that tag, which publishes to
+    PyPI (D-32). Run it only when a maintainer asks.
 
 ## Writing style
 

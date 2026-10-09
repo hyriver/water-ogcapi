@@ -788,6 +788,37 @@ Layering rule for anything new:
     install it, since both take a pre-release when no final version exists; the README
     says it is not usable yet.
 
+### D-33: Metadata types keep every member the server sent
+
+- **Status:** accepted.
+- **Date:** 2026-10-09.
+- **Decision:** `Collections`, `Collection`, `Extent`, `SpatialExtent`,
+    `TemporalExtent`, `Schema` (for both `/queryables` and `/schema`), `Property`, and
+    `Link` are frozen dataclasses built by `from_dict` and turned back into JSON by
+    `to_dict`. Each carries the members it names as typed fields and every other member
+    in a read-only `extra`, deep-copied both ways, so `from_dict(doc).to_dict() == doc`.
+    A field is `None` when its member is absent or has a shape the field cannot hold,
+    such as a null, a string where a list belongs, or a bbox of 5 numbers; that member
+    stays in `extra` as sent. A list with one unparsable item stays whole in `extra`.
+    `Collection.from_dict` raises `ValueError` without a string `id`, `Link.from_dict`
+    without a string `href`, and `Collections.from_dict` for an entry without an `id`.
+    `extra` is left out of the hash, so every type stays hashable.
+- **Why:** L-04. Keeping a malformed member in `extra` matches how the transport treats
+    a malformed header (`parse_count` returns `None`), and a USGS schema change stays
+    visible to the caller while parsing goes on. A collection with no `id` cannot enter
+    the collection index, so that case raises. pystac's `extra_fields` and `to_dict`
+    follow the same pattern. The fixture test checks the round trip and also that no
+    member a field names landed in `extra`, which a round trip alone cannot see.
+- **Rejected:** Storing the raw document behind typed accessors, which is lossless by
+    construction and leaves the round trip test nothing to prove (L-03). Raising on any
+    malformed member, which turns one odd member into a failed metadata fetch.
+- **Limits:** `to_dict` returns `href` values redacted (D-04), so a link that carried a
+    credential does not round trip. Redaction reaches only parsed links: a `Link.extra`
+    member, or a `links` list kept whole in `extra` because one entry lacks `href`,
+    passes through like a key inside a body (D-29). `extra` is read-only at its top
+    level; nested values are plain dicts and lists. `Property` types five JSON Schema
+    keywords; `enum`, `example`, and the rest stay in its `extra`.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

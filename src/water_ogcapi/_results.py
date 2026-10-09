@@ -6,16 +6,21 @@ pickled, logged, or displayed result never carries the API key.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast
 from urllib.parse import unquote_plus, urlsplit, urlunsplit
 
 from water_ogcapi._transport import CREDENTIAL_PARAMS
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
+
+    # A JSON member name, the field that carries it, and the parser that returns the
+    # field's value or None when the member does not have the expected shape.
+    type Members = Mapping[str, tuple[str, Callable[[Any], Any]]]
 
 __all__ = ["Completeness", "Link", "Page", "Pagination", "QueryResult", "StopReason"]
 
@@ -65,7 +70,7 @@ def redact_url(url: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, query, ""))
 
 
-class _ReadOnlyDict(dict[str, str]):
+class ReadOnlyDict[V](dict[str, V]):
     """A ``dict`` that raises ``TypeError`` on any change.
 
     It pickles, copies, and works with ``dataclasses.asdict`` and ``json.dumps``.
@@ -81,19 +86,19 @@ class _ReadOnlyDict(dict[str, str]):
 
     __setitem__ = __delitem__ = __ior__ = _refuse
 
-    def __reduce__(self) -> tuple[type[_ReadOnlyDict], tuple[dict[str, str]]]:
+    def __reduce__(self) -> tuple[type[Self], tuple[dict[str, V]]]:
         # The default reduction refills the copy through __setitem__.
         return (type(self), (dict(self),))
 
 
-def _redact_params(params: Mapping[str, str]) -> _ReadOnlyDict:
-    return _ReadOnlyDict(
+def _redact_params(params: Mapping[str, str]) -> ReadOnlyDict[str]:
+    return ReadOnlyDict(
         {k: REDACTED if k.lower() in CREDENTIAL_PARAMS else v for k, v in params.items()}
     )
 
 
-def _keep_headers(headers: Mapping[str, str]) -> _ReadOnlyDict:
-    return _ReadOnlyDict({k.lower(): v for k, v in headers.items() if k.lower() in KEPT_HEADERS})
+def _keep_headers(headers: Mapping[str, str]) -> ReadOnlyDict[str]:
+    return ReadOnlyDict({k.lower(): v for k, v in headers.items() if k.lower() in KEPT_HEADERS})
 
 
 def _all_of[T](items: tuple[object, ...], kind: type[T], name: str) -> tuple[T, ...]:
@@ -102,6 +107,68 @@ def _all_of[T](items: tuple[object, ...], kind: type[T], name: str) -> tuple[T, 
         msg = f"{name} must hold only {kind.__name__} objects"
         raise TypeError(msg)
     return cast("tuple[T, ...]", items)
+
+
+def empty_extra() -> ReadOnlyDict[Any]:
+    return ReadOnlyDict()
+
+
+def _reject(_value: object) -> None:
+    return None
+
+
+def as_str(value: object) -> str | None:
+    """Return ``value`` if it is a string, else ``None``."""
+    return value if isinstance(value, str) else None
+
+
+def from_members(
+    doc: Mapping[str, Any], members: Members, required: str | None = None
+) -> dict[str, Any]:
+    """Build field values from ``doc``, with every member ``members`` does not carry in ``extra``.
+
+    A member whose parser returns ``None``, such as a null or a value of the wrong JSON
+    type, stays in ``extra`` as sent, so no member is lost.
+
+    Raises
+    ------
+    ValueError
+        If ``required`` names a field that no member filled.
+    """
+    fields: dict[str, Any] = {}
+    extra: dict[str, Any] = {}
+    for key, value in doc.items():
+        name, parse = members.get(key, ("", _reject))
+        parsed = parse(value)
+        if parsed is None:
+            extra[key] = copy.deepcopy(value)
+        else:
+            fields[name] = parsed
+    if required is not None and required not in fields:
+        msg = f"the document has no string {required!r} member"
+        raise ValueError(msg)
+    fields["extra"] = ReadOnlyDict(extra)
+    return fields
+
+
+def _to_json(value: Any) -> Any:
+    if isinstance(value, tuple):
+        return [_to_json(item) for item in cast("tuple[Any, ...]", value)]
+    if isinstance(value, dict):
+        return {key: _to_json(item) for key, item in cast("dict[str, Any]", value).items()}
+    to_dict = getattr(value, "to_dict", None)
+    return value if to_dict is None else to_dict()
+
+
+def to_members(obj: object, members: Members, extra: Mapping[str, Any]) -> dict[str, Any]:
+    """Rebuild the document ``from_members`` parsed: the set fields, then ``extra``."""
+    doc = {
+        key: _to_json(getattr(obj, name))
+        for key, (name, _) in members.items()
+        if getattr(obj, name) is not None
+    }
+    doc.update(copy.deepcopy(dict(extra)))
+    return doc
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,15 +185,40 @@ class Link:
         Media type of the target.
     title : str, optional
         Human-readable label.
+    hreflang : str, optional
+        Language of the target.
+    extra : mapping of str to Any, optional
+        Every other member of the link object, read-only and left out of the hash.
     """
 
     href: str
     rel: str | None = None
     type: str | None = None
     title: str | None = None
+    hreflang: str | None = None
+    extra: Mapping[str, Any] = field(default_factory=empty_extra, hash=False)
+
+    _MEMBERS: ClassVar[Members] = {
+        key: (key, as_str) for key in ("href", "rel", "type", "title", "hreflang")
+    }
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "href", redact_url(self.href))
+
+    @classmethod
+    def from_dict(cls, doc: Mapping[str, Any]) -> Self:
+        """Parse a link object.
+
+        Raises
+        ------
+        ValueError
+            If ``doc`` has no string ``href``.
+        """
+        return cls(**from_members(doc, cls._MEMBERS, required="href"))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the link object, ``href`` redacted."""
+        return to_members(self, self._MEMBERS, self.extra)
 
 
 @dataclass(frozen=True, slots=True)

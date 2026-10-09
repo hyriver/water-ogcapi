@@ -761,7 +761,8 @@ Layering rule for anything new:
     environment through PyPI trusted publishing. The upload waits for both the build and
     the release notes. Every action is pinned to a commit SHA, each job gets only the
     permissions it uses, and no job restores a cache. The GitHub releases page is the
-    changelog.
+    changelog. The first tag is the first version people are asked to test: usable, with
+    the tutorials in place.
 - **Why:** Trusted publishing stores no PyPI token: PyPI accepts a short-lived OIDC
     token issued only to this repository, this workflow file, and the `pypi`
     environment. A PyPI version number is spent once uploaded, so a failed summary has
@@ -771,11 +772,14 @@ Layering rule for anything new:
     other HyRiver packages.
 - **Rejected:** A PyPI API token in a repository secret, which stays valid until someone
     revokes it. A tracked `CHANGELOG.md`, which needs a commit on `main` before every
-    tag.
+    tag. A placeholder `0.0.1` to claim the PyPI name early, which publishes a version
+    nobody can use; chosen by the maintainer.
 - **Limits:** The `pypi` environment has no required reviewer and no ruleset protects
     `v*` tags, so anyone with write access can publish by pushing a tag. The GitHub
     release is created before the upload, so a failed upload leaves a release with no
-    package on PyPI.
+    package on PyPI. A PyPI pending publisher reserves no name, so another account can
+    register `water-ogcapi` before the first release, which invalidates the pending
+    publisher.
 
 ## Lessons
 

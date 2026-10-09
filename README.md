@@ -6,8 +6,9 @@
 
 An async-first Python client for USGS water data services over OGC API Features.
 
-**Status:** early development. The async transport exists, the query API is in progress,
-and nothing is released yet.
+**Status:** early development. The async transport exists and the query API is in
+progress. The release candidate on PyPI only reserves the name and has no query API, so
+install from this repository until the first final release.
 
 ## Features
 

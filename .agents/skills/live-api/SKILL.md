@@ -57,6 +57,10 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
 
 - Record from real responses. Keep the status, the response headers, and the body. Keep
     the request URL and params with credentials removed.
+- A fixture stores the decoded body, so drop the headers that describe the wire bytes,
+    `content-encoding` and `content-length`: a mock serving a decoded body under
+    `content-encoding: gzip` tries to gunzip plain JSON. Never store `set-cookie`.
+    `scripts/record_fixtures.py` drops all three.
 - Record the request date with each fixture. The NWIS API is v1 and USGS may change it.
 - If `tests/fixtures/` does not exist yet, propose a layout before creating one.
 - Note which services send `X-RateLimit-*` headers. The quota logic depends on it.

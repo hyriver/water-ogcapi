@@ -215,6 +215,17 @@ def test_a_next_link_off_the_base_origin_is_refused(href: str) -> None:
     assert "refused a next link" in str(err)
 
 
+def test_a_repeated_next_link_stops_the_traversal() -> None:
+    doc = hu02()[1]
+    doc["links"] = [{"rel": "next", "type": "application/geo+json", "href": NEXT}]
+    transport, seen = serve(doc, doc, doc)
+    got, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
+    assert len(got) == len(seen) == 2, "the repeat is caught before a third request"
+    assert err is not None
+    assert err.failures[0].url == NEXT
+    assert "repeats one already followed" in str(err)
+
+
 def test_a_json_next_link_wins_over_an_earlier_one() -> None:
     first, second, third = hu02()
     href = next(link["href"] for link in first["links"] if link["rel"] == "next")

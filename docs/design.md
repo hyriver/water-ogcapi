@@ -831,20 +831,24 @@ Layering rule for anything new:
     JSON, or unstated, else the first. It follows a link only when the link's scheme,
     host, and port, with default ports filled in, match `base_url`. Otherwise it raises
     `PaginationError` after yielding the page that carried the link, with one
-    `ServiceError` whose URL is the refused link. A response fails like a failed request
-    (D-24) unless its body is a FeatureCollection with a `features` list, a `links`
-    member that is a list when present, and a string `href` on every `next` link.
+    `ServiceError` whose URL is the refused link. A `next` link whose `href` matches one
+    already followed raises the same way. A response fails like a failed request (D-24)
+    unless its body is a FeatureCollection with a `features` list, a `links` member that
+    is a list when present, and a string `href` on every `next` link.
 - **Why:** The key travels in a header (D-18) that httpx2 does not strip across hosts
     (D-12), so following a link to another host, or to `http://`, would send the key
     there. A pygeoapi deployment with a wrong `server.url` writes such links. FabricData
     links name port 443 (`api.water.usgs.gov:443`), hence the default ports. A 200
     holding an HTML gateway page, a cut-off body, or a JSON error object, or a page
     whose `next` link has a null `href`, would otherwise read as the last page, and
-    `collect()` would report a finished, possibly empty, result.
+    `collect()` would report a finished, possibly empty, result. A caller collecting
+    every page never stops iterating, so a repeated link would spend the NWIS quota of
+    1,000 `/items` requests an hour (D-30) without end.
 - **Rejected:** Following any link, the leak path of L-11. Ending the traversal at a
     refused link, which reads as a finished traversal.
-- **Limits:** No cycle check runs, so a server that repeats a `next` link loops until
-    the caller stops iterating. A subdomain of the base host counts as another host.
+- **Limits:** The cycle check compares `href` text, so a loop whose links differ only in
+    form, such as reordered query parameters, goes undetected. A subdomain of the base
+    host counts as another host.
 
 ## Lessons
 

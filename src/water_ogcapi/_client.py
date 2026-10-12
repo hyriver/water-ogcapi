@@ -180,12 +180,14 @@ class OGCService:
         ------
         PaginationError
             When a request fails, a body is not a FeatureCollection with well-formed
-            links, or a ``next`` link leaves the scheme, host, and port of ``base_url``.
-            Its one failure names that request or link by URL.
+            links, or a ``next`` link repeats one already followed or leaves the scheme,
+            host, and port of ``base_url``. Its one failure names that request or link
+            by URL.
         """
         url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
         query: Mapping[str, str] = {"f": "json", **(params or {})}
         origin = _origin(self.base_url)
+        followed: set[str] = set()
         while True:
             try:
                 page = _page(await self._transport.get(url, params=query), query)
@@ -195,10 +197,15 @@ class OGCService:
             href = _next_href(page.links)
             if href is None:
                 return
+            if href in followed:
+                # A caller collecting every page never stops, so a loop spends the quota.
+                msg = "a next link repeats one already followed"
+                raise PaginationError([ServiceError(msg, href)])
             if _origin(href) != origin:
                 # The key header would follow the link to another host or to plain HTTP.
                 msg = f"refused a next link outside {self.base_url}"
                 raise PaginationError([ServiceError(msg, href)])
+            followed.add(href)
             url, query = href, {}
 
     async def aclose(self) -> None:

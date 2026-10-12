@@ -47,21 +47,43 @@ def _count(value: object) -> int | None:
     return value if type(value) is int and value >= 0 else None
 
 
+def _broken_next(link: object) -> bool:
+    """Whether ``link`` is a ``next`` link without a string ``href``."""
+    if not isinstance(link, dict):
+        return False
+    member = cast("dict[str, Any]", link)
+    return member.get("rel") == "next" and not isinstance(member.get("href"), str)
+
+
 def _page(resp: Response, params: Mapping[str, str]) -> Page:
-    """Build a `Page` from a response whose body is a FeatureCollection."""
+    """Build a `Page` from a response whose body is a FeatureCollection.
+
+    Raises
+    ------
+    ServiceError
+        If the body is not a FeatureCollection with a ``features`` list, or its
+        ``links`` member is not a list or holds a ``next`` link without a string
+        ``href``. Either would otherwise read as the last page (D-34).
+    """
     body = json_object(resp)
-    links = body.get("links")
     features = body.get("features")
+    links = body.get("links", [])
+    if body.get("type") != "FeatureCollection" or not isinstance(features, list):
+        msg = "response is not a FeatureCollection with a features list"
+        raise ServiceError(msg, resp.url, status=resp.status)
+    if not isinstance(links, list) or any(map(_broken_next, links)):
+        msg = "response has a malformed links member or next link"
+        raise ServiceError(msg, resp.url, status=resp.status)
     return Page(
         url=resp.url,
         params=params,
         status=resp.status,
         headers=resp.headers,
-        links=tuple(filter(None, map(parse_link, links))) if isinstance(links, list) else (),
+        links=tuple(filter(None, map(parse_link, links))),
         fetched_at=time.time(),
         number_matched=_count(body.get("numberMatched")),
         number_returned=_count(body.get("numberReturned")),
-        feature_count=len(features) if isinstance(features, list) else 0,
+        feature_count=len(features),
         body=body,
         content=resp.content,
     )
@@ -157,9 +179,9 @@ class OGCService:
         Raises
         ------
         PaginationError
-            When a request fails, a body is not a JSON object, or a ``next`` link leaves
-            the scheme, host, and port of ``base_url``. Its one failure names that
-            request or link by URL.
+            When a request fails, a body is not a FeatureCollection with well-formed
+            links, or a ``next`` link leaves the scheme, host, and port of ``base_url``.
+            Its one failure names that request or link by URL.
         """
         url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
         query: Mapping[str, str] = {"f": "json", **(params or {})}

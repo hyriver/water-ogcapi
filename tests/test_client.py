@@ -163,6 +163,38 @@ def test_a_failed_page_is_reported_by_its_url(reply: httpx2.Response, status: in
     assert failure.url == record("geoconnex/hu02/items-2.json")["request"]["url"]
 
 
+NEXT = f"{GEOCONNEX}/collections/hu02/items?offset=10"
+
+
+@pytest.mark.parametrize(
+    "doc",
+    [
+        {"code": "InvalidParameterValue", "description": "bad bbox"},
+        {"type": "FeatureCollection"},
+        {"type": "FeatureCollection", "features": {}},
+        {"type": "Feature", "geometry": None, "properties": {}},
+        {"type": "FeatureCollection", "features": [], "links": {"rel": "next", "href": NEXT}},
+        {"type": "FeatureCollection", "features": [], "links": [{"rel": "next", "href": None}]},
+        {"type": "FeatureCollection", "features": [], "links": [{"rel": "next"}]},
+    ],
+)
+def test_a_page_that_could_read_as_the_last_one_fails(doc: dict[str, Any]) -> None:
+    transport, _ = serve(doc)
+    got, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
+    assert got == []
+    assert err is not None
+    [failure] = err.failures
+    assert failure.status == 200
+    assert failure.url == f"{GEOCONNEX}/collections/hu02/items?f=json"
+
+
+def test_a_page_without_links_is_the_last_one() -> None:
+    transport, _ = serve({"type": "FeatureCollection", "features": []})
+    got, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
+    assert err is None
+    assert [p.feature_count for p in got] == [0]
+
+
 @pytest.mark.parametrize(
     "href",
     [

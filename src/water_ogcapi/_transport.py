@@ -439,18 +439,21 @@ class Transport:
         """
         _reject_credentials(url, params)
         client, sem = self._bind()
+        # Every error names the request as sent, query included (docs/design.md D-24).
+        sent = url
         for attempt in range(self.max_retries + 1):
             final = attempt == self.max_retries
             status: int | None = None
             try:
                 async with sem, asyncio.timeout(self.timeout):
+                    # Parsed inside the try so a malformed URL raises a typed ServiceError.
+                    target = _merge_query(url, params) if params else httpx2.URL(url)
+                    sent = str(target)
                     if self._client is not client or client.is_closed:
                         # aclose() ran while this call waited for a permit or a backoff,
                         # or is still closing; httpx2 would raise a bare RuntimeError.
                         msg = "transport closed while the request waited"
-                        raise ServiceError(msg, url, attempts=attempt)
-                    # Parsed inside the try so a malformed URL raises a typed ServiceError.
-                    target = _merge_query(url, params) if params else url
+                        raise ServiceError(msg, sent, attempts=attempt)
                     # httpx2 times each operation, so a body trickling in under the
                     # read timeout would otherwise hold the permit indefinitely.
                     resp = await client.get(target, headers=headers)
@@ -474,7 +477,7 @@ class Transport:
                 logger.log(
                     logging.WARNING if resp.status_code == 429 else logging.INFO,
                     "GET %s returned HTTP %d; retry %d of %d in %.1f s",
-                    url,
+                    sent,
                     resp.status_code,
                     attempt + 1,
                     self.max_retries,
@@ -486,11 +489,11 @@ class Transport:
                 # Raised outside the except block: a chained httpx2 error keeps its
                 # request, whose headers hold the API key, and a redirect keeps its raw
                 # Location.
-                raise ServiceError(failure, url, status=status, attempts=attempt + 1)
+                raise ServiceError(failure, sent, status=status, attempts=attempt + 1)
             delay = self._delay(attempt)
             logger.info(
                 "GET %s failed with %s; retry %d of %d in %.1f s",
-                url,
+                sent,
                 failure,
                 attempt + 1,
                 self.max_retries,

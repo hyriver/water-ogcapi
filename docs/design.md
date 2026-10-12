@@ -820,6 +820,30 @@ Layering rule for anything new:
     level; nested values are plain dicts and lists. `Property` types five JSON Schema
     keywords; `enum`, `example`, and the rest stay in its `extra`.
 
+### D-34: `iter_pages()` follows `next` links within the base URL's origin
+
+- **Status:** accepted.
+- **Date:** 2026-10-12.
+- **Decision:** `OGCService.iter_pages()` requests `{base_url}/collections/{id}/items`
+    with the caller's params plus `f=json`, then follows each page's `next` link until a
+    page has none (D-05). A page shorter than requested or without `numberMatched` ends
+    nothing (L-01). Among several `next` links it takes the first whose type is GeoJSON,
+    JSON, or unstated, else the first. It follows a link only when the link's scheme,
+    host, and port, with default ports filled in, match `base_url`. Otherwise it raises
+    `PaginationError` after yielding the page that carried the link, with one
+    `ServiceError` whose URL is the refused link. A response whose body is not a JSON
+    object fails like a failed request (D-24).
+- **Why:** The key travels in a header (D-18) that httpx2 does not strip across hosts
+    (D-12), so following a link to another host, or to `http://`, would send the key
+    there. A pygeoapi deployment with a wrong `server.url` writes such links. FabricData
+    links name port 443 (`api.water.usgs.gov:443`), hence the default ports. A 200 with
+    an HTML gateway page or a cut-off body holds no features, and reading it as an empty
+    page would end the traversal without an error.
+- **Rejected:** Following any link, the leak path of L-11. Ending the traversal at a
+    refused link, which reads as a finished traversal.
+- **Limits:** No cycle check runs, so a server that repeats a `next` link loops until
+    the caller stops iterating. A subdomain of the base host counts as another host.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

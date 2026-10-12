@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any, Self, cast
+from urllib.parse import quote, urlsplit
 
-from water_ogcapi._metadata import Collections
+from water_ogcapi._metadata import Collections, parse_link
+from water_ogcapi._results import Page
 from water_ogcapi._transport import Transport
-from water_ogcapi.exceptions import ServiceError
+from water_ogcapi.exceptions import PaginationError, ServiceError
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Mapping
+
+    from water_ogcapi._results import Link
     from water_ogcapi._transport import Response
 
 __all__ = ["OGCService"]
+
+DEFAULT_PORTS = {"http": 80, "https": 443}
+JSON_TYPES = frozenset({"application/geo+json", "application/json"})
 
 
 def json_object(resp: Response) -> dict[str, Any]:
@@ -31,6 +40,52 @@ def json_object(resp: Response) -> dict[str, Any]:
         msg = "response body is not a JSON object"
         raise ServiceError(msg, resp.url, status=resp.status)
     return cast("dict[str, Any]", doc)
+
+
+def _count(value: object) -> int | None:
+    """Return a JSON count, or ``None`` for anything but a non-negative integer."""
+    return value if type(value) is int and value >= 0 else None
+
+
+def _page(resp: Response, params: Mapping[str, str]) -> Page:
+    """Build a `Page` from a response whose body is a FeatureCollection."""
+    body = json_object(resp)
+    links = body.get("links")
+    features = body.get("features")
+    return Page(
+        url=resp.url,
+        params=params,
+        status=resp.status,
+        headers=resp.headers,
+        links=tuple(filter(None, map(parse_link, links))) if isinstance(links, list) else (),
+        fetched_at=time.time(),
+        number_matched=_count(body.get("numberMatched")),
+        number_returned=_count(body.get("numberReturned")),
+        feature_count=len(features) if isinstance(features, list) else 0,
+        body=body,
+        content=resp.content,
+    )
+
+
+def _next_href(links: tuple[Link, ...]) -> str | None:
+    """Return the ``next`` link to follow: the first of a JSON or unstated type, else the first."""
+    nexts = [link for link in links if link.rel == "next"]
+    for link in nexts:
+        media_type = (link.type or "application/json").partition(";")[0].strip().lower()
+        if media_type in JSON_TYPES:
+            return link.href
+    return nexts[0].href if nexts else None
+
+
+def _origin(url: str) -> tuple[str, str | None, int | None] | None:
+    """Return the scheme, host, and port of ``url``, the port defaulted by scheme."""
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return None
+    scheme = parts.scheme.lower()
+    return scheme, parts.hostname, DEFAULT_PORTS.get(scheme) if port is None else port
 
 
 class OGCService:
@@ -75,6 +130,54 @@ class OGCService:
             resp = await self._transport.get(url, params={"f": "json"})
             self._collections = Collections.from_dict(json_object(resp))
         return self._collections
+
+    async def iter_pages(
+        self, collection: str, *, params: Mapping[str, str] | None = None
+    ) -> AsyncIterator[Page]:
+        """Yield each page of a collection's items, following ``next`` links (D-34).
+
+        Only a page without a ``next`` link ends the traversal. A page shorter than
+        requested, or one without ``numberMatched``, ends nothing.
+
+        Parameters
+        ----------
+        collection : str
+            The collection id.
+        params : mapping of str to str, optional
+            Query parameters of the first request, such as ``limit`` or ``bbox``, with
+            ``f=json`` added unless given. Later requests take their query from the
+            ``next`` link.
+
+        Yields
+        ------
+        Page
+            One per response, the decoded document in ``body`` and its bytes in
+            ``content``. The ``next`` link of each page is the resume point after it.
+
+        Raises
+        ------
+        PaginationError
+            When a request fails, a body is not a JSON object, or a ``next`` link leaves
+            the scheme, host, and port of ``base_url``. Its one failure names that
+            request or link by URL.
+        """
+        url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
+        query: Mapping[str, str] = {"f": "json", **(params or {})}
+        origin = _origin(self.base_url)
+        while True:
+            try:
+                page = _page(await self._transport.get(url, params=query), query)
+            except ServiceError as err:
+                raise PaginationError([err]) from err
+            yield page
+            href = _next_href(page.links)
+            if href is None:
+                return
+            if _origin(href) != origin:
+                # The key header would follow the link to another host or to plain HTTP.
+                msg = f"refused a next link outside {self.base_url}"
+                raise PaginationError([ServiceError(msg, href)])
+            url, query = href, {}
 
     async def aclose(self) -> None:
         """Close the transport if this service created it."""

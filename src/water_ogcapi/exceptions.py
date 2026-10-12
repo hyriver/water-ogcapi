@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 __all__ = [
+    "PaginationError",
     "RateLimitError",
     "ServiceError",
     "WaterOGCAPIError",
@@ -89,3 +95,24 @@ class RateLimitError(ServiceError):
     ) -> None:
         super().__init__(message, url, status=429, attempts=attempts, retry_after=retry_after)
         self.remaining = remaining
+
+
+class PaginationError(WaterOGCAPIError):
+    """Raised when page requests of a traversal fail (docs/design.md D-24).
+
+    Every page that succeeded has already been yielded, so the error holds no page.
+
+    Parameters
+    ----------
+    failures : sequence of ServiceError
+        One error per failed request, each naming the request by its URL as sent.
+    """
+
+    def __init__(self, failures: Sequence[ServiceError]) -> None:
+        self.failures = tuple(failures)
+        super().__init__(self.failures)
+
+    def __str__(self) -> str:
+        count = len(self.failures)
+        head = f"{count} page request{'' if count == 1 else 's'} failed"
+        return "\n".join([head, *map(str, self.failures)])

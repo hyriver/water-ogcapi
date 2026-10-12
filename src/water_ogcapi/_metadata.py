@@ -66,13 +66,13 @@ def _object[T](parse: Callable[[Mapping[str, Any]], T]) -> Callable[[Any], T | N
     return parse_object
 
 
-def _link(value: object) -> Link | None:
+def parse_link(value: object) -> Link | None:
     is_link = isinstance(value, dict) and isinstance(cast("dict[str, Any]", value).get("href"), str)
     return Link.from_dict(cast("dict[str, Any]", value)) if is_link else None
 
 
 def _links(value: object) -> tuple[Link, ...] | None:
-    return _list_of(value, _link)
+    return _list_of(value, parse_link)
 
 
 @dataclass(frozen=True, slots=True)

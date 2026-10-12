@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from water_ogcapi.exceptions import RateLimitError, ServiceError
+from water_ogcapi.exceptions import PaginationError, RateLimitError, ServiceError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -37,3 +37,11 @@ def test_round_trip_keeps_message_and_attributes(
 def test_message_carries_status_attempts_and_url() -> None:
     error = RateLimitError("rate limit exceeded", URL, attempts=2)
     assert str(error) == f"HTTP 429: rate limit exceeded (after 2 attempts)\nURL: {URL}"
+
+
+@pytest.mark.parametrize("clone", [copy.copy, lambda e: pickle.loads(pickle.dumps(e))])
+def test_pagination_error_round_trip(clone: Callable[[PaginationError], PaginationError]) -> None:
+    error = PaginationError([ServiceError("service unavailable", URL, status=503)])
+    restored = clone(error)
+    assert str(restored) == f"1 page request failed\nHTTP 503: service unavailable\nURL: {URL}"
+    assert [vars(f) for f in restored.failures] == [vars(f) for f in error.failures]

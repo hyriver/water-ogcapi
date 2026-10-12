@@ -448,6 +448,19 @@ def test_timeout_bounds_the_whole_attempt() -> None:
     assert excinfo.value.attempts == 2
 
 
+@pytest.mark.parametrize("timeout", [True, False])
+def test_failed_request_reports_the_url_as_sent(timeout: bool) -> None:
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        if timeout:
+            await asyncio.sleep(5)
+        raise httpx2.ConnectError("refused", request=request)
+
+    transport = Transport(transport=httpx2.MockTransport(handler), timeout=0.05, max_retries=0)
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(transport.get(f"{URL}?cursor=%FF", params={"limit": "2"}))
+    assert excinfo.value.url == f"{URL}?cursor=%FF&limit=2", "replaying it repeats the request"
+
+
 def test_concurrency_is_bounded() -> None:
     live = 0
     peak = 0

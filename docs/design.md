@@ -502,8 +502,8 @@ Layering rule for anything new:
 
 - **Decision:** A failure point is the failed request's URL as sent, query included.
     Under fan-out the offset sits in that query, so it needs no field of its own. The
-    transport raises every `ServiceError` with that URL, which a timeout or connection
-    failure does not do yet (#7 changes it).
+    transport raises every `ServiceError` with that URL, a timeout or connection failure
+    included.
 
     `iter_pages()` raises `PaginationError` when one or more page requests fail. Its
     `failures` holds one `ServiceError` per failed request, each with its status,
@@ -526,10 +526,9 @@ Layering rule for anything new:
     defines. Page-level resume (#21) builds on both.
 
 - **Why:** Offsets exist only under fan-out (D-05), and a URL is the failure point both
-    modes share. A timeout or connection failure currently carries the URL the transport
-    was called with, without the merged `params`, so it cannot replay a first-page
-    request. A serverless function can be stopped without an exception, so the resume
-    point has to exist after each page.
+    modes share. The URL the transport was called with lacks the merged `params`, so it
+    cannot replay a first-page request. A serverless function can be stopped without an
+    exception, so the resume point has to exist after each page.
 
 - **Rejected:** Offsets with a fan-out-only error, which gives sequential traversal
     weaker recovery. `iter_pages()` raising `PartialResultsError` with the fetched

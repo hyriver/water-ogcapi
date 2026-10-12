@@ -134,7 +134,8 @@ Layering rule for anything new:
 
 ### D-05: Follow `next` links; offset fan-out only where verified
 
-- **Status:** accepted. D-26 names the services that allow fan-out.
+- **Status:** accepted. D-35 replaces offset fan-out with partitioned fan-out on NWIS
+    only.
 - **Decision:** Pagination follows `next` links by default. Concurrent offset fan-out is
     enabled per service only after that service's result ordering is verified, gated by
     its capability profile (D-13), with count and identifier checks and a sequential
@@ -234,7 +235,7 @@ Layering rule for anything new:
 ### D-13: Per-service capability profiles
 
 - **Status:** accepted; D-30 sets the values and drops the FabricData key. D-26 replaces
-    the GeoConnex sort key.
+    the GeoConnex sort key, and D-35 drops sort keys and the offset fan-out flag.
 - **Decision:** Each service class declares a profile: auth header convention, page-size
     caps, sort key, whether offset fan-out is verified (D-05), and whether rate-limit
     headers exist (D-06).
@@ -249,7 +250,7 @@ Layering rule for anything new:
 
 ### D-14: Testing strategy
 
-- **Status:** accepted.
+- **Status:** accepted. D-35 drops the GeoConnex sort scenario.
 
 - **Decision:** Offline tests intercept HTTP with `httpx2.MockTransport`, and an
     unexpected call fails the test. Live tests carry `@pytest.mark.network`, stay out of
@@ -553,7 +554,7 @@ Layering rule for anything new:
 
 ### D-26: Two pagination strategies, picked per service
 
-- **Status:** accepted.
+- **Status:** superseded by D-35.
 
 - **Date:** 2026-10-07.
 
@@ -849,6 +850,31 @@ Layering rule for anything new:
 - **Limits:** The cycle check compares `href` text, so a loop whose links differ only in
     form, such as reordered query parameters, goes undetected. A subdomain of the base
     host counts as another host.
+
+### D-35: Only NWIS fans out, by splitting a query into pieces
+
+- **Status:** accepted.
+- **Date:** 2026-10-12.
+- **Decision:** Every service pages through `next` links (D-05), and `sorted-offset` is
+    dropped. Concurrency exists only as partitioned fan-out on NWIS (#14): the NWIS
+    class splits a query into independent pieces by `datetime` range or by site list and
+    runs them concurrently, each following its own cursor. An interval includes both
+    ends, so adjacent pieces get disjoint bounds. FabricData and GeoConnex never fan
+    out, and no profile (D-13) carries a fan-out flag for them.
+- **Why:** FabricData and GeoConnex page with `offset` links and report `numberMatched`
+    on every page (fixtures), so one sequential traversal there is complete and
+    checkable. Chosen by the maintainer. NWIS reports no `numberMatched` and guarantees
+    no order across offset pages (D-26). USGS's efficiency guidance recommends queries
+    sized near one page, split by year or by site and run in parallel, since every
+    `next` page re-runs the query. A live check on `daily` returned the shared day in
+    both of two adjacent `datetime` ranges.
+- **Rejected:** D-26's sorted-offset fan-out on FabricData and GeoConnex, which rests on
+    `sortby`, a draft extension, and whose throughput FabricData's 300 requests a minute
+    caps whatever the concurrency (inferred, unmeasured). Offset fan-out on NWIS (D-26).
+- **Limits:** A query with neither a `datetime` range nor a site list, such as a bbox
+    alone, has nothing to split and runs in sequence. Pieces run against a collection
+    that may change between them, as pages do (D-03). A failed piece is reported by the
+    URL of its failed request (D-24).
 
 ## Lessons
 

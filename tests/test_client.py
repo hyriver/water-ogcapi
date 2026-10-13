@@ -12,7 +12,7 @@ import pytest
 
 from water_ogcapi import OGCService, Page
 from water_ogcapi._transport import Transport
-from water_ogcapi.exceptions import PaginationError, ServiceError
+from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BASE = "https://api.waterdata.usgs.gov/ogcapi/v1"
@@ -237,3 +237,81 @@ def test_a_json_next_link_wins_over_an_earlier_one() -> None:
     _, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
     assert err is None
     assert str(seen[1].url) == href
+
+
+def collected(
+    service: OGCService, collection: str = "hu02", **kwargs: Any
+) -> tuple[Any, Exception | None]:
+    try:
+        return asyncio.run(service.collect(collection, **kwargs)), None
+    except PaginationError as err:
+        return None, err
+
+
+def test_collect_aggregates_every_feature_and_checks_the_count() -> None:
+    docs = hu02()
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, err = collected(OGCService(GEOCONNEX, transport=transport))
+    assert err is None
+    assert result.geojson["features"] == [f for d in docs for f in d["features"]]
+    pagination = result.pagination
+    assert pagination.completeness == "complete"
+    assert pagination.checks == ("end_of_links", "count")
+    assert (
+        pagination.number_matched == pagination.number_returned == len(result.geojson["features"])
+    )
+    assert all(p.body is None and p.content is None for p in result.pages)
+
+
+def test_collect_keeps_page_bytes_on_request() -> None:
+    docs = hu02()
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport), keep_pages=True)
+    assert all(p.body is None and p.json()["features"] for p in result.pages)
+
+
+def test_collect_without_number_matched_checks_only_the_end_of_links() -> None:
+    docs = [{k: v for k, v in d.items() if k != "numberMatched"} for d in hu02()]
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.completeness == "complete"
+    assert result.pagination.checks == ("end_of_links",)
+    assert result.pagination.number_matched is None
+
+
+def test_collect_reads_unknown_when_the_count_disagrees() -> None:
+    docs = hu02()
+    docs[0] = {**docs[0], "features": docs[0]["features"][:-1]}
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.completeness == "unknown"
+    assert result.pagination.checks == ("end_of_links",)
+
+
+def test_collect_reads_unknown_when_pages_disagree_on_number_matched() -> None:
+    docs = hu02()
+    docs[1] = {**docs[1], "numberMatched": docs[1]["numberMatched"] + 1}
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.completeness == "unknown"
+    assert result.pagination.number_matched is None
+
+
+def test_a_failed_later_page_raises_partial_results() -> None:
+    docs = hu02()
+    transport, _ = serve(docs[0], httpx2.Response(500))
+    result, err = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result is None
+    assert isinstance(err, PartialResultsError)
+    assert err.result.pagination.completeness == "limited"
+    assert err.result.pagination.stop_reason == "failure"
+    assert err.result.geojson["features"] == docs[0]["features"]
+    assert len(err.failures) == 1
+    next_href = next(link["href"] for link in docs[0]["links"] if link["rel"] == "next")
+    assert err.failures[0].url == next_href
+
+
+def test_a_failed_first_page_raises_pagination_error() -> None:
+    transport, _ = serve(httpx2.Response(500))
+    _, err = collected(OGCService(GEOCONNEX, transport=transport))
+    assert type(err) is PaginationError

@@ -7,8 +7,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from water_ogcapi._results import QueryResult
+
 __all__ = [
     "PaginationError",
+    "PartialResultsError",
     "RateLimitError",
     "ServiceError",
     "WaterOGCAPIError",
@@ -116,3 +119,20 @@ class PaginationError(WaterOGCAPIError):
         count = len(self.failures)
         head = f"{count} page request{'' if count == 1 else 's'} failed"
         return "\n".join([head, *map(str, self.failures)])
+
+
+class PartialResultsError(PaginationError):
+    """Raised by ``collect()`` when a page failed after at least one page succeeded.
+
+    Parameters
+    ----------
+    failures : sequence of ServiceError
+        One error per failed request, each naming the request by its URL as sent.
+    result : QueryResult
+        Every page that succeeded, with ``completeness`` ``limited`` and stop reason
+        ``failure`` (docs/design.md D-24).
+    """
+
+    def __init__(self, failures: Sequence[ServiceError], result: QueryResult) -> None:
+        super().__init__(failures)
+        self.result = result

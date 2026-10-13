@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+import dataclasses
 import time
 from typing import TYPE_CHECKING, Any, Self, cast
 from urllib.parse import quote, urlsplit
 
 from water_ogcapi._metadata import Collections, parse_link
-from water_ogcapi._results import Page
+from water_ogcapi._results import Page, Pagination, QueryResult
 from water_ogcapi._transport import Transport
-from water_ogcapi.exceptions import PaginationError, ServiceError
+from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
 
-    from water_ogcapi._results import Link
+    from water_ogcapi._results import Check, Completeness, Link
     from water_ogcapi._transport import Response
 
 __all__ = ["OGCService"]
@@ -108,6 +109,24 @@ def _origin(url: str) -> tuple[str, str | None, int | None] | None:
         return None
     scheme = parts.scheme.lower()
     return scheme, parts.hostname, DEFAULT_PORTS.get(scheme) if port is None else port
+
+
+def _pagination(pages: list[Page], *, failed: bool) -> Pagination:
+    """Summarize a traversal: counts, the checks that passed, and completeness (D-36)."""
+    reported = {p.number_matched for p in pages if p.number_matched is not None}
+    matched = next(iter(reported)) if len(reported) == 1 else None
+    returned = sum(p.feature_count for p in pages)
+    if failed:
+        return Pagination(matched, returned, len(pages), "limited", "failure")
+    # The traversal ended on a page without a next link. A count that disagrees with
+    # numberMatched, or pages that disagree with each other, leave the result unknown.
+    checks: tuple[Check, ...] = ("end_of_links",)
+    completeness: Completeness = "complete"
+    if len(reported) > 1 or (matched is not None and matched != returned):
+        completeness = "unknown"
+    elif matched is not None:
+        checks += ("count",)
+    return Pagination(matched, returned, len(pages), completeness, checks=checks)
 
 
 class OGCService:
@@ -207,6 +226,62 @@ class OGCService:
                 raise PaginationError([ServiceError(msg, href)])
             followed.add(href)
             url, query = href, {}
+
+    async def collect(
+        self,
+        collection: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        keep_pages: bool = False,
+    ) -> QueryResult:
+        """Fetch every page of a collection's items into one `QueryResult` (D-22).
+
+        Parameters
+        ----------
+        collection : str
+            The collection id.
+        params : mapping of str to str, optional
+            Query parameters of the first request, as for `iter_pages`.
+        keep_pages : bool, optional
+            Keep each page's response bytes in ``Page.content`` (D-23). Page bodies
+            are always dropped.
+
+        Returns
+        -------
+        QueryResult
+            ``geojson`` holds the features of all pages, in order.
+
+        Raises
+        ------
+        PartialResultsError
+            When a page fails after at least one succeeded. Its ``result`` holds the
+            pages that succeeded.
+        PaginationError
+            When the first page fails.
+        """
+        pages: list[Page] = []
+        features: list[Any] = []
+        failure: PaginationError | None = None
+        try:
+            async for page in self.iter_pages(collection, params=params):
+                features.extend((page.body or {})["features"])
+                pages.append(
+                    dataclasses.replace(
+                        page, body=None, content=page.content if keep_pages else None
+                    )
+                )
+        except PaginationError as err:
+            failure = err
+        result = QueryResult(
+            geojson={"type": "FeatureCollection", "features": features},
+            pages=tuple(pages),
+            pagination=_pagination(pages, failed=failure is not None),
+        )
+        if failure is None:
+            return result
+        if not pages:
+            raise failure
+        raise PartialResultsError(failure.failures, result) from failure
 
     async def aclose(self) -> None:
         """Close the transport if this service created it."""

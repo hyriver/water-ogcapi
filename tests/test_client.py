@@ -323,6 +323,22 @@ def test_a_failed_later_page_raises_partial_results() -> None:
     assert err.failures[0].url == next_href
 
 
+def test_a_next_link_with_a_credential_is_a_page_failure() -> None:
+    doc = hu02()[0]
+    links = [
+        {**link, "href": f"{link['href']}&api_key=SECRET"} if link["rel"] == "next" else link
+        for link in doc["links"]
+    ]
+    transport, seen = serve({**doc, "links": links})
+    _, err = collected(OGCService(GEOCONNEX, transport=transport))
+    assert isinstance(err, PartialResultsError)
+    assert len(seen) == 1
+    assert err.result.geojson["features"] == doc["features"]
+    assert err.failures[0].url is not None
+    assert "SECRET" not in err.failures[0].url
+    assert "api_key=REDACTED" in err.failures[0].url
+
+
 @pytest.mark.parametrize("clone", [copy.copy, lambda e: pickle.loads(pickle.dumps(e))])
 def test_partial_results_error_round_trip(clone: Any) -> None:
     """The error crosses process pools and Dask workers with its partial result."""

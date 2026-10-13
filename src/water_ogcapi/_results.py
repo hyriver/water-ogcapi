@@ -37,7 +37,7 @@ __all__ = [
 Check = Literal["end_of_links", "count"]
 Completeness = Literal["complete", "limited", "unknown"]
 StopReason = Literal["limit", "failure"]
-CrsSource = Literal["content_crs", "requested", "default", "unknown"]
+CrsSource = Literal["content_crs", "default", "unconfirmed", "unknown"]
 
 REDACTED = "REDACTED"
 # Response headers a Page keeps. Anything unlisted is dropped, so a header nobody
@@ -359,12 +359,14 @@ class Crs:
         Each page's ``Content-Crs`` header with its angle brackets removed, ``None``
         for a page without one.
     effective : str or None
-        The CRS of the geometries, ``None`` when it cannot be told.
-    source : {"content_crs", "requested", "default", "unknown"}
-        ``content_crs`` when every page named the same CRS, ``requested`` when no page
-        named one and the request did, ``default`` when neither did (the OGC API
-        Features default, CRS84), and ``unknown`` when pages disagreed or only some
-        named one.
+        The CRS of the geometries, ``None`` when no evidence settles it.
+    source : {"content_crs", "default", "unconfirmed", "unknown"}
+        ``content_crs`` when every page named the same CRS. Without a header on any
+        page: ``default`` (CRS84, the OGC API Features default) when no request asked
+        for another CRS, ``unconfirmed`` when every request asked for the same other
+        CRS, which a server applying it must name in ``Content-Crs``, and ``unknown``
+        when the requests disagreed. ``unknown`` also when pages named different CRSs
+        or only some named one.
     """
 
     requested: str | None
@@ -392,13 +394,14 @@ def crs_of(pages: Sequence[Page]) -> Crs:
     if named:
         return Crs(requested, seen, None, "unknown")
     # No page named a CRS. Each request's own query decides, since a next link may
-    # drop or change the parameter.
+    # drop or change the parameter. A server that applies crs must name it in
+    # Content-Crs (OGC API Features Part 2, requirement 15), so a request no page
+    # confirmed may have been ignored.
     asked = {_requested_crs(p) or p.params.get("crs") for p in pages}
-    if len(asked) > 1:
-        return Crs(requested, seen, None, "unknown")
-    if asked - {None}:
-        return Crs(requested, seen, asked.pop(), "requested")
-    return Crs(requested, seen, CRS84, "default")
+    asked = {None if crs == CRS84 else crs for crs in asked}
+    if asked <= {None}:
+        return Crs(requested, seen, CRS84, "default")
+    return Crs(requested, seen, None, "unconfirmed" if len(asked) == 1 else "unknown")
 
 
 @dataclass(frozen=True, slots=True)

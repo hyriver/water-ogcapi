@@ -901,24 +901,27 @@ Layering rule for anything new:
     `complete`.
 - **Limits:** `complete` still cannot prove that no feature moved between pages (D-03).
 
-### D-37: CRS provenance comes from `Content-Crs`, then the request, then the default
+### D-37: CRS provenance comes from `Content-Crs`, else the default
 
 - **Status:** accepted.
 - **Date:** 2026-10-13.
 - **Decision:** `QueryResult.crs` is a `Crs` with the first request's `crs` parameter
     (`requested`), each page's `Content-Crs` (`page_crs`), the CRS of the geometries
     (`effective`), and `source`. `effective` is the header when every page names the
-    same CRS (`content_crs`), the request when no page names one and the request did
-    (`requested`), CRS84 when neither did (`default`), and `None` when pages disagree or
-    only some name one (`unknown`). Without headers, each page's own request query
-    decides, so a `next` link that drops or changes `crs` reads `unknown`. The header
-    outranks the request.
-- **Why:** A server may ignore `crs`, so the request alone proves nothing, and all four
-    recorded fixtures send `Content-Crs` as CRS84. The OGC API Features default is CRS84
-    when nothing says otherwise.
+    same CRS (`content_crs`), and `None` when pages name different CRSs or only some
+    name one (`unknown`). Without a header on any page, each page's own request query
+    decides: CRS84 when no request asked for another CRS (`default`), and `None` when
+    every request asked for the same other CRS (`unconfirmed`) or the requests disagree
+    (`unknown`). Asking for CRS84 counts as asking for the default.
+- **Why:** A server that applies `crs` must name the CRS in `Content-Crs` (OGC API
+    Features Part 2, requirement 15; abstract test 4 expects the requested CRS there),
+    so a request no page confirmed may have been ignored. All four recorded fixtures
+    send `Content-Crs` as CRS84. The OGC API Features default is CRS84 when nothing says
+    otherwise.
 - **Rejected:** Reading `effective` from the request, which reports a CRS the server may
-    not have applied. Raising on disagreement, which discards pages the caller can still
-    use.
+    not have applied. Assuming CRS84 for an unconfirmed request, which mislabels a
+    server that applies `crs` and omits the header. Raising on disagreement, which
+    discards pages the caller can still use.
 - **Limits:** `requested` reads only `crs`, so a `bbox-crs` or `filter-crs` is not
     recorded. A `default` source is an assumption, since no header confirms it.
 

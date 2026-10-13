@@ -297,6 +297,16 @@ def test_collect_reads_unknown_when_pages_disagree_on_number_matched() -> None:
     assert result.pagination.number_matched is None
 
 
+def test_collect_reads_unknown_when_a_page_returns_fewer_features_than_it_reported() -> None:
+    docs = [{k: v for k, v in d.items() if k != "numberMatched"} for d in hu02()]
+    last = without_next(docs[-1])
+    docs[-1] = {**last, "features": last["features"][:-1]}
+    transport, _ = serve(*docs)
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.number_matched is None
+    assert result.pagination.completeness == "unknown"
+
+
 def test_a_failed_later_page_raises_partial_results() -> None:
     docs = hu02()
     transport, _ = serve(docs[0], httpx2.Response(500))

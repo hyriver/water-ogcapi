@@ -236,12 +236,15 @@ class Response:
         return json.loads(self.content)
 
 
-def _finalize(resp: httpx2.Response, *, attempts: int) -> Response:
+def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Response:
     """Convert a successful httpx2 response, or raise a typed error."""
     url = str(resp.url)
+    method = resp.request.method
     headers = dict(resp.headers.items())
     if resp.status_code < 300 or resp.status_code == 304:
-        logger.debug("GET %s returned HTTP %d after %d attempt(s)", url, resp.status_code, attempts)
+        logger.debug(
+            "%s %s returned HTTP %d after %d attempt(s)", method, url, resp.status_code, attempts
+        )
         return Response(url=url, status=resp.status_code, headers=headers, content=resp.content)
     if resp.status_code < 400:
         # follow_redirects is off so the caller never leaks credentials to another
@@ -250,7 +253,9 @@ def _finalize(resp: httpx2.Response, *, attempts: int) -> Response:
         location = headers.get("location")
         target = _describe_location(location) if location else "an unspecified location"
         msg = f"server redirected to {target}"
-        raise ServiceError(msg, url, status=resp.status_code, attempts=attempts)
+        raise ServiceError(
+            msg, url, status=resp.status_code, attempts=attempts, method=method, request_body=body
+        )
     retry_after = parse_retry_after(headers.get("retry-after"), headers.get("date"))
     if resp.status_code == 429:
         remaining = headers.get("x-ratelimit-remaining")
@@ -261,6 +266,8 @@ def _finalize(resp: httpx2.Response, *, attempts: int) -> Response:
             retry_after=retry_after,
             remaining=parse_count(remaining),
             attempts=attempts,
+            method=method,
+            request_body=body,
         )
     raise ServiceError(
         resp.reason_phrase or "request failed",
@@ -268,6 +275,8 @@ def _finalize(resp: httpx2.Response, *, attempts: int) -> Response:
         status=resp.status_code,
         attempts=attempts,
         retry_after=retry_after,
+        method=method,
+        request_body=body,
     )
 
 
@@ -405,10 +414,27 @@ class Transport:
         params: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> Response:
-        """Fetch a URL, retrying transient failures.
+        """Send a ``GET`` through `request`, which documents the parameters and errors."""
+        return await self.request("GET", url, params=params, headers=headers)
+
+    async def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
+        content: bytes | None = None,
+    ) -> Response:
+        """Send a request, retrying transient failures.
+
+        A ``POST`` is retried like a ``GET``: this package posts only queries, which
+        change nothing on the server (docs/design.md D-38).
 
         Parameters
         ----------
+        method : str
+            HTTP method, such as ``GET`` or ``POST``.
         url : str
             Absolute URL to fetch.
         params : mapping of str to str, optional
@@ -416,6 +442,8 @@ class Transport:
             takes its value from ``params``. Credentials are not allowed here.
         headers : mapping of str to str, optional
             Request headers, credentials included.
+        content : bytes, optional
+            Request body, sent unchanged on every attempt.
 
         Returns
         -------
@@ -427,7 +455,8 @@ class Transport:
         ------
         RateLimitError
             On a final 429, or on a 429 whose ``Retry-After`` exceeds ``MAX_SLEEP``.
-            Carries the parsed wait, the remaining count, and the attempt count.
+            Carries the parsed wait, the remaining count, and the attempt count. Every
+            error carries the method and body of the request (D-38).
         ServiceError
             On any other status of 400 or above, on a redirect, on a malformed URL
             or undecodable body, when retries are exhausted, or when ``aclose()``
@@ -438,6 +467,7 @@ class Transport:
             If ``params`` carries a credential such as ``api_key``.
         """
         reject_credentials(url, params)
+        method = method.upper()
         client, sem = self._bind()
         # Every error names the request as sent, query included (docs/design.md D-24).
         sent = url
@@ -453,10 +483,12 @@ class Transport:
                         # aclose() ran while this call waited for a permit or a backoff,
                         # or is still closing; httpx2 would raise a bare RuntimeError.
                         msg = "transport closed while the request waited"
-                        raise ServiceError(msg, sent, attempts=attempt)
+                        raise ServiceError(
+                            msg, sent, attempts=attempt, method=method, request_body=content
+                        )
                     # httpx2 times each operation, so a body trickling in under the
                     # read timeout would otherwise hold the permit indefinitely.
-                    resp = await client.get(target, headers=headers)
+                    resp = await client.request(method, target, headers=headers, content=content)
             except TimeoutError:
                 failure = f"TimeoutError: attempt exceeded {self.timeout} s"
                 transient = True
@@ -467,16 +499,17 @@ class Transport:
                 failure, transient = _describe(exc), _is_transient(exc)
             else:
                 if resp.status_code not in RETRY_STATUS or final:
-                    return _finalize(resp, attempts=attempt + 1)
+                    return _finalize(resp, attempts=attempt + 1, body=content)
                 wait = parse_retry_after(resp.headers.get("retry-after"), resp.headers.get("date"))
                 if wait is not None and wait > MAX_SLEEP:
                     # Retrying earlier than asked would burn the remaining attempts
                     # against a window that has not reopened. Hand the wait to the caller.
-                    return _finalize(resp, attempts=attempt + 1)
+                    return _finalize(resp, attempts=attempt + 1, body=content)
                 delay = self._delay(attempt) if wait is None else wait
                 logger.log(
                     logging.WARNING if resp.status_code == 429 else logging.INFO,
-                    "GET %s returned HTTP %d; retry %d of %d in %.1f s",
+                    "%s %s returned HTTP %d; retry %d of %d in %.1f s",
+                    method,
                     sent,
                     resp.status_code,
                     attempt + 1,
@@ -489,10 +522,18 @@ class Transport:
                 # Raised outside the except block: a chained httpx2 error keeps its
                 # request, whose headers hold the API key, and a redirect keeps its raw
                 # Location.
-                raise ServiceError(failure, sent, status=status, attempts=attempt + 1)
+                raise ServiceError(
+                    failure,
+                    sent,
+                    status=status,
+                    attempts=attempt + 1,
+                    method=method,
+                    request_body=content,
+                )
             delay = self._delay(attempt)
             logger.info(
-                "GET %s failed with %s; retry %d of %d in %.1f s",
+                "%s %s failed with %s; retry %d of %d in %.1f s",
+                method,
                 sent,
                 failure,
                 attempt + 1,

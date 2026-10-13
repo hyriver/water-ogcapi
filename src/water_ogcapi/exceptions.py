@@ -39,6 +39,10 @@ class ServiceError(WaterOGCAPIError):
         an exhausted one.
     retry_after : float, optional
         Seconds the server asked the caller to wait, parsed from ``Retry-After``.
+    method : str, optional
+        The request's HTTP method, defaults to ``GET``.
+    request_body : bytes, optional
+        The request body as sent, ``None`` for a request without one (D-38).
     """
 
     def __init__(
@@ -49,6 +53,8 @@ class ServiceError(WaterOGCAPIError):
         status: int | None = None,
         attempts: int = 1,
         retry_after: float | None = None,
+        method: str = "GET",
+        request_body: bytes | None = None,
     ) -> None:
         # args holds the bare message: pickle and copy rebuild the instance from args
         # and then restore the attributes, so a formatted args[0] gained its prefix twice.
@@ -58,6 +64,8 @@ class ServiceError(WaterOGCAPIError):
         self.status = status
         self.attempts = attempts
         self.retry_after = retry_after
+        self.method = method
+        self.request_body = request_body
 
     def __str__(self) -> str:
         prefix = f"HTTP {self.status}: " if self.status is not None else ""
@@ -66,6 +74,8 @@ class ServiceError(WaterOGCAPIError):
             full = f"{full} (after {self.attempts} attempts)"
         if self.url is not None:
             full = f"{full}\nURL: {self.url}"
+        if self.method != "GET":
+            full = f"{full}\nMethod: {self.method}"
         return full
 
 
@@ -85,6 +95,10 @@ class RateLimitError(ServiceError):
         Value of the ``x-ratelimit-remaining`` header when present.
     attempts : int, optional
         Requests made before giving up, defaults to 1.
+    method : str, optional
+        The request's HTTP method, defaults to ``GET``.
+    request_body : bytes, optional
+        The request body as sent, ``None`` for a request without one (D-38).
     """
 
     def __init__(
@@ -95,8 +109,18 @@ class RateLimitError(ServiceError):
         retry_after: float | None = None,
         remaining: int | None = None,
         attempts: int = 1,
+        method: str = "GET",
+        request_body: bytes | None = None,
     ) -> None:
-        super().__init__(message, url, status=429, attempts=attempts, retry_after=retry_after)
+        super().__init__(
+            message,
+            url,
+            status=429,
+            attempts=attempts,
+            retry_after=retry_after,
+            method=method,
+            request_body=request_body,
+        )
         self.remaining = remaining
 
 

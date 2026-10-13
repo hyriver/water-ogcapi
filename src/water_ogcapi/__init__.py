@@ -16,6 +16,7 @@ from water_ogcapi._metadata import (
     TemporalExtent,
 )
 from water_ogcapi._results import (
+    Check,
     Completeness,
     Link,
     Page,
@@ -30,6 +31,7 @@ except PackageNotFoundError:
     __version__ = "0.0.0+unknown"
 
 __all__ = [
+    "Check",
     "Collection",
     "Collections",
     "Completeness",

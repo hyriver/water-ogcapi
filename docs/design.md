@@ -876,6 +876,26 @@ Layering rule for anything new:
     that may change between them, as pages do (D-03). A failed piece is reported by the
     URL of its failed request (D-24).
 
+### D-36: `complete` means the traversal ended and the checks that ran passed
+
+- **Status:** accepted. Amends D-22.
+- **Date:** 2026-10-13.
+- **Decision:** `collect()` reads `complete` when the last page had no `next` link
+    (D-05) and every check that could run passed. `Pagination.checks` lists the checks
+    that passed: `end_of_links` always, and `count` when the pages agree on
+    `numberMatched` and the features received equal it. NWIS reports no `numberMatched`,
+    so its `complete` rests on `end_of_links` alone. A count that differs from
+    `numberMatched`, or pages that disagree, read `unknown` with `end_of_links` still
+    listed. A failed page reads `limited` with stop reason `failure` and no checks. The
+    `limit` stop reason is reserved for a caller cap, which no method offers yet.
+- **Why:** Chosen by the maintainer. A server that omits `numberMatched` gives no second
+    witness, and reading its end-of-links as `unknown` would make NWIS never complete.
+    Listing the checks tells the caller how strong a `complete` is.
+- **Rejected:** `complete` only when a count matched, which marks every NWIS result
+    `unknown`. A `bool` for the count check, which hides which evidence backed
+    `complete`.
+- **Limits:** `complete` still cannot prove that no feature moved between pages (D-03).
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

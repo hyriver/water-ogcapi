@@ -22,8 +22,9 @@ if TYPE_CHECKING:
     # field's value or None when the member does not have the expected shape.
     type Members = Mapping[str, tuple[str, Callable[[Any], Any]]]
 
-__all__ = ["Completeness", "Link", "Page", "Pagination", "QueryResult", "StopReason"]
+__all__ = ["Check", "Completeness", "Link", "Page", "Pagination", "QueryResult", "StopReason"]
 
+Check = Literal["end_of_links", "count"]
 Completeness = Literal["complete", "limited", "unknown"]
 StopReason = Literal["limit", "failure"]
 
@@ -311,6 +312,9 @@ class Pagination:
         Why a ``limited`` traversal stopped: a caller limit or a failed page.
     sort_by : str, optional
         The sort key the pages were requested with.
+    checks : tuple of {"end_of_links", "count"}
+        The completeness checks that ran and passed: the last page had no ``next``
+        link, and the features received equal the agreed ``numberMatched``.
 
     Raises
     ------
@@ -324,6 +328,7 @@ class Pagination:
     completeness: Completeness
     stop_reason: StopReason | None = None
     sort_by: str | None = None
+    checks: tuple[Check, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.completeness == "limited") != (self.stop_reason is not None):

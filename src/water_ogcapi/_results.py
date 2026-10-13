@@ -354,7 +354,7 @@ class Crs:
     Parameters
     ----------
     requested : str or None
-        The ``crs`` query parameter of the first request, ``None`` when absent.
+        The ``crs`` query parameter of the first request as sent, ``None`` when absent.
     page_crs : tuple of str or None
         Each page's ``Content-Crs`` header with its angle brackets removed, ``None``
         for a page without one.
@@ -386,7 +386,7 @@ def _requested_crs(page: Page) -> str | None:
 
 def crs_of(pages: Sequence[Page]) -> Crs:
     """Determine the CRS of ``pages`` from their ``Content-Crs`` headers and requests."""
-    requested = pages[0].params.get("crs") if pages else None
+    requested = _requested_crs(pages[0]) if pages else None
     seen = tuple((p.headers.get("content-crs") or "").strip("<> ") or None for p in pages)
     named = set(seen) - {None}
     if len(named) == 1 and None not in seen:
@@ -397,8 +397,7 @@ def crs_of(pages: Sequence[Page]) -> Crs:
     # drop or change the parameter. A server that applies crs must name it in
     # Content-Crs (OGC API Features Part 2, requirement 15), so a request no page
     # confirmed may have been ignored.
-    asked = {_requested_crs(p) or p.params.get("crs") for p in pages}
-    asked = {None if crs == CRS84 else crs for crs in asked}
+    asked = {None if crs == CRS84 else crs for crs in map(_requested_crs, pages)}
     if asked <= {None}:
         return Crs(requested, seen, CRS84, "default")
     return Crs(requested, seen, None, "unconfirmed" if len(asked) == 1 else "unknown")

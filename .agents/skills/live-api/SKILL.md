@@ -42,8 +42,9 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
 - Keep probes small: a low `limit`, one page unless the question is about paging.
 - Probe through `Transport(max_retries=0)` so one call sends one request. The default
     retries up to three times, and the caller never sees the intermediate responses.
-- Read `X-RateLimit-Remaining` on each response and stop well before zero. If a service
-    sends no `X-RateLimit-*` headers, keep to a handful of requests per task.
+- Read `X-RateLimit-Remaining` on each response and stop well before zero. It lags a
+    burst of requests by a few seconds, so space probes out. If a service sends no
+    `X-RateLimit-*` headers, keep to a handful of requests per task.
 - Never provoke a 429. Test rate-limit handling against `httpx2.MockTransport` only.
 - Make network tests for FabricData skip when the backend does not respond.
 
@@ -70,6 +71,11 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
 Send one keyed and one unkeyed request to the same endpoint and compare the
 `X-RateLimit-*` headers. A higher limit on the keyed response shows the key was honored.
 Equal limits or missing headers are inconclusive; record them as such.
+
+USGS raises a key's limit on request, and a raised key reports its own limit on every
+endpoint (D-30). A check made with such a key shows that key's limit, so record a
+default limit only from a key that has the default. Ignore `X-RateLimit-*` on a response
+with `x-cache: Hit`: CloudFront serves the headers stored with the cached response.
 
 ## Writing up findings
 

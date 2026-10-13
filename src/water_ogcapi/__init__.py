@@ -18,6 +18,8 @@ from water_ogcapi._metadata import (
 from water_ogcapi._results import (
     Check,
     Completeness,
+    Crs,
+    CrsSource,
     Link,
     Page,
     Pagination,
@@ -35,6 +37,8 @@ __all__ = [
     "Collection",
     "Collections",
     "Completeness",
+    "Crs",
+    "CrsSource",
     "Extent",
     "Link",
     "OGCService",

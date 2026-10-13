@@ -901,6 +901,27 @@ Layering rule for anything new:
     `complete`.
 - **Limits:** `complete` still cannot prove that no feature moved between pages (D-03).
 
+### D-37: CRS provenance comes from `Content-Crs`, then the request, then the default
+
+- **Status:** accepted.
+- **Date:** 2026-10-13.
+- **Decision:** `QueryResult.crs` is a `Crs` with the first request's `crs` parameter
+    (`requested`), each page's `Content-Crs` (`page_crs`), the CRS of the geometries
+    (`effective`), and `source`. `effective` is the header when every page names the
+    same CRS (`content_crs`), the request when no page names one and the request did
+    (`requested`), CRS84 when neither did (`default`), and `None` when pages disagree or
+    only some name one (`unknown`). Without headers, each page's own request query
+    decides, so a `next` link that drops or changes `crs` reads `unknown`. The header
+    outranks the request.
+- **Why:** A server may ignore `crs`, so the request alone proves nothing, and all four
+    recorded fixtures send `Content-Crs` as CRS84. The OGC API Features default is CRS84
+    when nothing says otherwise.
+- **Rejected:** Reading `effective` from the request, which reports a CRS the server may
+    not have applied. Raising on disagreement, which discards pages the caller can still
+    use.
+- **Limits:** `requested` reads only `crs`, so a `bbox-crs` or `filter-crs` is not
+    recorded. A `default` source is an assumption, since no header confirms it.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

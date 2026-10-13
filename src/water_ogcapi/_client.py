@@ -48,6 +48,15 @@ def _count(value: object) -> int | None:
     return value if type(value) is int and value >= 0 else None
 
 
+def _malformed_counts(body: Mapping[str, Any]) -> bool:
+    """Whether ``numberMatched`` or ``numberReturned`` is present but not a usable count.
+
+    A null reads as absent.
+    """
+    members = ("numberMatched", "numberReturned")
+    return any(body.get(key) is not None and _count(body[key]) is None for key in members)
+
+
 def _broken_next(link: object) -> bool:
     """Whether ``link`` is a ``next`` link without a string ``href``."""
     if not isinstance(link, dict):
@@ -111,20 +120,20 @@ def _origin(url: str) -> tuple[str, str | None, int | None] | None:
     return scheme, parts.hostname, DEFAULT_PORTS.get(scheme) if port is None else port
 
 
-def _pagination(pages: list[Page], *, failed: bool) -> Pagination:
+def _pagination(pages: list[Page], *, failed: bool, malformed: bool) -> Pagination:
     """Summarize a traversal: counts, the checks that passed, and completeness (D-36)."""
     reported = {p.number_matched for p in pages if p.number_matched is not None}
     matched = next(iter(reported)) if len(reported) == 1 else None
     returned = sum(p.feature_count for p in pages)
     if failed:
         return Pagination(matched, returned, len(pages), "limited", "failure")
-    # The traversal ended on a page without a next link. A count that disagrees with
-    # numberMatched, a page whose numberReturned differs from its features, or pages that
-    # disagree with each other, leave the result unknown.
+    # The traversal ended on a page without a next link. A malformed count, a count that
+    # disagrees with numberMatched, a page whose numberReturned differs from its features,
+    # or pages that disagree with each other, leave the result unknown.
     checks: tuple[Check, ...] = ("end_of_links",)
     completeness: Completeness = "complete"
     short = any(p.number_returned not in (None, p.feature_count) for p in pages)
-    if short or len(reported) > 1 or (matched is not None and matched != returned):
+    if malformed or short or len(reported) > 1 or (matched is not None and matched != returned):
         completeness = "unknown"
     elif matched is not None:
         checks += ("count",)
@@ -271,9 +280,12 @@ class OGCService:
         pages: list[Page] = []
         features: list[Any] = []
         failure: PaginationError | None = None
+        malformed = False
         try:
             async for page in self.iter_pages(collection, params=params):
-                features.extend((page.body or {})["features"])
+                body = page.body or {}
+                features.extend(body["features"])
+                malformed = malformed or _malformed_counts(body)
                 pages.append(
                     dataclasses.replace(
                         page, body=None, content=page.content if keep_pages else None
@@ -284,7 +296,7 @@ class OGCService:
         result = QueryResult(
             geojson={"type": "FeatureCollection", "features": features},
             pages=tuple(pages),
-            pagination=_pagination(pages, failed=failure is not None),
+            pagination=_pagination(pages, failed=failure is not None, malformed=malformed),
         )
         if failure is None:
             return result

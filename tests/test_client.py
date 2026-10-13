@@ -323,6 +323,18 @@ def test_a_failed_later_page_raises_partial_results() -> None:
     assert err.failures[0].url == next_href
 
 
+@pytest.mark.parametrize(
+    ("value", "completeness"),
+    [(-1, "unknown"), ("4", "unknown"), (True, "unknown"), (4.0, "unknown"), (None, "complete")],
+)
+def test_collect_reads_a_malformed_count_as_unknown(value: object, completeness: str) -> None:
+    docs = [{k: v for k, v in d.items() if k != "numberMatched"} for d in hu02()]
+    docs[-1] = {**without_next(docs[-1]), "numberReturned": value}
+    transport, _ = serve(*docs)
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.completeness == completeness
+
+
 def test_a_next_link_with_a_credential_is_a_page_failure() -> None:
     doc = hu02()[0]
     links = [

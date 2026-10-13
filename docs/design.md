@@ -729,7 +729,12 @@ Layering rule for anything new:
     consecutive NWIS requests on 2026-10-07. The 10,000 cap keeps GeoConnex requests at
     or below the declared maximum, so the untested behavior above it is never reached.
     Every value here can change without notice, and only the drift check (Q-05) would
-    see it.
+    see it. On 2026-10-13 a key whose limit USGS had raised on request read
+    `X-RateLimit-Limit: 3000` on `/items` and on metadata, and requests to both took
+    numbers from one `Remaining` sequence: a raised key appears to replace the
+    per-endpoint limits with one hourly budget (six requests). A response served from
+    CloudFront's cache (`x-cache: Hit`) carries the cached response's `X-RateLimit-*`,
+    and `Remaining` lags a burst of requests by a few seconds.
 
 ### D-31: 1.0 no longer waits on NWIS
 

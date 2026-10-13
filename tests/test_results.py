@@ -7,6 +7,7 @@ import dataclasses
 import json
 import pickle
 from typing import Any
+from urllib.parse import urlencode
 
 import pytest
 
@@ -206,10 +207,17 @@ UTM = "http://www.opengis.net/def/crs/EPSG/0/26918"
 def test_crs_provenance(
     params: dict[str, str], headers: list[dict[str, str]], expected: tuple[Any, ...]
 ) -> None:
-    pages = [make_page(params=params, headers=h) for h in headers]
+    url = f"{URL}?{urlencode({'f': 'json', **params})}"
+    pages = [make_page(url=url, params=params, headers=h) for h in headers]
     crs = crs_of(pages)
     assert (crs.requested, crs.effective, crs.source) == expected
     assert len(crs.page_crs) == len(headers)
+
+
+def test_crs_reads_the_request_as_sent() -> None:
+    """A traversal resumed from a next link has no params; its URL holds the query."""
+    resumed = make_page(url=f"{URL}?offset=2&crs={UTM}", params={})
+    assert crs_of([resumed]).requested == UTM
 
 
 def test_crs_of_no_pages_is_the_default() -> None:

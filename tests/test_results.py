@@ -193,7 +193,9 @@ UTM = "http://www.opengis.net/def/crs/EPSG/0/26918"
     ("params", "headers", "expected"),
     [
         ({}, [{}], (None, CRS84, "default")),
-        ({"crs": UTM}, [{}], (UTM, UTM, "requested")),
+        # A server that applies crs names it in Content-Crs.
+        ({"crs": UTM}, [{}], (UTM, None, "unconfirmed")),
+        ({"crs": CRS84}, [{}], (CRS84, CRS84, "default")),
         ({}, [{"Content-Crs": f"<{CRS84}>"}] * 2, (None, CRS84, "content_crs")),
         # The server's header outranks the request.
         ({"crs": UTM}, [{"Content-Crs": f"<{CRS84}>"}], (UTM, CRS84, "content_crs")),
@@ -222,4 +224,4 @@ def test_crs_is_unknown_when_a_next_link_drops_or_changes_the_requested_crs() ->
     assert crs_of([first, dropped]).source == "unknown"
     assert crs_of([first, changed]).effective is None
     kept = crs_of([first, same])
-    assert (kept.effective, kept.source) == (UTM, "requested")
+    assert (kept.effective, kept.source) == (None, "unconfirmed")

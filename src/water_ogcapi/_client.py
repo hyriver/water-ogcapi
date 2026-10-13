@@ -24,8 +24,12 @@ DEFAULT_PORTS = {"http": 80, "https": 443}
 JSON_TYPES = frozenset({"application/geo+json", "application/json"})
 
 
-def json_object(resp: Response) -> dict[str, Any]:
+def json_object(
+    resp: Response, *, method: str = "GET", request_body: bytes | None = None
+) -> dict[str, Any]:
     """Decode a response body that must be a JSON object.
+
+    ``method`` and ``request_body`` name the request in the error (D-38).
 
     Raises
     ------
@@ -39,7 +43,9 @@ def json_object(resp: Response) -> dict[str, Any]:
     if not isinstance(doc, dict):
         # Raised outside the except block: a JSONDecodeError holds the whole body.
         msg = "response body is not a JSON object"
-        raise ServiceError(msg, resp.url, status=resp.status)
+        raise ServiceError(
+            msg, resp.url, status=resp.status, method=method, request_body=request_body
+        )
     return cast("dict[str, Any]", doc)
 
 
@@ -65,7 +71,9 @@ def _broken_next(link: object) -> bool:
     return member.get("rel") == "next" and not isinstance(member.get("href"), str)
 
 
-def _page(resp: Response, params: Mapping[str, str]) -> Page:
+def _page(
+    resp: Response, params: Mapping[str, str], method: str, request_body: bytes | None
+) -> Page:
     """Build a `Page` from a response whose body is a FeatureCollection.
 
     Raises
@@ -75,15 +83,19 @@ def _page(resp: Response, params: Mapping[str, str]) -> Page:
         ``links`` member is not a list or holds a ``next`` link without a string
         ``href``. Either would otherwise read as the last page (D-34).
     """
-    body = json_object(resp)
+    body = json_object(resp, method=method, request_body=request_body)
     features = body.get("features")
     links = body.get("links", [])
     if body.get("type") != "FeatureCollection" or not isinstance(features, list):
         msg = "response is not a FeatureCollection with a features list"
-        raise ServiceError(msg, resp.url, status=resp.status)
+        raise ServiceError(
+            msg, resp.url, status=resp.status, method=method, request_body=request_body
+        )
     if not isinstance(links, list) or any(map(_broken_next, links)):
         msg = "response has a malformed links member or next link"
-        raise ServiceError(msg, resp.url, status=resp.status)
+        raise ServiceError(
+            msg, resp.url, status=resp.status, method=method, request_body=request_body
+        )
     return Page(
         url=resp.url,
         params=params,
@@ -96,6 +108,8 @@ def _page(resp: Response, params: Mapping[str, str]) -> Page:
         feature_count=len(features),
         body=body,
         content=resp.content,
+        method=method,
+        request_body=request_body,
     )
 
 
@@ -184,6 +198,58 @@ class OGCService:
             self._collections = Collections.from_dict(json_object(resp))
         return self._collections
 
+    async def _traverse(
+        self,
+        url: str,
+        *,
+        method: str = "GET",
+        params: Mapping[str, str] | None = None,
+        content: bytes | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> AsyncIterator[Page]:
+        """Yield each page from ``url`` on, following ``next`` links (D-34, D-38).
+
+        Every request, the ``next`` links included, sends ``method``, ``content``, and
+        ``headers``: a ``GET`` to the ``next`` link of a CQL2 ``POST`` drops the filter.
+        ``params`` apply to the first request only.
+        """
+        query: Mapping[str, str] = params or {}
+        origin = _origin(self.base_url)
+        followed: set[str] = set()
+        while True:
+            try:
+                resp = await self._transport.request(
+                    method, url, params=query, headers=headers, content=content
+                )
+                page = _page(resp, query, method.upper(), content)
+            except ServiceError as err:
+                raise PaginationError([err]) from err
+            yield page
+            # Holds the first request as sent too, so a next link back to it is a repeat.
+            followed.add(page.url)
+            href = _next_href(page.links)
+            if href is None:
+                return
+            refusal = None
+            if href in followed:
+                # A caller collecting every page never stops, so a loop spends the quota.
+                refusal = "a next link repeats one already followed"
+            elif _origin(href) != origin:
+                # The key header would follow the link to another host or to plain HTTP.
+                refusal = f"refused a next link outside {self.base_url}"
+            else:
+                try:
+                    reject_credentials(href, None)
+                except ValueError:
+                    # A gateway can copy the key into a URL (L-11). The transport's
+                    # ValueError would escape collect() and drop the pages fetched so far.
+                    refusal = "refused a next link that carries a credential in its query"
+            if refusal is not None:
+                err = ServiceError(refusal, href, method=page.method, request_body=content)
+                raise PaginationError([err])
+            followed.add(href)
+            url, query = href, {}
+
     async def iter_pages(
         self, collection: str, *, params: Mapping[str, str] | None = None
     ) -> AsyncIterator[Page]:
@@ -216,37 +282,8 @@ class OGCService:
             failure names that request or link by URL.
         """
         url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
-        query: Mapping[str, str] = {"f": "json", **(params or {})}
-        origin = _origin(self.base_url)
-        followed: set[str] = set()
-        while True:
-            try:
-                page = _page(await self._transport.get(url, params=query), query)
-            except ServiceError as err:
-                raise PaginationError([err]) from err
+        async for page in self._traverse(url, params={"f": "json", **(params or {})}):
             yield page
-            # Holds the first request as sent too, so a next link back to it is a repeat.
-            followed.add(page.url)
-            href = _next_href(page.links)
-            if href is None:
-                return
-            if href in followed:
-                # A caller collecting every page never stops, so a loop spends the quota.
-                msg = "a next link repeats one already followed"
-                raise PaginationError([ServiceError(msg, href)])
-            if _origin(href) != origin:
-                # The key header would follow the link to another host or to plain HTTP.
-                msg = f"refused a next link outside {self.base_url}"
-                raise PaginationError([ServiceError(msg, href)])
-            try:
-                reject_credentials(href, None)
-            except ValueError:
-                # A gateway can copy the key into a URL (L-11). The transport's ValueError
-                # would escape collect() and drop the pages fetched so far.
-                msg = "refused a next link that carries a credential in its query"
-                raise PaginationError([ServiceError(msg, href)]) from None
-            followed.add(href)
-            url, query = href, {}
 
     async def collect(
         self,

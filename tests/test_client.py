@@ -400,3 +400,52 @@ def test_collect_records_the_crs_each_page_named() -> None:
     assert result.crs.page_crs == (result.crs.effective,) * 3
     assert result.crs.effective == "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
     assert result.crs.requested is None
+
+
+FILTER = b'{"op": "=", "args": [{"property": "name"}, "x"]}'
+
+
+def post_traversal(service: OGCService) -> tuple[list[Page], PaginationError | None]:
+    got: list[Page] = []
+
+    async def run() -> None:
+        url = f"{GEOCONNEX}/collections/hu02/items"
+        async for page in service._traverse(
+            url, method="POST", params={"f": "json"}, content=FILTER
+        ):
+            got.append(page)  # noqa: PERF401
+
+    try:
+        asyncio.run(run())
+    except PaginationError as err:
+        return got, err
+    return got, None
+
+
+def test_a_post_traversal_sends_its_body_to_every_next_link() -> None:
+    """A GET to the next link of a CQL2 POST drops the filter (D-38)."""
+    docs = hu02()
+    transport, seen = serve(*docs[:-1], without_next(docs[-1]))
+    pages, err = post_traversal(OGCService(GEOCONNEX, transport=transport))
+    assert err is None
+    assert [(r.method, r.content) for r in seen] == [("POST", FILTER)] * 3
+    nexts = [next(link["href"] for link in d["links"] if link["rel"] == "next") for d in docs[:-1]]
+    assert [str(r.url) for r in seen[1:]] == nexts
+    assert [(p.method, p.request_body) for p in pages] == [("POST", FILTER)] * 3
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        httpx2.Response(500),
+        httpx2.Response(200, content=b"<html>gateway</html>"),
+        httpx2.Response(200, json={"code": "InvalidParameterValue"}),
+        httpx2.Response(200, json={"type": "FeatureCollection", "features": [], "links": {}}),
+    ],
+)
+def test_a_failed_post_page_names_its_method_and_body(reply: httpx2.Response) -> None:
+    transport, _ = serve(hu02()[0], reply)
+    pages, err = post_traversal(OGCService(GEOCONNEX, transport=transport))
+    assert len(pages) == 1
+    assert err is not None
+    assert (err.failures[0].method, err.failures[0].request_body) == ("POST", FILTER)

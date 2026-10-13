@@ -34,6 +34,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
     into independent pieces (D-35).
 - `iter_pages()` follows a `next` link only within the scheme, host, and port of
     `base_url` (D-34).
+- A request is identified by its method, URL as sent, and body, and every `next` link
+    gets the first request's method and body (D-38).
 - Query methods return payload plus evidence (`Page`, `QueryResult`), never a bare
     GeoJSON dict (D-03).
 - Any type that carries request headers or params redacts credentials at construction,

@@ -263,6 +263,11 @@ class Page:
         field; the caller owns it.
     content : bytes, optional
         The response body after HTTP content decoding, before JSON decoding.
+    method : str, optional
+        The request's HTTP method, defaults to ``GET``.
+    request_body : bytes, optional
+        The request body as sent, ``None`` for a request without one. With ``method``
+        and ``url`` it identifies the request (D-38).
 
     Notes
     -----
@@ -282,6 +287,8 @@ class Page:
     feature_count: int
     body: dict[str, Any] | None = field(default=None, repr=False)
     content: bytes | None = field(default=None, repr=False)
+    method: str = "GET"
+    request_body: bytes | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "url", redact_url(self.url))

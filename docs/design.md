@@ -429,7 +429,7 @@ Layering rule for anything new:
 
 ### D-22: Which operation returns which type
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-36 and D-38.
 
 - **Date:** 2026-10-07.
 
@@ -497,7 +497,7 @@ Layering rule for anything new:
 
 ### D-24: A failed page is reported by the request that failed
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-38.
 
 - **Date:** 2026-10-07.
 
@@ -924,6 +924,32 @@ Layering rule for anything new:
     discards pages the caller can still use.
 - **Limits:** `requested` reads only `crs`, so a `bbox-crs` or `filter-crs` is not
     recorded. A `default` source is an assumption, since no header confirms it.
+
+### D-38: A request is identified by its method, URL as sent, and body
+
+- **Status:** accepted. Amends D-22 and D-24.
+- **Date:** 2026-10-13.
+- **Decision:** `Transport.request(method, url, params=, headers=, content=)` sends
+    every request, and `get()` calls it. Every `ServiceError` and every `Page` carries
+    the request's `method` and `request_body` (the bytes sent, `None` without a body)
+    beside its URL. One private traversal, `OGCService._traverse()`, takes the first
+    URL, method, params, body, and headers, and follows `next` links (D-34) with the
+    same method, body, and headers; `iter_pages()` calls it with a `GET`. The failure
+    point of D-24, and the resume point after each page, become the method, the URL as
+    sent, and the body. The transport retries a `POST` like a `GET`.
+- **Why:** CQL2 over `POST` (#10) must re-send its body to each `next` URL: the
+    2026-10-12 NWIS check showed that a `GET` there drops the filter and returns other
+    sites with a 200. A URL alone would replay as that unfiltered query, which neither
+    `completeness` nor CRS provenance detects. One traversal keeps the origin, cycle,
+    and credential checks in one place for every request shape. This package posts only
+    CQL2 queries, which change nothing on the server, so a retry is safe. Chosen by the
+    maintainer after the 2026-10-13 project review.
+- **Rejected:** A second traversal loop for `POST` inside #10, which copies those
+    checks. Keeping the URL as the only identity and amending D-24 after resume (#21)
+    had built on it.
+- **Limits:** The request's own headers, such as its content type, are not recorded
+    (D-20), so a replay must supply them. A `POST` that changes server state needs
+    retries off, which the shared HyRiver client has to make opt-in.
 
 ## Lessons
 

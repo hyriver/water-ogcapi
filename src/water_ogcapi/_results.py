@@ -357,7 +357,7 @@ class Crs:
         The ``crs`` query parameter of the first request as sent, ``None`` when absent.
     page_crs : tuple of str or None
         Each page's ``Content-Crs`` header with its angle brackets removed, ``None``
-        for a page without one.
+        for a page without one. A repeated header lists its values comma-separated.
     effective : str or None
         The CRS of the geometries, ``None`` when no evidence settles it.
     source : {"content_crs", "default", "unconfirmed", "unknown"}
@@ -384,12 +384,19 @@ def _requested_crs(page: Page) -> str | None:
     return values[0] if values else None
 
 
+def _named_crs(page: Page) -> tuple[str, ...]:
+    """Return the CRS URIs in ``Content-Crs``; httpx2 comma-joins a repeated header (L-07)."""
+    parts = page.headers.get("content-crs", "").split(",")
+    return tuple(dict.fromkeys(filter(None, (part.strip().strip("<>") for part in parts))))
+
+
 def crs_of(pages: Sequence[Page]) -> Crs:
     """Determine the CRS of ``pages`` from their ``Content-Crs`` headers and requests."""
     requested = _requested_crs(pages[0]) if pages else None
-    seen = tuple((p.headers.get("content-crs") or "").strip("<> ") or None for p in pages)
-    named = set(seen) - {None}
-    if len(named) == 1 and None not in seen:
+    per_page = [_named_crs(p) for p in pages]
+    seen = tuple(", ".join(uris) or None for uris in per_page)
+    named = {uri for uris in per_page for uri in uris}
+    if len(named) == 1 and all(per_page):
         return Crs(requested, seen, named.pop(), "content_crs")
     if named:
         return Crs(requested, seen, None, "unknown")

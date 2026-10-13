@@ -202,6 +202,9 @@ UTM = "http://www.opengis.net/def/crs/EPSG/0/26918"
         ({"crs": UTM}, [{"Content-Crs": f"<{CRS84}>"}], (UTM, CRS84, "content_crs")),
         ({}, [{"Content-Crs": f"<{CRS84}>"}, {}], (None, None, "unknown")),
         ({}, [{"Content-Crs": f"<{CRS84}>"}, {"Content-Crs": f"<{UTM}>"}], (None, None, "unknown")),
+        # A repeated header arrives comma-joined.
+        ({}, [{"Content-Crs": f"<{CRS84}>, <{CRS84}>"}], (None, CRS84, "content_crs")),
+        ({}, [{"Content-Crs": f"<{CRS84}>, <{UTM}>"}], (None, None, "unknown")),
     ],
 )
 def test_crs_provenance(

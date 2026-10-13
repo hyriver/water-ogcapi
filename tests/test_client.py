@@ -335,6 +335,15 @@ def test_collect_reads_a_malformed_count_as_unknown(value: object, completeness:
     assert result.pagination.completeness == completeness
 
 
+def test_a_passing_count_check_is_listed_when_another_check_fails() -> None:
+    docs = hu02()
+    docs[-1] = {**without_next(docs[-1]), "numberReturned": "x"}
+    transport, _ = serve(*docs)
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.completeness == "unknown"
+    assert result.pagination.checks == ("end_of_links", "count")
+
+
 def test_a_next_link_back_to_the_first_request_is_a_repeat() -> None:
     doc = hu02()[0]
     first = f"{GEOCONNEX}/collections/hu02/items?f=json&limit=10"

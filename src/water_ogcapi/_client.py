@@ -131,12 +131,13 @@ def _pagination(pages: list[Page], *, failed: bool, malformed: bool) -> Paginati
     # disagrees with numberMatched, a page whose numberReturned differs from its features,
     # or pages that disagree with each other, leave the result unknown.
     checks: tuple[Check, ...] = ("end_of_links",)
-    completeness: Completeness = "complete"
-    short = any(p.number_returned not in (None, p.feature_count) for p in pages)
-    if malformed or short or len(reported) > 1 or (matched is not None and matched != returned):
-        completeness = "unknown"
-    elif matched is not None:
+    if matched is not None and matched == returned:
         checks += ("count",)
+    short = any(p.number_returned not in (None, p.feature_count) for p in pages)
+    mismatch = matched is not None and matched != returned
+    completeness: Completeness = (
+        "unknown" if malformed or short or len(reported) > 1 or mismatch else "complete"
+    )
     return Pagination(matched, returned, len(pages), completeness, checks=checks)
 
 

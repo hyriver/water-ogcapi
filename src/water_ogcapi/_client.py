@@ -224,6 +224,8 @@ class OGCService:
             except ServiceError as err:
                 raise PaginationError([err]) from err
             yield page
+            # Holds the first request as sent too, so a next link back to it is a repeat.
+            followed.add(page.url)
             href = _next_href(page.links)
             if href is None:
                 return

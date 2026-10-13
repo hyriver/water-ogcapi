@@ -388,3 +388,15 @@ def test_a_failed_first_page_raises_pagination_error() -> None:
     transport, _ = serve(httpx2.Response(500))
     _, err = collected(OGCService(GEOCONNEX, transport=transport))
     assert type(err) is PaginationError
+
+
+def test_collect_records_the_crs_each_page_named() -> None:
+    docs = hu02()
+    docs[-1] = without_next(docs[-1])
+    named = {"Content-Crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>"}
+    transport, _ = serve(*(httpx2.Response(200, json=d, headers=named) for d in docs))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.crs.source == "content_crs"
+    assert result.crs.page_crs == (result.crs.effective,) * 3
+    assert result.crs.effective == "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+    assert result.crs.requested is None

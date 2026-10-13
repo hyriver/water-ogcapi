@@ -11,22 +11,33 @@ import json
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast
-from urllib.parse import unquote_plus, urlsplit, urlunsplit
+from urllib.parse import parse_qs, unquote_plus, urlsplit, urlunsplit
 
 from water_ogcapi._transport import CREDENTIAL_PARAMS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
 
     # A JSON member name, the field that carries it, and the parser that returns the
     # field's value or None when the member does not have the expected shape.
     type Members = Mapping[str, tuple[str, Callable[[Any], Any]]]
 
-__all__ = ["Check", "Completeness", "Link", "Page", "Pagination", "QueryResult", "StopReason"]
+__all__ = [
+    "Check",
+    "Completeness",
+    "Crs",
+    "CrsSource",
+    "Link",
+    "Page",
+    "Pagination",
+    "QueryResult",
+    "StopReason",
+]
 
 Check = Literal["end_of_links", "count"]
 Completeness = Literal["complete", "limited", "unknown"]
 StopReason = Literal["limit", "failure"]
+CrsSource = Literal["content_crs", "requested", "default", "unknown"]
 
 REDACTED = "REDACTED"
 # Response headers a Page keeps. Anything unlisted is dropped, so a header nobody
@@ -337,6 +348,60 @@ class Pagination:
 
 
 @dataclass(frozen=True, slots=True)
+class Crs:
+    """The coordinate reference system of a result and how it was determined (D-37).
+
+    Parameters
+    ----------
+    requested : str or None
+        The ``crs`` query parameter of the first request, ``None`` when absent.
+    page_crs : tuple of str or None
+        Each page's ``Content-Crs`` header with its angle brackets removed, ``None``
+        for a page without one.
+    effective : str or None
+        The CRS of the geometries, ``None`` when it cannot be told.
+    source : {"content_crs", "requested", "default", "unknown"}
+        ``content_crs`` when every page named the same CRS, ``requested`` when no page
+        named one and the request did, ``default`` when neither did (the OGC API
+        Features default, CRS84), and ``unknown`` when pages disagreed or only some
+        named one.
+    """
+
+    requested: str | None
+    page_crs: tuple[str | None, ...]
+    effective: str | None
+    source: CrsSource
+
+
+CRS84 = "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+
+
+def _requested_crs(page: Page) -> str | None:
+    """Return the ``crs`` value in the query of the request that fetched ``page``."""
+    values = parse_qs(urlsplit(page.url).query).get("crs")
+    return values[0] if values else None
+
+
+def crs_of(pages: Sequence[Page]) -> Crs:
+    """Determine the CRS of ``pages`` from their ``Content-Crs`` headers and requests."""
+    requested = pages[0].params.get("crs") if pages else None
+    seen = tuple((p.headers.get("content-crs") or "").strip("<> ") or None for p in pages)
+    named = set(seen) - {None}
+    if len(named) == 1 and None not in seen:
+        return Crs(requested, seen, named.pop(), "content_crs")
+    if named:
+        return Crs(requested, seen, None, "unknown")
+    # No page named a CRS. Each request's own query decides, since a next link may
+    # drop or change the parameter.
+    asked = {_requested_crs(p) or p.params.get("crs") for p in pages}
+    if len(asked) > 1:
+        return Crs(requested, seen, None, "unknown")
+    if asked - {None}:
+        return Crs(requested, seen, asked.pop(), "requested")
+    return Crs(requested, seen, CRS84, "default")
+
+
+@dataclass(frozen=True, slots=True)
 class QueryResult:
     """An aggregated query result and the pages behind it (D-03).
 
@@ -349,11 +414,14 @@ class QueryResult:
         bytes only with ``keep_pages=True`` (D-23).
     pagination : Pagination
         Counts and completeness of the traversal.
+    crs : Crs
+        The requested, per-page, and effective CRS, and how it was determined.
     """
 
     geojson: dict[str, Any] = field(repr=False)
     pages: tuple[Page, ...]
     pagination: Pagination
+    crs: Crs
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "pages", _all_of(tuple(self.pages), Page, "pages"))

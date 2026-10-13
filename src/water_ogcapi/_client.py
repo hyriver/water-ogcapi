@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Self, cast
 from urllib.parse import quote, urlsplit
 
 from water_ogcapi._metadata import Collections, parse_link
-from water_ogcapi._results import Page, Pagination, QueryResult
+from water_ogcapi._results import Page, Pagination, QueryResult, crs_of
 from water_ogcapi._transport import Transport, reject_credentials
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
@@ -300,6 +300,7 @@ class OGCService:
             geojson={"type": "FeatureCollection", "features": features},
             pages=tuple(pages),
             pagination=_pagination(pages, failed=failure is not None, malformed=malformed),
+            crs=crs_of(pages),
         )
         if failure is None:
             return result

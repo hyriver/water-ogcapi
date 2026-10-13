@@ -10,8 +10,8 @@ from typing import Any
 
 import pytest
 
-from water_ogcapi import Link, Page, Pagination, QueryResult
-from water_ogcapi._results import REDACTED, redact_url
+from water_ogcapi import Crs, Link, Page, Pagination, QueryResult
+from water_ogcapi._results import CRS84, REDACTED, crs_of, redact_url
 
 SECRET = "SECRET"
 URL = "https://example.com/collections/c/items"
@@ -37,7 +37,10 @@ def make_result(*pages: Page) -> QueryResult:
         number_matched=None, number_returned=2, page_count=1, completeness="complete"
     )
     return QueryResult(
-        geojson={"type": "FeatureCollection", "features": []}, pages=pages, pagination=pagination
+        geojson={"type": "FeatureCollection", "features": []},
+        pages=pages,
+        pagination=pagination,
+        crs=Crs(None, (), CRS84, "default"),
     )
 
 
@@ -145,6 +148,7 @@ def test_repr_leaves_out_payloads() -> None:
         pagination=Pagination(
             number_matched=1, number_returned=1, page_count=1, completeness="complete"
         ),
+        crs=crs_of([page]),
     )
     assert "PAYLOAD" not in repr(page)
     assert "PAYLOAD" not in repr(result)
@@ -180,3 +184,42 @@ def test_stop_reason_set_exactly_when_limited(
     else:
         with pytest.raises(ValueError, match="stop_reason"):
             build()
+
+
+UTM = "http://www.opengis.net/def/crs/EPSG/0/26918"
+
+
+@pytest.mark.parametrize(
+    ("params", "headers", "expected"),
+    [
+        ({}, [{}], (None, CRS84, "default")),
+        ({"crs": UTM}, [{}], (UTM, UTM, "requested")),
+        ({}, [{"Content-Crs": f"<{CRS84}>"}] * 2, (None, CRS84, "content_crs")),
+        # The server's header outranks the request.
+        ({"crs": UTM}, [{"Content-Crs": f"<{CRS84}>"}], (UTM, CRS84, "content_crs")),
+        ({}, [{"Content-Crs": f"<{CRS84}>"}, {}], (None, None, "unknown")),
+        ({}, [{"Content-Crs": f"<{CRS84}>"}, {"Content-Crs": f"<{UTM}>"}], (None, None, "unknown")),
+    ],
+)
+def test_crs_provenance(
+    params: dict[str, str], headers: list[dict[str, str]], expected: tuple[Any, ...]
+) -> None:
+    pages = [make_page(params=params, headers=h) for h in headers]
+    crs = crs_of(pages)
+    assert (crs.requested, crs.effective, crs.source) == expected
+    assert len(crs.page_crs) == len(headers)
+
+
+def test_crs_of_no_pages_is_the_default() -> None:
+    assert crs_of([]) == Crs(None, (), CRS84, "default")
+
+
+def test_crs_is_unknown_when_a_next_link_drops_or_changes_the_requested_crs() -> None:
+    first = make_page(url=f"{URL}?f=json&crs={UTM}", params={"f": "json", "crs": UTM})
+    dropped = make_page(url=f"{URL}?offset=2", params={})
+    changed = make_page(url=f"{URL}?offset=2&crs={CRS84}", params={})
+    same = make_page(url=f"{URL}?offset=2&crs={UTM}", params={})
+    assert crs_of([first, dropped]).source == "unknown"
+    assert crs_of([first, changed]).effective is None
+    kept = crs_of([first, same])
+    assert (kept.effective, kept.source) == (UTM, "requested")

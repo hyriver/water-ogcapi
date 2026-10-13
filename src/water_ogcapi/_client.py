@@ -9,7 +9,7 @@ from urllib.parse import quote, urlsplit
 
 from water_ogcapi._metadata import Collections, parse_link
 from water_ogcapi._results import Page, Pagination, QueryResult
-from water_ogcapi._transport import Transport
+from water_ogcapi._transport import Transport, reject_credentials
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
 if TYPE_CHECKING:
@@ -201,9 +201,9 @@ class OGCService:
         ------
         PaginationError
             When a request fails, a body is not a FeatureCollection with well-formed
-            links, or a ``next`` link repeats one already followed or leaves the scheme,
-            host, and port of ``base_url``. Its one failure names that request or link
-            by URL.
+            links, or a ``next`` link repeats one already followed, leaves the scheme,
+            host, and port of ``base_url``, or carries a credential in its query. Its one
+            failure names that request or link by URL.
         """
         url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
         query: Mapping[str, str] = {"f": "json", **(params or {})}
@@ -226,6 +226,13 @@ class OGCService:
                 # The key header would follow the link to another host or to plain HTTP.
                 msg = f"refused a next link outside {self.base_url}"
                 raise PaginationError([ServiceError(msg, href)])
+            try:
+                reject_credentials(href, None)
+            except ValueError:
+                # A gateway can copy the key into a URL (L-11). The transport's ValueError
+                # would escape collect() and drop the pages fetched so far.
+                msg = "refused a next link that carries a credential in its query"
+                raise PaginationError([ServiceError(msg, href)]) from None
             followed.add(href)
             url, query = href, {}
 

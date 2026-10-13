@@ -61,7 +61,7 @@ def _mentions_credential(text: str) -> bool:
     return any(name in decoded for name in CREDENTIAL_PARAMS)
 
 
-def _reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
+def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
     """Refuse a credential passed as a query parameter (docs/design.md D-18).
 
     Checks ``params`` and the query and fragment already in ``url``, with
@@ -437,7 +437,7 @@ class Transport:
         ValueError
             If ``params`` carries a credential such as ``api_key``.
         """
-        _reject_credentials(url, params)
+        reject_credentials(url, params)
         client, sem = self._bind()
         # Every error names the request as sent, query included (docs/design.md D-24).
         sent = url

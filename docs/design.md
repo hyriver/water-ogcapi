@@ -833,9 +833,11 @@ Layering rule for anything new:
     host, and port, with default ports filled in, match `base_url`. Otherwise it raises
     `PaginationError` after yielding the page that carried the link, with one
     `ServiceError` whose URL is the refused link. A `next` link whose `href` matches one
-    already followed raises the same way. A response fails like a failed request (D-24)
-    unless its body is a FeatureCollection with a `features` list, a `links` member that
-    is a list when present, and a string `href` on every `next` link.
+    already followed raises the same way, and so does one carrying a credential in its
+    query (L-11), which the transport would refuse with a `ValueError` that drops the
+    pages already fetched. A response fails like a failed request (D-24) unless its body
+    is a FeatureCollection with a `features` list, a `links` member that is a list when
+    present, and a string `href` on every `next` link.
 - **Why:** The key travels in a header (D-18) that httpx2 does not strip across hosts
     (D-12), so following a link to another host, or to `http://`, would send the key
     there. A pygeoapi deployment with a wrong `server.url` writes such links. FabricData

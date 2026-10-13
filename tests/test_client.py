@@ -335,6 +335,17 @@ def test_collect_reads_a_malformed_count_as_unknown(value: object, completeness:
     assert result.pagination.completeness == completeness
 
 
+def test_a_next_link_back_to_the_first_request_is_a_repeat() -> None:
+    doc = hu02()[0]
+    first = f"{GEOCONNEX}/collections/hu02/items?f=json&limit=10"
+    links = [{**link, "href": first} if link["rel"] == "next" else link for link in doc["links"]]
+    transport, seen = serve({**doc, "links": links}, doc)
+    _, err = collected(OGCService(GEOCONNEX, transport=transport), params={"limit": "10"})
+    assert [str(r.url) for r in seen] == [first]
+    assert isinstance(err, PartialResultsError)
+    assert err.result.geojson["features"] == doc["features"]
+
+
 def test_a_next_link_with_a_credential_is_a_page_failure() -> None:
     doc = hu02()[0]
     links = [

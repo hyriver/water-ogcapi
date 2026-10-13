@@ -136,3 +136,5 @@ class PartialResultsError(PaginationError):
     def __init__(self, failures: Sequence[ServiceError], result: QueryResult) -> None:
         super().__init__(failures)
         self.result = result
+        # copy and pickle rebuild the instance as cls(*args).
+        self.args = (self.failures, result)

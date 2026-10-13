@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
+import pickle
 from pathlib import Path
 from typing import Any
 
@@ -319,6 +321,19 @@ def test_a_failed_later_page_raises_partial_results() -> None:
     assert len(err.failures) == 1
     next_href = next(link["href"] for link in docs[0]["links"] if link["rel"] == "next")
     assert err.failures[0].url == next_href
+
+
+@pytest.mark.parametrize("clone", [copy.copy, lambda e: pickle.loads(pickle.dumps(e))])
+def test_partial_results_error_round_trip(clone: Any) -> None:
+    """The error crosses process pools and Dask workers with its partial result."""
+    transport, _ = serve(hu02()[0], httpx2.Response(500))
+    _, err = collected(OGCService(GEOCONNEX, transport=transport))
+    assert isinstance(err, PartialResultsError)
+    restored = clone(err)
+    assert type(restored) is PartialResultsError
+    assert str(restored) == str(err)
+    assert restored.result == err.result
+    assert [vars(f) for f in restored.failures] == [vars(f) for f in err.failures]
 
 
 def test_a_failed_first_page_raises_pagination_error() -> None:

@@ -121,6 +121,41 @@ def test_request_headers_are_sent() -> None:
     assert seen[0].headers["x-api-key"] == "key"
 
 
+def test_request_sends_its_method_and_body_on_every_attempt(no_sleep: list[float]) -> None:
+    mock, seen = responder(httpx2.Response(503), httpx2.Response(200, json={}))
+    body = b'{"op": "="}'
+
+    async def run() -> Response:
+        async with Transport(transport=mock) as transport:
+            return await transport.request("post", URL, content=body)
+
+    assert asyncio.run(run()).status == 200
+    assert [(r.method, r.content) for r in seen] == [("POST", body)] * 2
+    assert len(no_sleep) == 1
+
+
+@pytest.mark.parametrize(
+    "reply", [httpx2.Response(400), httpx2.Response(429), httpx2.ConnectError("down")]
+)
+def test_a_failed_request_carries_its_method_and_body(
+    reply: httpx2.Response | httpx2.ConnectError,
+) -> None:
+    def handler(_: httpx2.Request) -> httpx2.Response:
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    async def run() -> None:
+        transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
+        async with transport:
+            await transport.request("POST", URL, content=b"{}")
+
+    with pytest.raises(ServiceError) as info:
+        asyncio.run(run())
+    assert (info.value.method, info.value.request_body) == ("POST", b"{}")
+    assert str(info.value).endswith("\nMethod: POST")
+
+
 def test_client_uses_the_configured_timeout() -> None:
     mock, _ = responder(httpx2.Response(200, json={}))
     transport = Transport(transport=mock, timeout=7.0)

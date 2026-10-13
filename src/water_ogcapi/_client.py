@@ -119,10 +119,12 @@ def _pagination(pages: list[Page], *, failed: bool) -> Pagination:
     if failed:
         return Pagination(matched, returned, len(pages), "limited", "failure")
     # The traversal ended on a page without a next link. A count that disagrees with
-    # numberMatched, or pages that disagree with each other, leave the result unknown.
+    # numberMatched, a page whose numberReturned differs from its features, or pages that
+    # disagree with each other, leave the result unknown.
     checks: tuple[Check, ...] = ("end_of_links",)
     completeness: Completeness = "complete"
-    if len(reported) > 1 or (matched is not None and matched != returned):
+    short = any(p.number_returned not in (None, p.feature_count) for p in pages)
+    if short or len(reported) > 1 or (matched is not None and matched != returned):
         completeness = "unknown"
     elif matched is not None:
         checks += ("count",)

@@ -38,6 +38,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
     gets the first request's method and body (D-38).
 - Query methods return payload plus evidence (`Page`, `QueryResult`), never a bare
     GeoJSON dict (D-03).
+- Query forms (`bbox`, `geometry`, `filter`, `ids`) are keyword arguments of
+    `iter_pages()` and `collect()`, never a method per form (D-39).
 - Any type that carries request headers or params redacts credentials at construction,
     using an allowlist (D-04).
 - The sync wrapper runs the async core on one background event-loop thread, never

@@ -90,14 +90,14 @@ def without_next(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 def traverse(
-    service: OGCService, collection: str, params: dict[str, str] | None = None
+    service: OGCService, collection: str, params: dict[str, str] | None = None, **query: Any
 ) -> tuple[list[Page], PaginationError | None]:
     """Return the pages a traversal yielded and the error that ended it, if any."""
     got: list[Page] = []
 
     async def run() -> None:
         # A comprehension would lose the pages yielded before an error.
-        async for page in service.iter_pages(collection, params=params):
+        async for page in service.iter_pages(collection, params=params, **query):
             got.append(page)  # noqa: PERF401
 
     try:
@@ -449,3 +449,106 @@ def test_a_failed_post_page_names_its_method_and_body(reply: httpx2.Response) ->
     assert len(pages) == 1
     assert err is not None
     assert (err.failures[0].method, err.failures[0].request_body) == ("POST", FILTER)
+
+
+def first_request(**query: Any) -> httpx2.Request:
+    """Run a one-page traversal with ``query`` and return its request."""
+    transport, seen = serve(without_next(hu02()[0]))
+    _, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02", **query)
+    assert err is None
+    (request,) = seen
+    return request
+
+
+@pytest.mark.parametrize(
+    ("bbox", "sent"),
+    [
+        ((-77.123456789, 38.8, -76.9, 39), "-77.123456789,38.8,-76.9,39.0"),
+        ((1e-7, -1e-7, 0.5, 0.5), "0.0000001,-0.0000001,0.5,0.5"),
+        ((170, -10, -170, 10), "170.0,-10.0,-170.0,10.0"),
+        ((-77, 38, 0, -76, 39, 100), "-77.0,38.0,0.0,-76.0,39.0,100.0"),
+    ],
+)
+def test_a_bbox_is_sent_with_every_digit(bbox: tuple[float, ...], sent: str) -> None:
+    request = first_request(bbox=bbox)
+    assert (request.method, request.content) == ("GET", b"")
+    assert dict(request.url.params) == {"f": "json", "bbox": sent}
+
+
+class Shape:
+    """A stand-in for a shapely geometry."""
+
+    __geo_interface__: Any = {"type": "Point", "coordinates": (-77.5, 38.5)}
+
+
+@pytest.mark.parametrize(
+    ("geometry", "sent"),
+    [
+        (
+            {"type": "Polygon", "coordinates": [[[-78, 38], [-77, 38], [-77.5, 39.25], [-78, 38]]]},
+            "-78.0,38.0,-77.0,39.25",
+        ),
+        (
+            {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [[[0, 0], [1, 0], [1, 1], [0, 0]]],
+                    [[[5, -2, 9], [6, -2, 9], [6, -1, 9], [5, -2, 9]]],
+                ],
+            },
+            "0.0,-2.0,6.0,1.0",
+        ),
+        (Shape(), "-77.5,38.5,-77.5,38.5"),
+        (
+            {
+                "type": "GeometryCollection",
+                "geometries": [
+                    {"type": "Point", "coordinates": [-77, 38]},
+                    {
+                        "type": "GeometryCollection",
+                        "geometries": [
+                            {"type": "LineString", "coordinates": [[-76, 39], [-75.5, 38.5]]}
+                        ],
+                    },
+                ],
+            },
+            "-77.0,38.0,-75.5,39.0",
+        ),
+    ],
+)
+def test_a_geometry_sends_its_bbox(geometry: object, sent: str) -> None:
+    assert first_request(geometry=geometry).url.params["bbox"] == sent
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"bbox": (0, 0, 1)},
+        {"bbox": (0, float("nan"), 1, 1)},
+        {"bbox": (True, 0, 1, 1)},
+        {"bbox": (0, 2, 1, 1)},
+        {"bbox": (0, 0, 100, 1, 1, 50)},
+        {"bbox": "0,0,1,1"},
+        {"bbox": (0, 0, 1, 1), "geometry": Shape()},
+        {"bbox": (0, 0, 1, 1), "params": {"bbox": "0,0,1,1"}},
+        {"geometry": {"type": "Polygon", "coordinates": []}},
+        {"geometry": {"type": "GeometryCollection", "geometries": []}},
+        {"geometry": {"type": "GeometryCollection", "geometries": [{"type": "Point"}]}},
+        {"geometry": {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}}},
+        {"geometry": {"type": "Point"}},
+        {"geometry": {"type": "Point", "coordinates": [0]}},
+        {"geometry": {"type": "Point", "coordinates": ["0", 1]}},
+    ],
+)
+def test_a_malformed_spatial_query_sends_nothing(query: dict[str, Any]) -> None:
+    transport, seen = serve()
+    with pytest.raises(ValueError, match=r"bbox|coordinate|geometry|position"):
+        traverse(OGCService(GEOCONNEX, transport=transport), "hu02", **query)
+    assert seen == []
+
+
+def test_collect_sends_the_bbox() -> None:
+    transport, seen = serve(without_next(hu02()[0]))
+    service = OGCService(GEOCONNEX, transport=transport)
+    asyncio.run(service.collect("hu02", params={"limit": "5"}, bbox=(-78, 38, -77, 39)))
+    assert dict(seen[0].url.params) == {"f": "json", "limit": "5", "bbox": "-78.0,38.0,-77.0,39.0"}

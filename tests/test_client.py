@@ -625,3 +625,97 @@ def test_collect_posts_a_json_filter() -> None:
     result = asyncio.run(service.collect("hu02", filter=SITES))
     assert (seen[0].method, seen[0].content) == ("POST", SITES_BODY)
     assert (result.pages[0].method, result.pages[0].request_body) == ("POST", SITES_BODY)
+
+
+def test_ids_are_posted_as_an_in_filter_with_their_types() -> None:
+    request = first_request(ids=["01646500", 7], id_property="staid")
+    assert (request.method, request.headers["content-type"]) == (
+        "POST",
+        "application/query-cql-json",
+    )
+    assert request.content == b'{"op":"in","args":[{"property":"staid"},["01646500",7]]}'
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"ids": ["USGS-1"]},
+        {"id_property": "id"},
+        {"ids": "USGS-1", "id_property": "id"},
+        {"ids": [], "id_property": "id"},
+        {"ids": b"01", "id_property": "id"},
+        {"ids": (i for i in ()), "id_property": "id"},
+        {"ids": ["USGS-1"], "id_property": ""},
+        {"ids": ["USGS-1"], "id_property": "id", "filter": "a = 1"},
+        {"ids": ["USGS-1"], "id_property": "id", "params": {"filter": "a = 1"}},
+    ],
+)
+def test_a_malformed_identifier_query_sends_nothing(query: dict[str, Any]) -> None:
+    transport, seen = serve()
+    with pytest.raises(ValueError, match=r"ids|filter"):
+        traverse(OGCService(GEOCONNEX, transport=transport), "hu02", **query)
+    assert seen == []
+
+
+def test_collect_posts_ids() -> None:
+    transport, seen = serve(without_next(hu02()[0]))
+    service = OGCService(GEOCONNEX, transport=transport)
+    asyncio.run(service.collect("hu02", ids=["01"], id_property="id"))
+    assert seen[0].content == b'{"op":"in","args":[{"property":"id"},["01"]]}'
+
+
+def test_an_item_is_one_page() -> None:
+    recorded = record("nwis/monitoring-locations/item-USGS-01646500.json")
+    response = recorded["response"]
+    transport, seen = serve(
+        httpx2.Response(200, json=response["body"], headers=response["headers"])
+    )
+    page = asyncio.run(
+        OGCService(BASE, transport=transport).item("monitoring-locations", "USGS-01646500")
+    )
+    assert [str(r.url) for r in seen] == [recorded["request"]["url"]]
+    assert page.body == response["body"]
+    assert page.content is not None
+    assert json.loads(page.content) == response["body"]
+    assert (page.feature_count, page.number_matched, page.number_returned) == (1, None, None)
+    assert (page.method, page.request_body, page.params) == ("GET", None, {"f": "json"})
+    assert [link.rel for link in page.links] == [link["rel"] for link in response["body"]["links"]]
+    assert page.headers["content-crs"] == response["headers"]["content-crs"]
+
+
+def test_an_item_sends_its_params() -> None:
+    crs = "http://www.opengis.net/def/crs/EPSG/0/4326"
+    transport, seen = serve({"type": "Feature", "geometry": None, "properties": {}})
+    service = OGCService(BASE, transport=transport)
+    page = asyncio.run(service.item("c", "x", params={"crs": crs, "skipGeometry": "true"}))
+    assert dict(seen[0].url.params) == {"f": "json", "crs": crs, "skipGeometry": "true"}
+    assert page.params == {"f": "json", "crs": crs, "skipGeometry": "true"}
+
+
+@pytest.mark.parametrize("item_id", ["", ".", ".."])
+def test_an_item_id_that_is_a_path_segment_sends_nothing(item_id: str) -> None:
+    transport, seen = serve()
+    with pytest.raises(ValueError, match="another path"):
+        asyncio.run(OGCService(BASE, transport=transport).item("c", item_id))
+    assert seen == []
+
+
+def test_an_item_id_is_percent_encoded() -> None:
+    transport, seen = serve({"type": "Feature", "geometry": None, "properties": {}})
+    asyncio.run(OGCService(BASE, transport=transport).item("a b", "x/y?z"))
+    assert seen[0].url.raw_path == b"/ogcapi/v1/collections/a%20b/items/x%2Fy%3Fz?f=json"
+
+
+@pytest.mark.parametrize(
+    ("reply", "status"),
+    [
+        (httpx2.Response(404, json={"code": "NotFound"}), 404),
+        (httpx2.Response(200, json=hu02()[0]), 200),
+        (httpx2.Response(200, json={"type": "Feature", "links": {}}), 200),
+    ],
+)
+def test_an_item_that_is_not_a_feature_fails(reply: httpx2.Response, status: int) -> None:
+    transport, _ = serve(reply)
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(OGCService(BASE, transport=transport).item("monitoring-locations", "x"))
+    assert excinfo.value.status == status

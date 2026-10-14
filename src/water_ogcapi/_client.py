@@ -120,6 +120,31 @@ def _geometry_bbox(geometry: object) -> tuple[float, ...]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
+def _filter(
+    cql2: str | Mapping[str, Any] | None,
+    ids: Sequence[str | int] | None,
+    id_property: str | None,
+) -> str | Mapping[str, Any] | None:
+    """Return ``cql2``, or the CQL2-JSON ``in`` filter that ``ids`` and ``id_property`` set.
+
+    Raises
+    ------
+    ValueError
+        If ``ids`` comes with a filter, is a ``str`` or ``bytes``, is empty, or lacks
+        ``id_property``.
+    """
+    if ids is None and id_property is None:
+        return cql2
+    if cql2 is not None:
+        msg = "pass ids or filter, not both; combine them in one CQL2 filter"
+        raise ValueError(msg)
+    values = [] if ids is None or isinstance(ids, str | bytes | bytearray) else list(ids)
+    if not values or not id_property:
+        msg = "ids takes a non-empty sequence of identifiers, and id_property their property"
+        raise ValueError(msg)
+    return {"op": "in", "args": [{"property": id_property}, values]}
+
+
 def _json_default(value: object) -> object:
     """Encode a mapping that ``json`` does not know, such as a ``MappingProxyType``."""
     if isinstance(value, Mapping):
@@ -381,6 +406,8 @@ class OGCService:
         bbox: Sequence[float] | None = None,
         geometry: Mapping[str, Any] | GeoInterface | None = None,
         filter: str | Mapping[str, Any] | None = None,  # noqa: A002
+        ids: Sequence[str | int] | None = None,
+        id_property: str | None = None,
     ) -> AsyncIterator[Page]:
         """Yield each page of a collection's items, following ``next`` links (D-34).
 
@@ -410,6 +437,14 @@ class OGCService:
             mapping is CQL2-JSON, sent as the body of a ``POST`` with ``Content-Type:
             application/query-cql-json``; every ``next`` link gets the same body, since
             a ``GET`` there drops the filter (D-38).
+        ids : sequence of str or int, optional
+            Values of ``id_property`` to match, sent as the CQL2-JSON filter
+            ``{"op": "in", "args": [{"property": id_property}, ids]}``, as ``filter``
+            sends a mapping. Each value goes out with its type, so ``"01646500"`` keeps
+            its leading zero.
+        id_property : str, optional
+            The property ``ids`` matches, such as ``id`` for feature ids or
+            ``monitoring_location_id`` for the sites of an NWIS time series.
 
         Yields
         ------
@@ -420,8 +455,10 @@ class OGCService:
         Raises
         ------
         ValueError
-            Before any request, when both ``bbox`` and ``geometry`` are given, either is
-            malformed, a CQL2-JSON filter holds a NaN or infinite number, a filter is empty, or
+            Before any request, when both ``bbox`` and ``geometry``, or ``ids`` and
+            ``filter``, are given, ``ids`` is a ``str`` or ``bytes``, empty, or lacks
+            ``id_property``, ``bbox`` or ``geometry`` is malformed, a CQL2-JSON filter
+            holds a NaN or infinite number, a filter is empty, or
             ``params`` also holds a parameter a keyword sets (``bbox``, ``filter``,
             ``filter-lang``).
         TypeError
@@ -434,7 +471,7 @@ class OGCService:
             failure names that request or link by URL.
         """
         url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
-        query, body = _items_query(params, bbox, geometry, filter)
+        query, body = _items_query(params, bbox, geometry, _filter(filter, ids, id_property))
         headers = None if body is None else CQL2_JSON
         method = "GET" if body is None else "POST"
         async for page in self._traverse(
@@ -450,6 +487,8 @@ class OGCService:
         bbox: Sequence[float] | None = None,
         geometry: Mapping[str, Any] | GeoInterface | None = None,
         filter: str | Mapping[str, Any] | None = None,  # noqa: A002
+        ids: Sequence[str | int] | None = None,
+        id_property: str | None = None,
         keep_pages: bool = False,
     ) -> QueryResult:
         """Fetch every page of a collection's items into one `QueryResult` (D-22).
@@ -458,7 +497,7 @@ class OGCService:
         ----------
         collection : str
             The collection id.
-        params, bbox, geometry, filter
+        params, bbox, geometry, filter, ids, id_property
             The query, as for `iter_pages`.
         keep_pages : bool, optional
             Keep each page's response bytes in ``Page.content`` (D-23). Page bodies
@@ -488,7 +527,13 @@ class OGCService:
         malformed = False
         try:
             async for page in self.iter_pages(
-                collection, params=params, bbox=bbox, geometry=geometry, filter=filter
+                collection,
+                params=params,
+                bbox=bbox,
+                geometry=geometry,
+                filter=filter,
+                ids=ids,
+                id_property=id_property,
             ):
                 body = page.body or {}
                 features.extend(body["features"])
@@ -511,6 +556,65 @@ class OGCService:
         if not pages:
             raise failure
         raise PartialResultsError(failure.failures, result) from failure
+
+    async def item(
+        self, collection: str, item_id: str | int, *, params: Mapping[str, str] | None = None
+    ) -> Page:
+        """Fetch one feature of a collection by its id (D-22).
+
+        Parameters
+        ----------
+        collection : str
+            The collection id.
+        item_id : str or int
+            The feature id, percent-encoded into the URL path.
+        params : mapping of str to str, optional
+            Query parameters, such as ``crs`` or ``skipGeometry``, with ``f=json`` added
+            unless given.
+
+        Returns
+        -------
+        Page
+            ``body`` holds the decoded Feature and ``content`` its bytes.
+            ``feature_count`` is 1, and ``number_matched`` and ``number_returned`` are
+            ``None``.
+
+        Raises
+        ------
+        ServiceError
+            If the request fails, with status 404 for an unknown id, or the body is not
+            a Feature whose ``links`` member, when present, is a list.
+        ValueError
+            Before any request, if ``item_id`` is empty, ``.``, or ``..``, which would
+            address another path, or ``params`` carries a credential such as ``api_key``.
+        """
+        if str(item_id) in {"", ".", ".."}:
+            msg = f"item_id {item_id!r} would address another path"
+            raise ValueError(msg)
+        url = (
+            f"{self.base_url}/collections/{quote(collection, safe='')}"
+            f"/items/{quote(str(item_id), safe='')}"
+        )
+        query = {"f": "json", **(params or {})}
+        resp = await self._transport.get(url, params=query)
+        body = json_object(resp)
+        links = body.get("links", [])
+        if body.get("type") != "Feature" or not isinstance(links, list):
+            msg = "response is not a Feature with a links list"
+            raise ServiceError(msg, resp.url, status=resp.status)
+        return Page(
+            url=resp.url,
+            params=query,
+            status=resp.status,
+            headers=resp.headers,
+            links=tuple(filter(None, map(parse_link, links))),
+            fetched_at=time.time(),
+            number_matched=None,
+            number_returned=None,
+            feature_count=1,
+            body=body,
+            content=resp.content,
+        )
 
     async def aclose(self) -> None:
         """Close the transport if this service created it."""

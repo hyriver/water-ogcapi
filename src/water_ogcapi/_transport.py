@@ -220,12 +220,15 @@ class Response:
         as httpx2 returns them.
     content : bytes
         Raw response body.
+    attempts : int, optional
+        Requests sent to get this response, retries included.
     """
 
     url: str
     status: int
     headers: Mapping[str, str]
     content: bytes
+    attempts: int = 1
 
     def json(self) -> Any:
         """Decode the body as JSON.
@@ -245,7 +248,13 @@ def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Re
         logger.debug(
             "%s %s returned HTTP %d after %d attempt(s)", method, url, resp.status_code, attempts
         )
-        return Response(url=url, status=resp.status_code, headers=headers, content=resp.content)
+        return Response(
+            url=url,
+            status=resp.status_code,
+            headers=headers,
+            content=resp.content,
+            attempts=attempts,
+        )
     if resp.status_code < 400:
         # follow_redirects is off so the caller never leaks credentials to another
         # host. Returning the bodyless redirect as a success would surface later as

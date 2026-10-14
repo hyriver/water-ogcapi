@@ -302,8 +302,9 @@ def _pagination(pages: list[Page], *, failed: bool, malformed: bool) -> Paginati
     reported = {p.number_matched for p in pages if p.number_matched is not None}
     matched = next(iter(reported)) if len(reported) == 1 else None
     returned = sum(p.feature_count for p in pages)
+    sort_by = pages[0].params.get("sortby") if pages else None
     if failed:
-        return Pagination(matched, returned, len(pages), "limited", "failure")
+        return Pagination(matched, returned, len(pages), "limited", "failure", sort_by)
     # The traversal ended on a page without a next link. A malformed count, a count that
     # disagrees with numberMatched, a page whose numberReturned differs from its features,
     # or pages that disagree with each other, leave the result unknown.
@@ -315,7 +316,7 @@ def _pagination(pages: list[Page], *, failed: bool, malformed: bool) -> Paginati
     completeness: Completeness = (
         "unknown" if malformed or short or len(reported) > 1 or mismatch else "complete"
     )
-    return Pagination(matched, returned, len(pages), completeness, checks=checks)
+    return Pagination(matched, returned, len(pages), completeness, sort_by=sort_by, checks=checks)
 
 
 class OGCService:

@@ -13,7 +13,7 @@ from typing import Any
 import httpx2
 import pytest
 
-from water_ogcapi import OGCService, Page
+from water_ogcapi import OGCService, Page, QueryResult
 from water_ogcapi._transport import Transport
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
@@ -783,3 +783,20 @@ def test_a_body_that_fails_validation_reports_every_attempt() -> None:
     with pytest.raises(ServiceError) as excinfo:
         asyncio.run(service.item("c", "x"))
     assert excinfo.value.attempts == 2
+
+
+def test_pagination_records_the_requested_sort_key() -> None:
+    docs = hu02()
+    transport, _ = serve(docs[0], without_next(docs[1]), docs[0], httpx2.Response(500))
+    service = OGCService(GEOCONNEX, transport=transport)
+
+    async def run() -> tuple[QueryResult, QueryResult]:
+        result = await service.collect("hu02", params={"sortby": "huc2"})
+        try:
+            await service.collect("hu02", params={"sortby": "-huc2"})
+        except PartialResultsError as err:
+            return result, err.result
+        raise AssertionError
+
+    complete, partial = asyncio.run(run())
+    assert (complete.pagination.sort_by, partial.pagination.sort_by) == ("huc2", "-huc2")

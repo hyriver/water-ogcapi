@@ -330,6 +330,43 @@ class OGCService:
         """The landing page URL, without a trailing slash."""
         return self._base_url
 
+    def _headers(self) -> dict[str, str]:
+        """Return the headers every request to this service carries (D-40).
+
+        The base service sends none. A service class overrides this to add its API key
+        (D-18); `_send` keeps them to the origin of ``base_url``.
+        """
+        return {}
+
+    async def _send(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        content: bytes | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> Response:
+        """Send one request with this service's headers added to ``headers`` (D-40).
+
+        Raises
+        ------
+        ServiceError
+            Before sending, if ``url`` leaves the scheme, host, and port of ``base_url``,
+            since the service's headers would follow it there (D-34); otherwise as
+            `Transport.request` raises.
+        """
+        if _origin(url) != _origin(self.base_url):
+            msg = f"refused a URL outside {self.base_url}"
+            raise ServiceError(msg, url, method=method.upper(), request_body=content)
+        return await self._transport.request(
+            method,
+            url,
+            params=params,
+            headers={**self._headers(), **(headers or {})},
+            content=content,
+        )
+
     async def collections(self) -> Collections:
         """Return the collection index, fetching ``/collections`` on the first call.
 
@@ -342,7 +379,7 @@ class OGCService:
         """
         if self._collections is None:
             url = f"{self.base_url}/collections"
-            resp = await self._transport.get(url, params={"f": "json"})
+            resp = await self._send("GET", url, params={"f": "json"})
             self._collections = Collections.from_dict(json_object(resp))
         return self._collections
 
@@ -362,13 +399,10 @@ class OGCService:
         ``params`` apply to the first request only.
         """
         query: Mapping[str, str] = params or {}
-        origin = _origin(self.base_url)
         followed: set[str] = set()
         while True:
             try:
-                resp = await self._transport.request(
-                    method, url, params=query, headers=headers, content=content
-                )
+                resp = await self._send(method, url, params=query, headers=headers, content=content)
                 page = _page(resp, query, method.upper(), content)
             except ServiceError as err:
                 raise PaginationError([err]) from err
@@ -382,9 +416,6 @@ class OGCService:
             if href in followed:
                 # A caller collecting every page never stops, so a loop spends the quota.
                 refusal = "a next link repeats one already followed"
-            elif _origin(href) != origin:
-                # The key header would follow the link to another host or to plain HTTP.
-                refusal = f"refused a next link outside {self.base_url}"
             else:
                 try:
                     reject_credentials(href, None)
@@ -596,7 +627,7 @@ class OGCService:
             f"/items/{quote(str(item_id), safe='')}"
         )
         query = {"f": "json", **(params or {})}
-        resp = await self._transport.get(url, params=query)
+        resp = await self._send("GET", url, params=query)
         body = json_object(resp)
         links = body.get("links", [])
         if body.get("type") != "Feature" or not isinstance(links, list):

@@ -828,7 +828,7 @@ Layering rule for anything new:
 
 ### D-34: `iter_pages()` follows `next` links within the base URL's origin
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-40.
 - **Date:** 2026-10-12.
 - **Decision:** `OGCService.iter_pages()` requests `{base_url}/collections/{id}/items`
     with the caller's params plus `f=json`, then follows each page's `next` link until a
@@ -984,6 +984,25 @@ Layering rule for anything new:
     (one page each, filter applied per `numberMatched`) found CQL2-Text over `GET`
     working on NWIS, FabricData, and GeoConnex, and CQL2-JSON over `POST` on FabricData
     and GeoConnex. Re-sending the body to `next` links is checked live on NWIS only.
+
+### D-40: Every service request goes through `OGCService._send()`
+
+- **Status:** accepted. Amends D-34.
+- **Date:** 2026-10-14.
+- **Decision:** `collections()`, `item()`, and `_traverse()` send through one private
+    method, `_send()`, which adds the headers `_headers()` returns and refuses, before
+    sending, any URL outside the scheme, host, and port of `base_url`, the first URL of
+    a traversal included. The base service's `_headers()` returns none; a service class
+    overrides it to add its key (D-18). A traversal reports a refused URL as a
+    `PaginationError` (D-24), as D-34 did for a `next` link.
+- **Why:** A service class adding its key at each request site would add it three times,
+    and a later site could miss it. D-34 checked only `next` links, so a resume (#21)
+    replaying a stored URL from another service would send the key to that host before
+    any check.
+- **Rejected:** Binding keys to hosts inside `Transport`, which stays a general tool.
+    Overriding `collections()`, `item()`, and `iter_pages()` in each service class.
+- **Limits:** The check compares origins, so a URL on the same host outside the path of
+    `base_url` passes.
 
 ## Lessons
 

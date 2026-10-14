@@ -215,7 +215,7 @@ def test_a_next_link_off_the_base_origin_is_refused(href: str) -> None:
     assert len(seen) == 1, "the key header would follow the link"
     assert err is not None
     assert err.failures[0].url == href
-    assert "refused a next link" in str(err)
+    assert "refused a URL outside" in str(err)
 
 
 def test_a_repeated_next_link_stops_the_traversal() -> None:
@@ -719,3 +719,47 @@ def test_an_item_that_is_not_a_feature_fails(reply: httpx2.Response, status: int
     with pytest.raises(ServiceError) as excinfo:
         asyncio.run(OGCService(BASE, transport=transport).item("monitoring-locations", "x"))
     assert excinfo.value.status == status
+
+
+class Keyed(OGCService):
+    """A service class that adds a key to every request."""
+
+    def _headers(self) -> dict[str, str]:
+        return {"X-Api-Key": "k"}
+
+
+def test_service_headers_reach_every_request() -> None:
+    feature = {"type": "Feature", "geometry": None, "properties": {}}
+    page = without_next(hu02()[0])
+    transport, seen = serve(body("nwis/collections.json"), feature, page, page)
+    service = Keyed(BASE, transport=transport)
+
+    async def run() -> None:
+        await service.collections()
+        await service.item("c", "x")
+        await service.collect("c")
+        await service.collect("c", filter=SITES)
+
+    asyncio.run(run())
+    assert [r.headers.get("x-api-key") for r in seen] == ["k"] * 4
+    assert seen[3].headers["content-type"] == "application/query-cql-json"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"{GEOCONNEX}/collections/hu02/items",
+        "http://api.waterdata.usgs.gov/ogcapi/v1/collections/c/items",
+    ],
+)
+def test_a_first_url_off_the_base_origin_sends_nothing(url: str) -> None:
+    """A resume replaying a stored URL must not carry the key to another host (D-40)."""
+    transport, seen = serve()
+
+    async def run() -> None:
+        async for _ in Keyed(BASE, transport=transport)._traverse(url):
+            pass
+
+    with pytest.raises(PaginationError, match="refused a URL outside"):
+        asyncio.run(run())
+    assert seen == []

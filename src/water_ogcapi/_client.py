@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import dataclasses
+import math
+import numbers
 import time
-from typing import TYPE_CHECKING, Any, Self, cast
+from collections.abc import Mapping
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, Protocol, Self, cast, runtime_checkable
 from urllib.parse import quote, urlsplit
 
 from water_ogcapi._metadata import Collections, parse_link
@@ -13,7 +17,7 @@ from water_ogcapi._transport import Transport, reject_credentials
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Mapping
+    from collections.abc import AsyncIterator, Sequence
 
     from water_ogcapi._results import Check, Completeness, Link
     from water_ogcapi._transport import Response
@@ -47,6 +51,97 @@ def json_object(
             msg, resp.url, status=resp.status, method=method, request_body=request_body
         )
     return cast("dict[str, Any]", doc)
+
+
+@runtime_checkable
+class GeoInterface(Protocol):
+    """An object exposing a GeoJSON geometry, such as a shapely geometry."""
+
+    @property
+    def __geo_interface__(self) -> Mapping[str, Any]: ...
+
+
+def _coordinate(value: object) -> float:
+    """Return ``value`` as a float, raising for anything but a finite real number."""
+    if type(value) is bool or not isinstance(value, numbers.Real) or not math.isfinite(value):
+        msg = f"a coordinate must be a finite number, got {value!r}"
+        raise ValueError(msg)
+    return float(value)
+
+
+def _bbox_param(bbox: Sequence[float]) -> str:
+    """Serialize a bbox unrounded and without exponents: rounding can move an edge inward."""
+    coords = [_coordinate(v) for v in bbox]
+    half = len(coords) // 2
+    if len(coords) not in (4, 6) or any(coords[i] > coords[i + half] for i in range(1, half)):
+        msg = (
+            "bbox takes (west, south, east, north) or (west, south, low, east, north, high), "
+            "with south <= north and low <= high"
+        )
+        raise ValueError(msg)
+    return ",".join(format(Decimal(repr(v)), "f") for v in coords)
+
+
+def _coordinate_arrays(geo: object) -> list[object]:
+    """Return a GeoJSON geometry's ``coordinates``, or those of each in a GeometryCollection."""
+    member = cast("Mapping[str, object]", geo) if isinstance(geo, Mapping) else {}
+    geometries = member.get("geometries")
+    if member.get("type") == "GeometryCollection" and isinstance(geometries, list | tuple):
+        parts = cast("list[object] | tuple[object, ...]", geometries)
+        return [coords for part in parts for coords in _coordinate_arrays(part)]
+    return [member.get("coordinates")]
+
+
+def _geometry_bbox(geometry: object) -> tuple[float, ...]:
+    """Return the 2D bbox of every position in a GeoJSON geometry."""
+    geo = geometry.__geo_interface__ if isinstance(geometry, GeoInterface) else geometry
+    xs: list[float] = []
+    ys: list[float] = []
+    stack = _coordinate_arrays(geo)
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, list | tuple):
+            msg = "geometry must be a GeoJSON geometry with nested coordinate arrays"
+            raise ValueError(msg)  # noqa: TRY004
+        items = cast("list[object] | tuple[object, ...]", node)
+        if items and not isinstance(items[0], list | tuple):
+            if len(items) < 2:
+                msg = f"a position needs two coordinates, got {list(items)!r}"
+                raise ValueError(msg)
+            xs.append(_coordinate(items[0]))
+            ys.append(_coordinate(items[1]))
+        else:
+            stack.extend(items)
+    if not xs:
+        msg = "geometry has no positions"
+        raise ValueError(msg)
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _items_query(
+    params: Mapping[str, str] | None,
+    bbox: Sequence[float] | None,
+    geometry: Mapping[str, Any] | GeoInterface | None,
+) -> dict[str, str]:
+    """Build the first request's query, with ``f=json`` added unless given.
+
+    Raises
+    ------
+    ValueError
+        If both ``bbox`` and ``geometry`` are given, either is malformed, or ``params``
+        already holds ``bbox``.
+    """
+    query = {"f": "json", **(params or {})}
+    if bbox is not None and geometry is not None:
+        msg = "pass bbox or geometry, not both"
+        raise ValueError(msg)
+    box = _geometry_bbox(geometry) if geometry is not None else bbox
+    if box is not None:
+        if "bbox" in query:
+            msg = "bbox is given both as an argument and in params"
+            raise ValueError(msg)
+        query["bbox"] = _bbox_param(box)
+    return query
 
 
 def _count(value: object) -> int | None:
@@ -251,7 +346,12 @@ class OGCService:
             url, query = href, {}
 
     async def iter_pages(
-        self, collection: str, *, params: Mapping[str, str] | None = None
+        self,
+        collection: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        bbox: Sequence[float] | None = None,
+        geometry: Mapping[str, Any] | GeoInterface | None = None,
     ) -> AsyncIterator[Page]:
         """Yield each page of a collection's items, following ``next`` links (D-34).
 
@@ -263,9 +363,18 @@ class OGCService:
         collection : str
             The collection id.
         params : mapping of str to str, optional
-            Query parameters of the first request, such as ``limit`` or ``bbox``, with
-            ``f=json`` added unless given. Later requests take their query from the
-            ``next`` link.
+            Query parameters of the first request, such as ``limit`` or ``datetime``,
+            with ``f=json`` added unless given. Later requests take their query from
+            the ``next`` link.
+        bbox : sequence of float, optional
+            ``(west, south, east, north)`` in CRS84, or six values with the minimum and
+            maximum heights, sent as the ``bbox`` parameter with every digit kept. West
+            above east crosses the antimeridian.
+        geometry : mapping or GeoInterface, optional
+            A GeoJSON geometry, or an object with ``__geo_interface__`` such as a
+            shapely polygon, in CRS84. Its bbox is sent in place of the geometry
+            (D-11), so the result holds every feature intersecting that bbox; exact
+            containment is the caller's post-filter.
 
         Yields
         ------
@@ -275,6 +384,9 @@ class OGCService:
 
         Raises
         ------
+        ValueError
+            Before any request, when both ``bbox`` and ``geometry`` are given, either is
+            malformed, or ``params`` also holds ``bbox``.
         PaginationError
             When a request fails, a body is not a FeatureCollection with well-formed
             links, or a ``next`` link repeats one already followed, leaves the scheme,
@@ -282,7 +394,7 @@ class OGCService:
             failure names that request or link by URL.
         """
         url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
-        async for page in self._traverse(url, params={"f": "json", **(params or {})}):
+        async for page in self._traverse(url, params=_items_query(params, bbox, geometry)):
             yield page
 
     async def collect(
@@ -290,6 +402,8 @@ class OGCService:
         collection: str,
         *,
         params: Mapping[str, str] | None = None,
+        bbox: Sequence[float] | None = None,
+        geometry: Mapping[str, Any] | GeoInterface | None = None,
         keep_pages: bool = False,
     ) -> QueryResult:
         """Fetch every page of a collection's items into one `QueryResult` (D-22).
@@ -298,8 +412,8 @@ class OGCService:
         ----------
         collection : str
             The collection id.
-        params : mapping of str to str, optional
-            Query parameters of the first request, as for `iter_pages`.
+        params, bbox, geometry
+            The query, as for `iter_pages`.
         keep_pages : bool, optional
             Keep each page's response bytes in ``Page.content`` (D-23). Page bodies
             are always dropped.
@@ -311,6 +425,8 @@ class OGCService:
 
         Raises
         ------
+        ValueError
+            Before any request, on a malformed query, as for `iter_pages`.
         PartialResultsError
             When a page fails after at least one succeeded. Its ``result`` holds the
             pages that succeeded.
@@ -322,7 +438,9 @@ class OGCService:
         failure: PaginationError | None = None
         malformed = False
         try:
-            async for page in self.iter_pages(collection, params=params):
+            async for page in self.iter_pages(
+                collection, params=params, bbox=bbox, geometry=geometry
+            ):
                 body = page.body or {}
                 features.extend(body["features"])
                 malformed = malformed or _malformed_counts(body)

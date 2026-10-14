@@ -956,6 +956,35 @@ Layering rule for anything new:
     (D-20), so a replay must supply them. A `POST` that changes server state needs
     retries off, which the shared HyRiver client has to make opt-in.
 
+### D-39: Query forms are keyword arguments of `iter_pages()` and `collect()`
+
+- **Status:** accepted.
+- **Date:** 2026-10-14.
+- **Decision:** `iter_pages()` and `collect()` take the same query keywords beside
+    `params`: `bbox`, `geometry` (sent as its bbox, D-11), `filter` (a `str` goes out as
+    CQL2-Text in the `filter` parameter of a `GET`, a mapping as a CQL2-JSON `POST`
+    body), and `ids` with `id_property` (a CQL2 `in` over `POST`). An item fetch is its
+    own method, `item()`, returning a `Page` (D-22). Selectors combine with AND, as OGC
+    API Features combines parameters. `bbox` with `geometry`, `ids` with `filter`, and a
+    keyword whose parameter `params` also holds, raise `ValueError` before any request.
+    A bbox goes out with every digit and no exponent.
+- **Why:** Every query form streams through the primitive (D-02), combines with
+    `datetime` or `limit` in one request, and leaves two signatures for the sync class
+    (#12) to copy. The identifier property is explicit, since `id`,
+    `monitoring_location_id`, and FabricData's `staid` mean different things. Formatting
+    to six decimals, as the prototype did, can move a bbox edge inward and drop the
+    features on it.
+- **Rejected:** One method per query form (`bybox`, `byid`, `bycql`, `byfilter`,
+    `bygeometry`), as the prototype and `pynhd.ogcapi` had, which needs an iterating and
+    a collecting variant of each and cannot combine forms. A query object passed to both
+    methods, which adds a public type for a few keywords. Translating CQL2-Text to
+    CQL2-JSON to combine `ids` with a text filter.
+- **Limits:** `bbox-crs` and `filter-crs` go through `params`. A comma-separated `GET`
+    for NWIS site lists is left to the NWIS class (#28). An unkeyed check on 2026-10-14
+    (one page each, filter applied per `numberMatched`) found CQL2-Text over `GET`
+    working on NWIS, FabricData, and GeoConnex, and CQL2-JSON over `POST` on FabricData
+    and GeoConnex. Re-sending the body to `next` links is checked live on NWIS only.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

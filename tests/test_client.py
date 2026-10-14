@@ -7,6 +7,7 @@ import copy
 import json
 import pickle
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import httpx2
@@ -552,3 +553,75 @@ def test_collect_sends_the_bbox() -> None:
     service = OGCService(GEOCONNEX, transport=transport)
     asyncio.run(service.collect("hu02", params={"limit": "5"}, bbox=(-78, 38, -77, 39)))
     assert dict(seen[0].url.params) == {"f": "json", "limit": "5", "bbox": "-78.0,38.0,-77.0,39.0"}
+
+
+SITES = {"op": "in", "args": [{"property": "monitoring_location_id"}, ["USGS-1", "USGS-2"]]}
+SITES_BODY = b'{"op":"in","args":[{"property":"monitoring_location_id"},["USGS-1","USGS-2"]]}'
+
+
+def test_a_text_filter_goes_in_a_get() -> None:
+    text = "parameter_code = '00060' AND S_INTERSECTS(geometry, POINT(-77 38))"
+    request = first_request(filter=text)
+    assert (request.method, request.content) == ("GET", b"")
+    assert "content-type" not in request.headers
+    assert dict(request.url.params) == {"f": "json", "filter": text}
+
+
+def test_a_json_filter_is_posted_to_every_page() -> None:
+    docs = hu02()
+    transport, seen = serve(*docs[:-1], without_next(docs[-1]))
+    pages, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02", filter=SITES)
+    assert err is None
+    assert [(r.method, r.content) for r in seen] == [("POST", SITES_BODY)] * 3
+    assert {r.headers["content-type"] for r in seen} == {"application/query-cql-json"}
+    assert dict(seen[0].url.params) == {"f": "json"}
+    nexts = [next(link["href"] for link in d["links"] if link["rel"] == "next") for d in docs[:-1]]
+    assert [str(r.url) for r in seen[1:]] == nexts
+    assert [(p.method, p.request_body) for p in pages] == [("POST", SITES_BODY)] * 3
+
+
+def test_a_spatial_predicate_and_a_bbox_combine_in_one_post() -> None:
+    within = {
+        "op": "s_intersects",
+        "args": [{"property": "geometry"}, {"type": "Point", "coordinates": [-77.5, 38.5]}],
+    }
+    request = first_request(filter=within, bbox=(-78, 38, -77, 39), params={"limit": "5"})
+    assert request.method == "POST"
+    assert request.content == (
+        b'{"op":"s_intersects","args":[{"property":"geometry"},'
+        b'{"type":"Point","coordinates":[-77.5,38.5]}]}'
+    )
+    assert dict(request.url.params) == {"f": "json", "limit": "5", "bbox": "-78.0,38.0,-77.0,39.0"}
+
+
+@pytest.mark.parametrize(
+    ("query", "error"),
+    [
+        ({"filter": ""}, ValueError),
+        ({"filter": {}}, ValueError),
+        ({"filter": "a = 1", "params": {"filter": "b = 2"}}, ValueError),
+        ({"filter": SITES, "params": {"filter-lang": "cql2-text"}}, ValueError),
+        ({"filter": {"op": "=", "args": [{"property": "x"}, float("nan")]}}, ValueError),
+        ({"filter": {"op": "in", "args": [{"property": "x"}, {1, 2}]}}, TypeError),
+    ],
+)
+def test_a_malformed_filter_sends_nothing(query: dict[str, Any], error: type[Exception]) -> None:
+    transport, seen = serve()
+    with pytest.raises(error):
+        traverse(OGCService(GEOCONNEX, transport=transport), "hu02", **query)
+    assert seen == []
+
+
+def test_a_read_only_mapping_filter_is_posted() -> None:
+    sites = MappingProxyType(
+        {"op": "in", "args": [MappingProxyType(SITES["args"][0]), SITES["args"][1]]}
+    )
+    assert first_request(filter=sites).content == SITES_BODY
+
+
+def test_collect_posts_a_json_filter() -> None:
+    transport, seen = serve(without_next(hu02()[0]))
+    service = OGCService(GEOCONNEX, transport=transport)
+    result = asyncio.run(service.collect("hu02", filter=SITES))
+    assert (seen[0].method, seen[0].content) == ("POST", SITES_BODY)
+    assert (result.pages[0].method, result.pages[0].request_body) == ("POST", SITES_BODY)

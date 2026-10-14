@@ -932,7 +932,7 @@ Layering rule for anything new:
 
 ### D-38: A request is identified by its method, URL as sent, and body
 
-- **Status:** accepted. Amends D-22 and D-24.
+- **Status:** accepted; amended by D-39. Amends D-22 and D-24.
 - **Date:** 2026-10-13.
 - **Decision:** `Transport.request(method, url, params=, headers=, content=)` sends
     every request, and `get()` calls it. Every `ServiceError` and every `Page` carries
@@ -958,7 +958,7 @@ Layering rule for anything new:
 
 ### D-39: Query forms are keyword arguments of `iter_pages()` and `collect()`
 
-- **Status:** accepted.
+- **Status:** accepted. Amends D-38: `iter_pages()` also sends a `POST`.
 - **Date:** 2026-10-14.
 - **Decision:** `iter_pages()` and `collect()` take the same query keywords beside
     `params`: `bbox`, `geometry` (sent as its bbox, D-11), `filter` (a `str` goes out as

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import math
 import numbers
 import time
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
 __all__ = ["OGCService"]
 
 DEFAULT_PORTS = {"http": 80, "https": 443}
+CQL2_JSON = {"Content-Type": "application/query-cql-json"}
 JSON_TYPES = frozenset({"application/geo+json", "application/json"})
 
 
@@ -118,30 +120,56 @@ def _geometry_bbox(geometry: object) -> tuple[float, ...]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
+def _json_default(value: object) -> object:
+    """Encode a mapping that ``json`` does not know, such as a ``MappingProxyType``."""
+    if isinstance(value, Mapping):
+        return dict(cast("Mapping[str, object]", value))
+    msg = f"Object of type {type(value).__name__} is not JSON serializable"
+    raise TypeError(msg)
+
+
 def _items_query(
     params: Mapping[str, str] | None,
     bbox: Sequence[float] | None,
     geometry: Mapping[str, Any] | GeoInterface | None,
-) -> dict[str, str]:
-    """Build the first request's query, with ``f=json`` added unless given.
+    cql2: str | Mapping[str, Any] | None,
+) -> tuple[dict[str, str], bytes | None]:
+    """Build the first request's query, with ``f=json`` added unless given, and its body.
+
+    A CQL2-Text filter goes in the query; a CQL2-JSON filter becomes the body (D-39).
 
     Raises
     ------
     ValueError
-        If both ``bbox`` and ``geometry`` are given, either is malformed, or ``params``
-        already holds ``bbox``.
+        If both ``bbox`` and ``geometry`` are given, either is malformed, a CQL2-JSON
+        filter holds a NaN or infinite number, a filter is empty, or ``params`` already
+        holds a parameter a keyword sets.
+    TypeError
+        If a CQL2-JSON filter holds a value JSON cannot encode, such as a set.
     """
     query = {"f": "json", **(params or {})}
+    if cql2 is not None and not cql2:
+        msg = "filter is empty; pass None for no filter"
+        raise ValueError(msg)
     if bbox is not None and geometry is not None:
         msg = "pass bbox or geometry, not both"
         raise ValueError(msg)
     box = _geometry_bbox(geometry) if geometry is not None else bbox
+    claimed = ({"bbox"} if box is not None else set()) | (
+        {"filter", "filter-lang"} if cql2 is not None else set()
+    )
+    if clash := sorted(claimed & query.keys()):
+        msg = f"{', '.join(clash)} given both as a keyword and in params"
+        raise ValueError(msg)
     if box is not None:
-        if "bbox" in query:
-            msg = "bbox is given both as an argument and in params"
-            raise ValueError(msg)
         query["bbox"] = _bbox_param(box)
-    return query
+    if isinstance(cql2, str):
+        query["filter"] = cql2
+        return query, None
+    if cql2 is None:
+        return query, None
+    body = json.dumps(cql2, separators=(",", ":"), allow_nan=False, default=_json_default)
+    return query, body.encode()
 
 
 def _count(value: object) -> int | None:
@@ -352,6 +380,7 @@ class OGCService:
         params: Mapping[str, str] | None = None,
         bbox: Sequence[float] | None = None,
         geometry: Mapping[str, Any] | GeoInterface | None = None,
+        filter: str | Mapping[str, Any] | None = None,  # noqa: A002
     ) -> AsyncIterator[Page]:
         """Yield each page of a collection's items, following ``next`` links (D-34).
 
@@ -375,6 +404,12 @@ class OGCService:
             shapely polygon, in CRS84. Its bbox is sent in place of the geometry
             (D-11), so the result holds every feature intersecting that bbox; exact
             containment is the caller's post-filter.
+        filter : str or mapping, optional
+            A CQL2 filter, spatial predicates such as ``s_intersects`` included. A
+            ``str`` is CQL2-Text, sent as the ``filter`` parameter of a ``GET``. A
+            mapping is CQL2-JSON, sent as the body of a ``POST`` with ``Content-Type:
+            application/query-cql-json``; every ``next`` link gets the same body, since
+            a ``GET`` there drops the filter (D-38).
 
         Yields
         ------
@@ -386,7 +421,12 @@ class OGCService:
         ------
         ValueError
             Before any request, when both ``bbox`` and ``geometry`` are given, either is
-            malformed, or ``params`` also holds ``bbox``.
+            malformed, a CQL2-JSON filter holds a NaN or infinite number, a filter is empty, or
+            ``params`` also holds a parameter a keyword sets (``bbox``, ``filter``,
+            ``filter-lang``).
+        TypeError
+            Before any request, when a CQL2-JSON filter holds a value JSON cannot
+            encode, such as a set.
         PaginationError
             When a request fails, a body is not a FeatureCollection with well-formed
             links, or a ``next`` link repeats one already followed, leaves the scheme,
@@ -394,7 +434,12 @@ class OGCService:
             failure names that request or link by URL.
         """
         url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
-        async for page in self._traverse(url, params=_items_query(params, bbox, geometry)):
+        query, body = _items_query(params, bbox, geometry, filter)
+        headers = None if body is None else CQL2_JSON
+        method = "GET" if body is None else "POST"
+        async for page in self._traverse(
+            url, method=method, params=query, content=body, headers=headers
+        ):
             yield page
 
     async def collect(
@@ -404,6 +449,7 @@ class OGCService:
         params: Mapping[str, str] | None = None,
         bbox: Sequence[float] | None = None,
         geometry: Mapping[str, Any] | GeoInterface | None = None,
+        filter: str | Mapping[str, Any] | None = None,  # noqa: A002
         keep_pages: bool = False,
     ) -> QueryResult:
         """Fetch every page of a collection's items into one `QueryResult` (D-22).
@@ -412,7 +458,7 @@ class OGCService:
         ----------
         collection : str
             The collection id.
-        params, bbox, geometry
+        params, bbox, geometry, filter
             The query, as for `iter_pages`.
         keep_pages : bool, optional
             Keep each page's response bytes in ``Page.content`` (D-23). Page bodies
@@ -427,6 +473,9 @@ class OGCService:
         ------
         ValueError
             Before any request, on a malformed query, as for `iter_pages`.
+        TypeError
+            Before any request, when a CQL2-JSON filter holds a value JSON cannot
+            encode, as for `iter_pages`.
         PartialResultsError
             When a page fails after at least one succeeded. Its ``result`` holds the
             pages that succeeded.
@@ -439,7 +488,7 @@ class OGCService:
         malformed = False
         try:
             async for page in self.iter_pages(
-                collection, params=params, bbox=bbox, geometry=geometry
+                collection, params=params, bbox=bbox, geometry=geometry, filter=filter
             ):
                 body = page.body or {}
                 features.extend(body["features"])

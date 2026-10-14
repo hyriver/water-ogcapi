@@ -26,8 +26,9 @@ install from this repository until the first final release.
 
 ## Installation
 
-water-ogcapi is not on PyPI or conda-forge yet. Install the development version from
-GitHub (Python 3.12 or later):
+PyPI holds only a release candidate, which reserves the name and has no query API, and
+conda-forge has no package yet. Install the development version from GitHub (Python 3.12
+or later):
 
 ```bash
 pip install git+https://github.com/hyriver/water-ogcapi

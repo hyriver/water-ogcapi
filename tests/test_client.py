@@ -216,6 +216,7 @@ def test_a_next_link_off_the_base_origin_is_refused(href: str) -> None:
     assert err is not None
     assert err.failures[0].url == href
     assert "refused a URL outside" in str(err)
+    assert err.failures[0].attempts == 0, "nothing was sent"
 
 
 def test_a_repeated_next_link_stops_the_traversal() -> None:
@@ -763,3 +764,22 @@ def test_a_first_url_off_the_base_origin_sends_nothing(url: str) -> None:
     with pytest.raises(PaginationError, match="refused a URL outside"):
         asyncio.run(run())
     assert seen == []
+
+
+def retried(*replies: httpx2.Response) -> OGCService:
+    """A service whose transport retries without waiting."""
+    queue = list(replies)
+    transport = Transport(transport=httpx2.MockTransport(lambda _: queue.pop(0)), backoff=0)
+    return OGCService(BASE, transport=transport)
+
+
+def test_a_body_that_fails_validation_reports_every_attempt() -> None:
+    html = httpx2.Response(200, content=b"<html>gateway</html>")
+    service = retried(httpx2.Response(503), httpx2.Response(503), html)
+    _, err = traverse(service, "c")
+    assert err is not None
+    assert err.failures[0].attempts == 3
+    service = retried(httpx2.Response(503), httpx2.Response(200, json=hu02()[0]))
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(service.item("c", "x"))
+    assert excinfo.value.attempts == 2

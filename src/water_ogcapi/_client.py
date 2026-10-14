@@ -50,7 +50,12 @@ def json_object(
         # Raised outside the except block: a JSONDecodeError holds the whole body.
         msg = "response body is not a JSON object"
         raise ServiceError(
-            msg, resp.url, status=resp.status, method=method, request_body=request_body
+            msg,
+            resp.url,
+            status=resp.status,
+            attempts=resp.attempts,
+            method=method,
+            request_body=request_body,
         )
     return cast("dict[str, Any]", doc)
 
@@ -237,12 +242,22 @@ def _page(
     if body.get("type") != "FeatureCollection" or not isinstance(features, list):
         msg = "response is not a FeatureCollection with a features list"
         raise ServiceError(
-            msg, resp.url, status=resp.status, method=method, request_body=request_body
+            msg,
+            resp.url,
+            status=resp.status,
+            attempts=resp.attempts,
+            method=method,
+            request_body=request_body,
         )
     if not isinstance(links, list) or any(map(_broken_next, links)):
         msg = "response has a malformed links member or next link"
         raise ServiceError(
-            msg, resp.url, status=resp.status, method=method, request_body=request_body
+            msg,
+            resp.url,
+            status=resp.status,
+            attempts=resp.attempts,
+            method=method,
+            request_body=request_body,
         )
     return Page(
         url=resp.url,
@@ -358,7 +373,7 @@ class OGCService:
         """
         if _origin(url) != _origin(self.base_url):
             msg = f"refused a URL outside {self.base_url}"
-            raise ServiceError(msg, url, method=method.upper(), request_body=content)
+            raise ServiceError(msg, url, attempts=0, method=method.upper(), request_body=content)
         return await self._transport.request(
             method,
             url,
@@ -424,7 +439,9 @@ class OGCService:
                     # ValueError would escape collect() and drop the pages fetched so far.
                     refusal = "refused a next link that carries a credential in its query"
             if refusal is not None:
-                err = ServiceError(refusal, href, method=page.method, request_body=content)
+                err = ServiceError(
+                    refusal, href, attempts=0, method=page.method, request_body=content
+                )
                 raise PaginationError([err])
             followed.add(href)
             url, query = href, {}
@@ -632,7 +649,7 @@ class OGCService:
         links = body.get("links", [])
         if body.get("type") != "Feature" or not isinstance(links, list):
             msg = "response is not a Feature with a links list"
-            raise ServiceError(msg, resp.url, status=resp.status)
+            raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
         return Page(
             url=resp.url,
             params=query,

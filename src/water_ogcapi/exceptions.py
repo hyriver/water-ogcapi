@@ -34,9 +34,9 @@ class ServiceError(WaterOGCAPIError):
     status : int, optional
         HTTP status code from the failed response, when available.
     attempts : int, optional
-        Requests made before giving up, defaults to 1. Anything above 1 means the
-        transport retried, so an outer retry budget can tell a single failure from
-        an exhausted one.
+        Requests made before giving up, defaults to 1; 0 when the request was refused
+        before sending. Anything above 1 means the transport retried, so an outer
+        retry budget can tell a single failure from an exhausted one.
     retry_after : float, optional
         Seconds the server asked the caller to wait, parsed from ``Retry-After``.
     method : str, optional

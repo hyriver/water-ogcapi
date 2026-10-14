@@ -353,8 +353,8 @@ Layering rule for anything new:
     request. A header stays out of all four; L-09 covers the error chain.
 - **Rejected:** Redacting URLs wherever they appear, which has to find every copy,
     including log records the library does not own.
-- **Limits:** Whether NWIS honors the header form is unverified (Q-07). If it honors
-    only the query form, this decision needs revisiting.
+- **Limits:** Q-07 left open whether NWIS honors the header form; D-30 confirmed it
+    does.
 
 ### D-19: `timeout` bounds each attempt end to end
 

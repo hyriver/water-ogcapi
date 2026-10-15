@@ -23,7 +23,8 @@ class WaterOGCAPIError(Exception):
 
 
 class ServiceError(WaterOGCAPIError):
-    """Raised when an OGC API service returns an error response.
+    """Raised when a request fails: an error status, a redirect, a body of the wrong shape,
+    or a URL refused before sending (``attempts`` 0).
 
     Parameters
     ----------

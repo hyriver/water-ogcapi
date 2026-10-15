@@ -46,3 +46,11 @@ def test_pagination_error_round_trip(clone: Callable[[PaginationError], Paginati
     restored = clone(error)
     assert str(restored) == f"1 page request failed\nHTTP 503: service unavailable\nURL: {URL}"
     assert [vars(f) for f in restored.failures] == [vars(f) for f in error.failures]
+
+
+def test_a_service_error_masks_a_credential_in_its_url() -> None:
+    """A resume replaying a stored URL reaches ServiceError before the transport's check."""
+    err = PaginationError([ServiceError("refused", f"{URL}?api_key=SECRET&f=json", attempts=0)])
+    for text in (str(err), repr(err.failures[0]), pickle.dumps(err).decode("latin-1")):
+        assert "SECRET" not in text
+    assert err.failures[0].url == f"{URL}?api_key=REDACTED&f=json"

@@ -18,6 +18,7 @@ from urllib.parse import parse_qsl, unquote, unquote_plus, urlencode, urlsplit
 import httpx2
 
 from water_ogcapi._logging import logger
+from water_ogcapi._redact import CREDENTIAL_PARAMS
 from water_ogcapi.exceptions import RateLimitError, ServiceError
 
 if TYPE_CHECKING:
@@ -39,9 +40,6 @@ FATAL_ERRORS = (
 # Longest wait this transport will sit through, in seconds. Caps our own backoff,
 # and a `Retry-After` above it is raised to the caller instead of slept off.
 MAX_SLEEP = 60.0
-# Query parameters that carry a credential. A key in the URL reaches Response.url,
-# error messages, and httpx2's INFO log, so it must travel in a header.
-CREDENTIAL_PARAMS = frozenset({"api_key"})
 # RFC 9111 section 1.2.2: a delta-seconds value too large to represent reads as 2**31.
 MAX_DELTA_SECONDS = 2**31
 

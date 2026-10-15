@@ -10,7 +10,8 @@ from urllib.parse import urljoin, urlsplit
 
 from water_ogcapi._metadata import Collections, parse_link
 from water_ogcapi._query import Request, items_request, path_segment
-from water_ogcapi._results import REDACTED, Page, Pagination, QueryResult, crs_of
+from water_ogcapi._redact import REDACTED
+from water_ogcapi._results import Page, Pagination, QueryResult, crs_of
 from water_ogcapi._transport import Transport, parse_count, reject_credentials
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 

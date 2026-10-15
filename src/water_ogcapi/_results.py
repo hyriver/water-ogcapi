@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import copy
 import json
-import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast
-from urllib.parse import parse_qs, unquote_plus, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit
 
-from water_ogcapi._transport import CREDENTIAL_PARAMS
+from water_ogcapi._redact import CREDENTIAL_PARAMS, REDACTED, redact_url
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -39,7 +38,6 @@ Completeness = Literal["complete", "limited", "unknown"]
 StopReason = Literal["limit", "failure"]
 CrsSource = Literal["content_crs", "default", "unconfirmed", "unknown"]
 
-REDACTED = "REDACTED"
 # Response headers a Page keeps. Anything unlisted is dropped, so a header nobody
 # thought of cannot carry a credential into a result.
 KEPT_HEADERS = frozenset(
@@ -57,29 +55,6 @@ KEPT_HEADERS = frozenset(
         "x-ratelimit-remaining",
     }
 )
-_QUERY_ENTRY = re.compile(r"(?:^|(?<=[&;]))([^&;=]*)=([^&;]*)")
-
-
-def _mask_entry(match: re.Match[str]) -> str:
-    name = match[1]
-    return f"{name}={REDACTED}" if unquote_plus(name).lower() in CREDENTIAL_PARAMS else match[0]
-
-
-def redact_url(url: str) -> str:
-    """Mask credential query values and drop userinfo and fragment from ``url``.
-
-    Other query entries keep their bytes, so an opaque cursor still replays. A URL
-    that needs no change is returned as given, and an unparsable one as ``REDACTED``.
-    """
-    try:
-        parts = urlsplit(url)
-    except ValueError:
-        return REDACTED
-    query = _QUERY_ENTRY.sub(_mask_entry, parts.query)
-    netloc = parts.netloc.rpartition("@")[2]
-    if (query, netloc, parts.fragment) == (parts.query, parts.netloc, ""):
-        return url
-    return urlunsplit((parts.scheme, netloc, parts.path, query, ""))
 
 
 class ReadOnlyDict[V](dict[str, V]):

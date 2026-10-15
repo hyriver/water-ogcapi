@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from water_ogcapi._redact import redact_url
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -31,7 +33,8 @@ class ServiceError(WaterOGCAPIError):
     message : str
         Description of the failure.
     url : str, optional
-        The URL that triggered the error, included in the message when given.
+        The URL that triggered the error, included in the message when given, with
+        credential query values masked (D-04).
     status : int, optional
         HTTP status code from the failed response, when available.
     attempts : int, optional
@@ -61,7 +64,7 @@ class ServiceError(WaterOGCAPIError):
         # and then restore the attributes, so a formatted args[0] gained its prefix twice.
         super().__init__(message)
         self.message = message
-        self.url = url
+        self.url = None if url is None else redact_url(url)
         self.status = status
         self.attempts = attempts
         self.retry_after = retry_after

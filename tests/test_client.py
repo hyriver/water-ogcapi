@@ -235,6 +235,24 @@ def test_a_next_link_off_the_base_origin_is_refused(href: str) -> None:
     assert err.failures[0].attempts == 0, "nothing was sent"
 
 
+def test_a_relative_next_link_resolves_against_the_page() -> None:
+    first = {**hu02()[0], "links": [{"rel": "next", "href": "?offset=10&f=json"}]}
+    transport, seen = serve(first, without_next(hu02()[1]))
+    pages, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
+    assert err is None
+    assert len(pages) == 2
+    assert str(seen[1].url) == f"{GEOCONNEX}/collections/hu02/items?offset=10&f=json"
+
+
+def test_an_unparsable_next_link_sends_nothing() -> None:
+    first = {**hu02()[0], "links": [{"rel": "next", "href": "https://["}]}
+    transport, seen = serve(first)
+    pages, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
+    assert len(pages) == 1
+    assert err is not None
+    assert len(seen) == 1
+
+
 def test_a_repeated_next_link_stops_the_traversal() -> None:
     doc = hu02()[1]
     doc["links"] = [{"rel": "next", "type": "application/geo+json", "href": NEXT}]

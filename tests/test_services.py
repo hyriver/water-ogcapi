@@ -7,8 +7,7 @@ import asyncio
 import httpx2
 import pytest
 
-from water_ogcapi import NWIS, FabricData, OGCService, QueryResult
-from water_ogcapi._transport import Transport
+from water_ogcapi import NWIS, FabricData, OGCService, QueryResult, Transport
 from water_ogcapi.exceptions import PaginationError, ServiceError
 
 FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}

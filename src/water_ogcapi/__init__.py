@@ -27,6 +27,7 @@ from water_ogcapi._results import (
     StopReason,
 )
 from water_ogcapi._services import NWIS, FabricData
+from water_ogcapi._transport import Transport
 
 try:
     __version__ = version("water-ogcapi")
@@ -54,6 +55,7 @@ __all__ = [
     "SpatialExtent",
     "StopReason",
     "TemporalExtent",
+    "Transport",
     "__version__",
     "configure_logger",
 ]

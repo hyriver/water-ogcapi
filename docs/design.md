@@ -1095,6 +1095,26 @@ Layering rule for anything new:
     concurrency. `_pagination()` summarizes one traversal, so across pieces it takes
     `sort_by` from the first page and its `numberMatched` agreement check does not hold.
 
+### D-45: Input errors become a `ValidationError` that is also a `ValueError`
+
+- **Status:** accepted; lands with #20.
+- **Date:** 2026-10-15.
+- **Decision:** #20 adds `ValidationError`, a subclass of both `WaterOGCAPIError` and
+    `ValueError`, and every check that rejects caller input before sending raises it:
+    the query forms (D-39), `limit` (D-41), path segments, an `api_key` in `params`
+    (D-18), a malformed key (D-42), and the `Transport` arguments. Its message lists the
+    valid options where a finite set exists. An unencodable CQL2-JSON value stays a
+    `TypeError`.
+- **Why:** The 2026-10-15 project review counted about 12 sites raising bare
+    `ValueError`, and every public Raises section promises it. Subclassing `ValueError`
+    keeps those contracts and lets `except WaterOGCAPIError` catch input errors too, so
+    #20 adds a type without breaking a caller. Chosen by the maintainer.
+- **Rejected:** A `ValidationError` under `WaterOGCAPIError` alone, which breaks every
+    documented `ValueError` and any caller catching it.
+- **Limits:** Until #20 lands the checks raise plain `ValueError`. Errors parsing a
+    server's document (`_metadata.py`, `_results.py`) are not caller input and stay
+    `ValueError`.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

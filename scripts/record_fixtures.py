@@ -2,7 +2,7 @@
 
 Follow ``.agents/skills/live-api/SKILL.md``. NWIS requests carry the key from
 ``USGS_API_KEY`` in ``X-Api-Key``; FabricData and GeoConnex requests carry none. Each
-request goes through ``Transport(max_retries=0)``, about 40 in all, and the run stops
+request goes through ``Transport(max_retries=0)``, about 30 in all, and the run stops
 when NWIS reports fewer than 100 requests remaining. No request header is stored, and
 the key's value is replaced in everything written.
 """
@@ -16,7 +16,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from water_ogcapi._transport import Transport
+from water_ogcapi import Transport
+from water_ogcapi._transport import parse_count
 
 ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
 NWIS = "https://api.waterdata.usgs.gov/ogcapi/v1"
@@ -78,21 +79,9 @@ PLAN = [
         {"bbox": DC_BBOX, "limit": "5"},
         2,
     ),
-    (
-        "fabricdata/gagesii/sorted",
-        f"{FABRICDATA}/collections/gagesii/items",
-        {"bbox": DC_BBOX, "limit": "5", "sortby": "staid"},
-        2,
-    ),
     ("geoconnex/landing", f"{GEOCONNEX}/", {}, 1),
     ("geoconnex/collections", f"{GEOCONNEX}/collections", {}, 1),
     *metadata("geoconnex", GEOCONNEX, "gages"),
-    (
-        "geoconnex/gages/sorted",
-        f"{GEOCONNEX}/collections/gages/items",
-        {"bbox": DC_BBOX, "limit": "5", "sortby": "id"},
-        3,
-    ),
     (
         "geoconnex/hu02/items",
         f"{GEOCONNEX}/collections/hu02/items",
@@ -143,7 +132,8 @@ async def main() -> None:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(text, encoding="utf-8")
                 remaining = resp.headers.get("x-ratelimit-remaining")
-                if headers and remaining is not None and int(remaining) < MIN_REMAINING:
+                left = parse_count(remaining)
+                if headers and left is not None and left < MIN_REMAINING:
                     sys.exit("stopping: under MIN_REMAINING requests left")
                 href = next_href(body)
                 if href is None:

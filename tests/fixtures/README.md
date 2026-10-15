@@ -32,13 +32,13 @@ first two describe the compressed bytes on the wire. No request header is stored
 | `geoconnex/`  | `reference.geoconnex.us`             | no       | none                      |
 
 A name ending in `-N` is page N of one traversal, each page fetched from the previous
-page's `next` link. `items` pages follow the server's default order and `sorted` pages
-add `sortby`. NWIS `next` links carry a `cursor` and no response reports
-`numberMatched`; FabricData and GeoConnex links carry `offset` and report it.
+page's `next` link, in the server's default order. NWIS `next` links carry a `cursor`
+and no response reports `numberMatched`; FabricData and GeoConnex links carry `offset`
+and report it.
 
 ## Re-recording
 
-Follow `.agents/skills/live-api/SKILL.md`. The script sends about 40 requests with
+Follow `.agents/skills/live-api/SKILL.md`. The script sends about 30 requests with
 `max_retries=0`, sends the key only to NWIS, and replaces the key's value in anything it
 writes. Then run the skill's key scan and commit the changed files with their new
 `recorded` date.

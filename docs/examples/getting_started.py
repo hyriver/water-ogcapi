@@ -8,7 +8,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.5
+#       jupytext_version: 1.19.6
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -26,7 +26,7 @@
 # %%
 from water_ogcapi.exceptions import ServiceError
 
-url = "https://api.waterdata.usgs.gov/ogcapi/v0/collections"
+url = "https://api.waterdata.usgs.gov/ogcapi/v1/collections"
 print(ServiceError("service unavailable", url, status=503, attempts=4))
 
 # %% [markdown]

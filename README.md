@@ -6,9 +6,10 @@
 
 An async-first Python client for USGS water data services over OGC API Features.
 
-**Status:** early development. The async transport exists and the query API is in
-progress. The release candidate on PyPI only reserves the name and has no query API, so
-install from this repository until the first final release.
+**Status:** early development. The async query API works on all three services; the sync
+API, metadata cache, quota governor, and resume are in progress. The release candidate
+on PyPI only reserves the name and has no query API, so install from this repository
+until the first final release.
 
 ## Features
 
@@ -18,11 +19,14 @@ install from this repository until the first final release.
 
 ## Services
 
-| Service    | Base URL                             |
-| ---------- | ------------------------------------ |
-| NWIS       | `api.waterdata.usgs.gov/ogcapi/v1`   |
-| FabricData | `api.water.usgs.gov/fabric/pygeoapi` |
-| GeoConnex  | `reference.geoconnex.us`             |
+| Service    | Class        | Base URL                              |
+| ---------- | ------------ | ------------------------------------- |
+| NWIS       | `NWIS`       | `api.waterdata.usgs.gov/ogcapi/v1/`   |
+| FabricData | `FabricData` | `api.water.usgs.gov/fabric/pygeoapi/` |
+| GeoConnex  | `GeoConnex`  | `reference.geoconnex.us/`             |
+
+`NWIS` sends the key in `USGS_API_KEY`, when set, in the `X-Api-Key` header. The other
+two services never receive it.
 
 ## Installation
 
@@ -36,17 +40,33 @@ pip install git+https://github.com/hyriver/water-ogcapi
 
 ## Quick start
 
-The query API is in progress, so there is no runnable example yet. In its planned shape,
-`iter_pages()` streams each page as it arrives and `collect()` returns one result
-holding the aggregated GeoJSON and the evidence for every page. The
+The monitoring locations in a small box around Washington, DC:
+
+```python
+import asyncio
+
+from water_ogcapi import NWIS
+
+
+async def main() -> None:
+    async with NWIS() as nwis:
+        result = await nwis.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
+    print(len(result.geojson["features"]), result.pagination.completeness)
+
+
+asyncio.run(main())
+```
+
+`collect()` returns one `QueryResult` holding the aggregated GeoJSON and the evidence
+for every page; `iter_pages()` streams each page as it arrives. The
 [design decisions](https://docs.hyriver.io/water-ogcapi/design/) (D-02 and D-03)
-describe it.
+describe both.
 
 ## Documentation
 
 The [documentation](https://docs.hyriver.io/water-ogcapi/) has the API reference, a
 [logging guide](https://docs.hyriver.io/water-ogcapi/logging/), and the design decisions
-behind the library. Example notebooks arrive with the query API.
+behind the library. Example notebooks for each service are in progress.
 
 ## Roadmap
 

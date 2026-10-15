@@ -1053,6 +1053,24 @@ Layering rule for anything new:
     `repr` does not show it. Unkeyed NWIS responses carry no `X-RateLimit-*` headers
     (D-30), so the governor (#18) uses its static default there.
 
+### D-43: `Transport` is public
+
+- **Status:** accepted.
+- **Date:** 2026-10-15.
+- **Decision:** The package exports `Transport`. A caller tunes the timeout, retries,
+    backoff, concurrency, and HTTP/2 by passing one to a service class, and several
+    services can share one. `Response` stays private.
+- **Why:** The service classes tell callers to pass
+    `Transport(timeout=...,   max_retries=...)`, and the sync class (#12) and the
+    HyRiver shared client take one. Without the export, a private import is the only
+    route (D-21). Chosen by the maintainer.
+- **Rejected:** `timeout=` and `max_retries=` keywords on each service class, which
+    repeat the transport's parameters in three signatures and leave sharing a transport
+    without a public route.
+- **Limits:** The constructor, `request()`, `get()`, and `aclose()` become public API
+    under D-21. `request()` returns the private `Response`, which a caller reads through
+    its documented attributes only.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

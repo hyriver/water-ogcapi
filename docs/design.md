@@ -235,7 +235,8 @@ Layering rule for anything new:
 ### D-13: Per-service capability profiles
 
 - **Status:** accepted; D-30 sets the values and drops the FabricData key. D-26 replaces
-    the GeoConnex sort key, and D-35 drops sort keys and the offset fan-out flag.
+    the GeoConnex sort key, D-35 drops sort keys and the offset fan-out flag, and D-41
+    adds the default page sizes.
 - **Decision:** Each service class declares a profile: auth header convention, page-size
     caps, sort key, whether offset fan-out is verified (D-05), and whether rate-limit
     headers exist (D-06).
@@ -1003,6 +1004,29 @@ Layering rule for anything new:
     Overriding `collections()`, `item()`, and `iter_pages()` in each service class.
 - **Limits:** The check compares origins, so a URL on the same host outside the path of
     `base_url` passes.
+
+### D-41: Service profiles set the page sizes
+
+- **Status:** accepted. Amends D-13.
+- **Date:** 2026-10-15.
+- **Decision:** `ServiceProfile` holds a service's base URL, its default and maximum
+    `limit`, whether it sends `X-RateLimit-*` headers (read by the governor, D-06), and
+    the environment variable holding its key (D-18). Each service class sets `profile`;
+    the base `OGCService` has none and sends no `limit`. An items query adds the
+    profile's `default_limit` when `params` hold no `limit`, and raises `ValueError`
+    before sending when `limit` is not an integer from 1 to `max_limit`. The defaults
+    are 10,000 on NWIS (D-13), 1,000 on FabricData, and 500 on GeoConnex.
+- **Why:** FabricData's server default of 10 spends 100 of its 300 requests a minute on
+    1,000 features. GeoConnex's 500 is its server default, sent explicitly so a server
+    change does not move it, and its HUC polygons make a 10,000-feature page large.
+    Chosen by the maintainer. NWIS and FabricData answer a `limit` above the cap with a
+    400 (D-30), and raising first names the cap.
+- **Rejected:** A sort key and a fan-out flag in the profile (D-35); the NWIS class
+    carries fan-out (#14). Clamping an oversized `limit`, which changes the request
+    without saying so.
+- **Limits:** The caps are D-30's live values and can change without notice (Q-05). Only
+    the first request's `limit` is checked; a `next` link's own query is sent as the
+    server wrote it.
 
 ## Lessons
 

@@ -13,7 +13,7 @@ from typing import Any
 import httpx2
 import pytest
 
-from water_ogcapi import OGCService, Page, QueryResult
+from water_ogcapi import OGCService, Page, QueryResult, ServiceProfile
 from water_ogcapi._transport import Transport
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
@@ -800,3 +800,35 @@ def test_pagination_records_the_requested_sort_key() -> None:
 
     complete, partial = asyncio.run(run())
     assert (complete.pagination.sort_by, partial.pagination.sort_by) == ("huc2", "-huc2")
+
+
+class Capped(OGCService):
+    """A service whose profile sends 10 features a page by default and accepts 50."""
+
+    profile = ServiceProfile(
+        base_url=GEOCONNEX, default_limit=10, max_limit=50, rate_limit_headers=False
+    )
+
+
+@pytest.mark.parametrize(
+    ("params", "sent"), [(None, "10"), ({"limit": "50"}, "50"), ({"limit": 50}, "50")]
+)
+def test_a_profile_sets_the_default_limit(params: dict[str, Any] | None, sent: str) -> None:
+    transport, seen = serve(without_next(hu02()[0]))
+    _, err = traverse(Capped(GEOCONNEX, transport=transport), "hu02", params)
+    assert err is None
+    assert dict(seen[0].url.params) == {"f": "json", "limit": sent}
+
+
+@pytest.mark.parametrize("limit", ["0", "51", "", "ten", "-1", "1e3", "\u0661", 51, True])
+def test_a_limit_outside_the_profile_sends_nothing(limit: object) -> None:
+    transport, seen = serve()
+    with pytest.raises(ValueError, match="limit takes an integer from 1 to 50"):
+        traverse(Capped(GEOCONNEX, transport=transport), "hu02", {"limit": limit})
+    assert seen == []
+
+
+def test_a_profile_supplies_the_base_url() -> None:
+    assert Capped().base_url == GEOCONNEX
+    with pytest.raises(TypeError, match="base_url is required"):
+        OGCService()

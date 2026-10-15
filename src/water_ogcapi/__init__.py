@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-from water_ogcapi._client import OGCService
+from water_ogcapi._client import OGCService, ServiceProfile
 from water_ogcapi._logging import configure_logger
 from water_ogcapi._metadata import (
     Collection,
@@ -47,6 +47,7 @@ __all__ = [
     "Property",
     "QueryResult",
     "Schema",
+    "ServiceProfile",
     "SpatialExtent",
     "StopReason",
     "TemporalExtent",

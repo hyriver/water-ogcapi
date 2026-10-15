@@ -9,12 +9,12 @@ import numbers
 import time
 from collections.abc import Mapping
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Protocol, Self, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self, cast, runtime_checkable
 from urllib.parse import quote, urlsplit
 
 from water_ogcapi._metadata import Collections, parse_link
 from water_ogcapi._results import Page, Pagination, QueryResult, crs_of
-from water_ogcapi._transport import Transport, reject_credentials
+from water_ogcapi._transport import Transport, parse_count, reject_credentials
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from water_ogcapi._results import Check, Completeness, Link
     from water_ogcapi._transport import Response
 
-__all__ = ["OGCService"]
+__all__ = ["OGCService", "ServiceProfile"]
 
 DEFAULT_PORTS = {"http": 80, "https": 443}
 CQL2_JSON = {"Content-Type": "application/query-cql-json"}
@@ -319,6 +319,32 @@ def _pagination(pages: list[Page], *, failed: bool, malformed: bool) -> Paginati
     return Pagination(matched, returned, len(pages), completeness, sort_by=sort_by, checks=checks)
 
 
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class ServiceProfile:
+    """What one service accepts and sends, read by its service class (D-13, D-41).
+
+    Attributes
+    ----------
+    base_url : str
+        The landing page.
+    default_limit : int
+        The ``limit`` an items query sends when its ``params`` hold none.
+    max_limit : int
+        The largest ``limit`` the service accepts.
+    rate_limit_headers : bool
+        Whether responses carry ``X-RateLimit-*`` headers (D-06).
+    key_env : str or None, optional
+        The environment variable that holds the service's API key, sent in the
+        ``X-Api-Key`` header (D-18). ``None``, the default, for a service sent no key.
+    """
+
+    base_url: str
+    default_limit: int
+    max_limit: int
+    rate_limit_headers: bool
+    key_env: str | None = None
+
+
 class OGCService:
     """Async client for one OGC API Features service.
 
@@ -327,15 +353,30 @@ class OGCService:
 
     Parameters
     ----------
-    base_url : str
+    base_url : str, optional
         The service's landing page, such as
         ``https://api.waterdata.usgs.gov/ogcapi/v1``. A trailing slash is ignored.
+        Defaults to the profile's ``base_url``; required where ``profile`` is ``None``.
     transport : Transport, optional
         Sends every request. The service closes a transport it created and leaves a
         passed one open, so several services can share one.
+
+    Attributes
+    ----------
+    profile : ServiceProfile or None
+        The service's page sizes and key convention, set by each service class.
+        ``None`` here: a query sends the server's default ``limit`` and any ``limit``
+        goes unchecked.
     """
 
-    def __init__(self, base_url: str, *, transport: Transport | None = None) -> None:
+    profile: ClassVar[ServiceProfile | None] = None
+
+    def __init__(self, base_url: str | None = None, *, transport: Transport | None = None) -> None:
+        if base_url is None:
+            if self.profile is None:
+                msg = "base_url is required for a service without a profile"
+                raise TypeError(msg)
+            base_url = self.profile.base_url
         self._base_url = base_url.rstrip("/")
         self._owns_transport = transport is None
         self._transport = Transport() if transport is None else transport
@@ -353,6 +394,26 @@ class OGCService:
         (D-18); `_send` keeps them to the origin of ``base_url``.
         """
         return {}
+
+    def _limited(self, params: Mapping[str, str] | None) -> Mapping[str, str] | None:
+        """Return ``params`` with the profile's ``default_limit`` added unless given.
+
+        Raises
+        ------
+        ValueError
+            If ``limit`` is not an integer from 1 to the profile's ``max_limit``.
+        """
+        if self.profile is None:
+            return params
+        query = {"limit": str(self.profile.default_limit), **(params or {})}
+        # str(): httpx2 sends an int limit as given, so the check reads it the same way.
+        count = parse_count(str(query["limit"]))
+        if count is None or not 1 <= count <= self.profile.max_limit:
+            msg = (
+                f"limit takes an integer from 1 to {self.profile.max_limit}, got {query['limit']!r}"
+            )
+            raise ValueError(msg)
+        return {**query, "limit": str(count)}
 
     async def _send(
         self,
@@ -469,8 +530,8 @@ class OGCService:
             The collection id.
         params : mapping of str to str, optional
             Query parameters of the first request, such as ``limit`` or ``datetime``,
-            with ``f=json`` added unless given. Later requests take their query from
-            the ``next`` link.
+            with ``f=json`` and the profile's ``default_limit`` added unless given.
+            Later requests take their query from the ``next`` link.
         bbox : sequence of float, optional
             ``(west, south, east, north)`` in CRS84, or six values with the minimum and
             maximum heights, sent as the ``bbox`` parameter with every digit kept. West
@@ -507,9 +568,10 @@ class OGCService:
             Before any request, when both ``bbox`` and ``geometry``, or ``ids`` and
             ``filter``, are given, ``ids`` is a ``str`` or ``bytes``, empty, or lacks
             ``id_property``, ``bbox`` or ``geometry`` is malformed, a CQL2-JSON filter
-            holds a NaN or infinite number, a filter is empty, or
+            holds a NaN or infinite number, a filter is empty,
             ``params`` also holds a parameter a keyword sets (``bbox``, ``filter``,
-            ``filter-lang``).
+            ``filter-lang``), or ``limit`` is not an integer from 1 to the profile's
+            ``max_limit``.
         TypeError
             Before any request, when a CQL2-JSON filter holds a value JSON cannot
             encode, such as a set.
@@ -520,7 +582,9 @@ class OGCService:
             failure names that request or link by URL.
         """
         url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
-        query, body = _items_query(params, bbox, geometry, _filter(filter, ids, id_property))
+        query, body = _items_query(
+            self._limited(params), bbox, geometry, _filter(filter, ids, id_property)
+        )
         headers = None if body is None else CQL2_JSON
         method = "GET" if body is None else "POST"
         async for page in self._traverse(

@@ -938,16 +938,17 @@ Layering rule for anything new:
 
 ### D-38: A request is identified by its method, URL as sent, and body
 
-- **Status:** accepted; amended by D-39. Amends D-22 and D-24.
+- **Status:** accepted; amended by D-39 and D-44. Amends D-22 and D-24.
 - **Date:** 2026-10-13.
 - **Decision:** `Transport.request(method, url, params=, headers=, content=)` sends
     every request, and `get()` calls it. Every `ServiceError` and every `Page` carries
     the request's `method` and `request_body` (the bytes sent, `None` without a body)
     beside its URL. One private traversal, `OGCService._traverse()`, takes the first
-    URL, method, params, body, and headers, and follows `next` links (D-34) with the
-    same method, body, and headers; `iter_pages()` calls it with a `GET`. The failure
-    point of D-24, and the resume point after each page, become the method, the URL as
-    sent, and the body. The transport retries a `POST` like a `GET`.
+    request's URL, method, params, body, and headers (a `Request`, D-44), and follows
+    `next` links (D-34) with the same method, body, and headers; `iter_pages()` sends a
+    `GET`, or a `POST` for a CQL2-JSON filter (D-39). The failure point of D-24, and the
+    resume point after each page, become the method, the URL as sent, and the body. The
+    transport retries a `POST` like a `GET`.
 - **Why:** CQL2 over `POST` (#10) must re-send its body to each `next` URL: the
     2026-10-12 NWIS check showed that a `GET` there drops the filter and returns other
     sites with a 200. A URL alone would replay as that unfiltered query, which neither
@@ -1071,6 +1072,27 @@ Layering rule for anything new:
 - **Limits:** The constructor, `request()`, `get()`, and `aclose()` become public API
     under D-21. `request()` returns the private `Response`, which a caller reads through
     its documented attributes only.
+
+### D-44: `_query.py` builds the request, and `_pieces()` is the fan-out seam
+
+- **Status:** accepted. Amends D-38 and D-39.
+- **Date:** 2026-10-15.
+- **Decision:** `_query.py` builds the first request of an items query with no I/O:
+    `items_request()` validates the query forms (D-39) and returns a `Request` holding
+    the URL, method, params, body, and the CQL2 content type. `iter_pages()` passes it
+    to `_pieces()`, which returns it whole on the base service, and traverses each piece
+    in order through `_traverse(request)`. NWIS fan-out (#14) overrides `_pieces()` to
+    split by `datetime` range or site list, and resume (#21) replays a stored `Request`.
+- **Why:** The 2026-10-15 project review found that `iter_pages()` built its request
+    inline, so #14 could fan out only by overriding `iter_pages()` whole, signature,
+    docstring, and validation included, which D-40 rejected. `_client.py` held query
+    building, page parsing, the traversal summary, and the class in 735 lines. Chosen by
+    the maintainer.
+- **Rejected:** Moving page parsing (`_page()`, `_pagination()`) out as well; neither
+    #14 nor #21 adds to it.
+- **Limits:** The base `iter_pages()` runs pieces one after another; #14 adds the
+    concurrency. `_pagination()` summarizes one traversal, so across pieces it takes
+    `sort_by` from the first page and its `numberMatched` agreement check does not hold.
 
 ## Lessons
 

@@ -26,6 +26,7 @@ from water_ogcapi._results import (
     QueryResult,
     StopReason,
 )
+from water_ogcapi._services import NWIS
 
 try:
     __version__ = version("water-ogcapi")
@@ -33,6 +34,7 @@ except PackageNotFoundError:
     __version__ = "0.0.0+unknown"
 
 __all__ = [
+    "NWIS",
     "Check",
     "Collection",
     "Collections",

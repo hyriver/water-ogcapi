@@ -981,7 +981,7 @@ Layering rule for anything new:
     methods, which adds a public type for a few keywords. Translating CQL2-Text to
     CQL2-JSON to combine `ids` with a text filter.
 - **Limits:** `bbox-crs` and `filter-crs` go through `params`. A comma-separated `GET`
-    for NWIS site lists is left to the NWIS class (#28). An unkeyed check on 2026-10-14
+    for NWIS site lists is left to NWIS fan-out (#14). An unkeyed check on 2026-10-14
     (one page each, filter applied per `numberMatched`) found CQL2-Text over `GET`
     working on NWIS, FabricData, and GeoConnex, and CQL2-JSON over `POST` on FabricData
     and GeoConnex. Re-sending the body to `next` links is checked live on NWIS only.
@@ -1027,6 +1027,27 @@ Layering rule for anything new:
 - **Limits:** The caps are D-30's live values and can change without notice (Q-05). Only
     the first request's `limit` is checked; a `next` link's own query is sent as the
     server wrote it.
+
+### D-42: NWIS reads its key once and has a fixed base URL
+
+- **Status:** accepted.
+- **Date:** 2026-10-15.
+- **Decision:** `NWIS(api_key=None)` takes its key from the argument, else from
+    `USGS_API_KEY`, read once at construction. An empty string sends no key, and a key
+    that is not printable ASCII raises `ValueError` there, since httpx2's
+    `UnicodeEncodeError` for it holds the whole key in its `repr`. `_headers()` adds the
+    key to every request as `X-Api-Key` (D-18, D-40). Service classes take no `base_url`
+    argument and send only to their profile's base URL. A caller who needs another host
+    uses `OGCService`, which sends no key.
+- **Why:** With no `base_url` argument, D-13's rule that a USGS key never reaches a
+    non-USGS host holds by construction, and `_send()` keeps it to that origin (D-40).
+    Reading the environment once fixes the key for the life of the instance, so every
+    page of a traversal carries the same key.
+- **Rejected:** Reading the environment on each request. A `base_url` argument, which
+    sends the environment's key to whatever host it names.
+- **Limits:** The instance holds the key unredacted in a private attribute; the default
+    `repr` does not show it. Unkeyed NWIS responses carry no `X-RateLimit-*` headers
+    (D-30), so the governor (#18) uses its static default there.
 
 ## Lessons
 

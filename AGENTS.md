@@ -47,6 +47,7 @@ One-line summaries of the decisions any code change can break. The IDs point int
 - No pandas, geopandas, xarray, Arrow, shapely, or STAC on the core import path (D-09).
 - Construction performs no HTTP (D-10), and redirects are never followed (D-12).
 - The USGS API key never goes to a non-USGS host such as GeoConnex (D-13).
+- Service classes take no `base_url`, so a key goes only to its profile's host (D-42).
 - The API key travels only in the `X-Api-Key` header, never as a query parameter (D-18).
 - Log records never carry request headers, and the `water_ogcapi` logger does not
     propagate to the root logger (D-20).

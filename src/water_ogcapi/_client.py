@@ -6,10 +6,10 @@ import dataclasses
 import time
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
-from urllib.parse import quote, urlsplit
+from urllib.parse import urlsplit
 
 from water_ogcapi._metadata import Collections, parse_link
-from water_ogcapi._query import Request, items_request
+from water_ogcapi._query import Request, items_request, path_segment
 from water_ogcapi._results import Page, Pagination, QueryResult, crs_of
 from water_ogcapi._transport import Transport, parse_count, reject_credentials
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
@@ -426,8 +426,8 @@ class OGCService:
         Raises
         ------
         ValueError
-            Before any request, when both ``bbox`` and ``geometry``, or ``ids`` and
-            ``filter``, are given, ``ids`` is a ``str`` or ``bytes``, empty, or lacks
+            Before any request, when ``collection`` is empty, ``.``, or ``..``, both
+            ``bbox`` and ``geometry``, or ``ids`` and ``filter``, are given, ``ids`` is a ``str`` or ``bytes``, empty, or lacks
             ``id_property``, ``bbox`` or ``geometry`` is malformed, a CQL2-JSON filter
             holds a NaN or infinite number, a filter is empty,
             ``params`` also holds a parameter a keyword sets (``bbox``, ``filter``,
@@ -562,15 +562,13 @@ class OGCService:
             If the request fails, with status 404 for an unknown id, or the body is not
             a Feature whose ``links`` member, when present, is a list.
         ValueError
-            Before any request, if ``item_id`` is empty, ``.``, or ``..``, which would
-            address another path, or ``params`` carries a credential such as ``api_key``.
+            Before any request, if ``collection`` or ``item_id`` is empty, ``.``, or
+            ``..``, which would address another path, or ``params`` carries a credential
+            such as ``api_key``.
         """
-        if str(item_id) in {"", ".", ".."}:
-            msg = f"item_id {item_id!r} would address another path"
-            raise ValueError(msg)
         url = (
-            f"{self.base_url}/collections/{quote(collection, safe='')}"
-            f"/items/{quote(str(item_id), safe='')}"
+            f"{self.base_url}/collections/{path_segment(collection, 'collection')}"
+            f"/items/{path_segment(item_id, 'item_id')}"
         )
         query = {"f": "json", **(params or {})}
         resp = await self._send("GET", url, params=query)

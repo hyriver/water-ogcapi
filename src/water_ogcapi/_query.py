@@ -14,7 +14,7 @@ from urllib.parse import quote
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-__all__ = ["GeoInterface", "Request", "items_request"]
+__all__ = ["GeoInterface", "Request", "items_request", "path_segment"]
 
 CQL2_JSON = {"Content-Type": "application/query-cql-json"}
 
@@ -186,6 +186,21 @@ def _items_query(
     return query, body.encode()
 
 
+def path_segment(value: str | int, name: str) -> str:
+    """Return ``value`` percent-encoded as one URL path segment.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is empty, ``.``, or ``..``, which would address another path.
+    """
+    text = str(value)
+    if text in {"", ".", ".."}:
+        msg = f"{name} {value!r} would address another path"
+        raise ValueError(msg)
+    return quote(text, safe="")
+
+
 def items_request(
     base_url: str,
     collection: str,
@@ -206,7 +221,7 @@ def items_request(
     ValueError, TypeError
         On a malformed query, as `OGCService.iter_pages` documents.
     """
-    url = f"{base_url}/collections/{quote(collection, safe='')}/items"
+    url = f"{base_url}/collections/{path_segment(collection, 'collection')}/items"
     query, body = _items_query(params, bbox, geometry, _filter(cql2, ids, id_property))
     if body is None:
         return Request(url=url, params=query)

@@ -123,7 +123,9 @@ Layering rule for anything new:
 
 ### D-04: Credentials are redacted at construction
 
-- **Status:** accepted.
+- **Status:** accepted. Since 2026-10-15, `redact_url()` lives in the leaf module
+    `_redact.py`, so `ServiceError` masks its URL too; before, it relied on upstream
+    rejection.
 - **Decision:** Any type that carries request headers or params (`Page`, `QueryResult`,
     exceptions) redacts credentials in its constructor, keeping headers from an
     allowlist. Callers never have to remember.

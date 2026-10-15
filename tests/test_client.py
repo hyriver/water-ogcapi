@@ -708,11 +708,18 @@ def test_an_item_sends_its_params() -> None:
     assert page.params == {"f": "json", "crs": crs, "skipGeometry": "true"}
 
 
-@pytest.mark.parametrize("item_id", ["", ".", ".."])
-def test_an_item_id_that_is_a_path_segment_sends_nothing(item_id: str) -> None:
+@pytest.mark.parametrize("segment", ["", ".", ".."])
+def test_a_path_segment_name_sends_nothing(segment: str) -> None:
+    """httpx2 normalizes /collections/../items to the landing page's /items."""
     transport, seen = serve()
-    with pytest.raises(ValueError, match="another path"):
-        asyncio.run(OGCService(BASE, transport=transport).item("c", item_id))
+    service = OGCService(BASE, transport=transport)
+    for call in (
+        service.item("c", segment),
+        service.item(segment, "x"),
+        service.collect(segment),
+    ):
+        with pytest.raises(ValueError, match="would address another path"):
+            asyncio.run(call)
     assert seen == []
 
 

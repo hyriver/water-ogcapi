@@ -305,14 +305,20 @@ class OGCService:
         Raises
         ------
         ServiceError
-            If the request fails or the body is not a JSON object.
+            If the request fails or the body is not a JSON object with a
+            ``collections`` list. Nothing is cached, so the next call asks again.
         ValueError
             If an entry of ``collections`` is not an object with a string ``id``.
         """
         if self._collections is None:
             url = f"{self.base_url}/collections"
             resp = await self._send("GET", url, params={"f": "json"})
-            self._collections = Collections.from_dict(json_object(resp))
+            doc = json_object(resp)
+            if not isinstance(doc.get("collections"), list):
+                # A gateway's 200 error document would otherwise be cached as the index.
+                msg = "response is not a collection index with a collections list"
+                raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+            self._collections = Collections.from_dict(doc)
         return self._collections
 
     def _pieces(self, request: Request) -> Sequence[Request]:

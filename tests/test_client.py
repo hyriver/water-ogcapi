@@ -68,6 +68,20 @@ def test_body_must_be_a_json_object(content: bytes) -> None:
     assert excinfo.value.__context__ is None, "a JSONDecodeError holds the whole body"
 
 
+def test_a_body_without_a_collections_list_is_not_cached() -> None:
+    error = {"code": "InternalError", "description": "upstream timed out"}
+    transport, seen = serve(error, body("nwis/collections.json"))
+    service = OGCService(BASE, transport=transport)
+
+    async def run() -> Any:
+        with pytest.raises(ServiceError, match="not a collection index"):
+            await service.collections()
+        return await service.collections()
+
+    assert asyncio.run(run()).collections
+    assert len(seen) == 2
+
+
 def test_only_a_created_transport_is_closed() -> None:
     shared, _ = serve(body("nwis/collections.json"))
 

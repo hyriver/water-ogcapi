@@ -21,7 +21,8 @@ def recording() -> tuple[Transport, list[httpx2.Request]]:
     def handler(request: httpx2.Request) -> httpx2.Response:
         seen.append(request)
         path = request.url.path
-        doc = FEATURE if "/items/" in path else EMPTY_PAGE if path.endswith("/items") else {}
+        index = {"collections": []}
+        doc = FEATURE if "/items/" in path else EMPTY_PAGE if path.endswith("/items") else index
         return httpx2.Response(200, json=doc)
 
     return Transport(transport=httpx2.MockTransport(handler), max_retries=0), seen

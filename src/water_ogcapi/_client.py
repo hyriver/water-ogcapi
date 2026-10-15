@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
-import json
-import math
-import numbers
 import time
 from collections.abc import Mapping
-from decimal import Decimal
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 from urllib.parse import quote, urlsplit
 
 from water_ogcapi._metadata import Collections, parse_link
+from water_ogcapi._query import Request, items_request
 from water_ogcapi._results import Page, Pagination, QueryResult, crs_of
 from water_ogcapi._transport import Transport, parse_count, reject_credentials
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
@@ -20,13 +17,13 @@ from water_ogcapi.exceptions import PaginationError, PartialResultsError, Servic
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
 
+    from water_ogcapi._query import GeoInterface
     from water_ogcapi._results import Check, Completeness, Link
     from water_ogcapi._transport import Response
 
 __all__ = ["OGCService", "ServiceProfile"]
 
 DEFAULT_PORTS = {"http": 80, "https": 443}
-CQL2_JSON = {"Content-Type": "application/query-cql-json"}
 JSON_TYPES = frozenset({"application/geo+json", "application/json"})
 
 
@@ -58,148 +55,6 @@ def json_object(
             request_body=request_body,
         )
     return cast("dict[str, Any]", doc)
-
-
-@runtime_checkable
-class GeoInterface(Protocol):
-    """An object exposing a GeoJSON geometry, such as a shapely geometry."""
-
-    @property
-    def __geo_interface__(self) -> Mapping[str, Any]: ...
-
-
-def _coordinate(value: object) -> float:
-    """Return ``value`` as a float, raising for anything but a finite real number."""
-    if type(value) is bool or not isinstance(value, numbers.Real) or not math.isfinite(value):
-        msg = f"a coordinate must be a finite number, got {value!r}"
-        raise ValueError(msg)
-    return float(value)
-
-
-def _bbox_param(bbox: Sequence[float]) -> str:
-    """Serialize a bbox unrounded and without exponents: rounding can move an edge inward."""
-    coords = [_coordinate(v) for v in bbox]
-    half = len(coords) // 2
-    if len(coords) not in (4, 6) or any(coords[i] > coords[i + half] for i in range(1, half)):
-        msg = (
-            "bbox takes (west, south, east, north) or (west, south, low, east, north, high), "
-            "with south <= north and low <= high"
-        )
-        raise ValueError(msg)
-    return ",".join(format(Decimal(repr(v)), "f") for v in coords)
-
-
-def _coordinate_arrays(geo: object) -> list[object]:
-    """Return a GeoJSON geometry's ``coordinates``, or those of each in a GeometryCollection."""
-    member = cast("Mapping[str, object]", geo) if isinstance(geo, Mapping) else {}
-    geometries = member.get("geometries")
-    if member.get("type") == "GeometryCollection" and isinstance(geometries, list | tuple):
-        parts = cast("list[object] | tuple[object, ...]", geometries)
-        return [coords for part in parts for coords in _coordinate_arrays(part)]
-    return [member.get("coordinates")]
-
-
-def _geometry_bbox(geometry: object) -> tuple[float, ...]:
-    """Return the 2D bbox of every position in a GeoJSON geometry."""
-    geo = geometry.__geo_interface__ if isinstance(geometry, GeoInterface) else geometry
-    xs: list[float] = []
-    ys: list[float] = []
-    stack = _coordinate_arrays(geo)
-    while stack:
-        node = stack.pop()
-        if not isinstance(node, list | tuple):
-            msg = "geometry must be a GeoJSON geometry with nested coordinate arrays"
-            raise ValueError(msg)  # noqa: TRY004
-        items = cast("list[object] | tuple[object, ...]", node)
-        if items and not isinstance(items[0], list | tuple):
-            if len(items) < 2:
-                msg = f"a position needs two coordinates, got {list(items)!r}"
-                raise ValueError(msg)
-            xs.append(_coordinate(items[0]))
-            ys.append(_coordinate(items[1]))
-        else:
-            stack.extend(items)
-    if not xs:
-        msg = "geometry has no positions"
-        raise ValueError(msg)
-    return min(xs), min(ys), max(xs), max(ys)
-
-
-def _filter(
-    cql2: str | Mapping[str, Any] | None,
-    ids: Sequence[str | int] | None,
-    id_property: str | None,
-) -> str | Mapping[str, Any] | None:
-    """Return ``cql2``, or the CQL2-JSON ``in`` filter that ``ids`` and ``id_property`` set.
-
-    Raises
-    ------
-    ValueError
-        If ``ids`` comes with a filter, is a ``str`` or ``bytes``, is empty, or lacks
-        ``id_property``.
-    """
-    if ids is None and id_property is None:
-        return cql2
-    if cql2 is not None:
-        msg = "pass ids or filter, not both; combine them in one CQL2 filter"
-        raise ValueError(msg)
-    values = [] if ids is None or isinstance(ids, str | bytes | bytearray) else list(ids)
-    if not values or not id_property:
-        msg = "ids takes a non-empty sequence of identifiers, and id_property their property"
-        raise ValueError(msg)
-    return {"op": "in", "args": [{"property": id_property}, values]}
-
-
-def _json_default(value: object) -> object:
-    """Encode a mapping that ``json`` does not know, such as a ``MappingProxyType``."""
-    if isinstance(value, Mapping):
-        return dict(cast("Mapping[str, object]", value))
-    msg = f"Object of type {type(value).__name__} is not JSON serializable"
-    raise TypeError(msg)
-
-
-def _items_query(
-    params: Mapping[str, str] | None,
-    bbox: Sequence[float] | None,
-    geometry: Mapping[str, Any] | GeoInterface | None,
-    cql2: str | Mapping[str, Any] | None,
-) -> tuple[dict[str, str], bytes | None]:
-    """Build the first request's query, with ``f=json`` added unless given, and its body.
-
-    A CQL2-Text filter goes in the query; a CQL2-JSON filter becomes the body (D-39).
-
-    Raises
-    ------
-    ValueError
-        If both ``bbox`` and ``geometry`` are given, either is malformed, a CQL2-JSON
-        filter holds a NaN or infinite number, a filter is empty, or ``params`` already
-        holds a parameter a keyword sets.
-    TypeError
-        If a CQL2-JSON filter holds a value JSON cannot encode, such as a set.
-    """
-    query = {"f": "json", **(params or {})}
-    if cql2 is not None and not cql2:
-        msg = "filter is empty; pass None for no filter"
-        raise ValueError(msg)
-    if bbox is not None and geometry is not None:
-        msg = "pass bbox or geometry, not both"
-        raise ValueError(msg)
-    box = _geometry_bbox(geometry) if geometry is not None else bbox
-    claimed = ({"bbox"} if box is not None else set()) | (
-        {"filter", "filter-lang"} if cql2 is not None else set()
-    )
-    if clash := sorted(claimed & query.keys()):
-        msg = f"{', '.join(clash)} given both as a keyword and in params"
-        raise ValueError(msg)
-    if box is not None:
-        query["bbox"] = _bbox_param(box)
-    if isinstance(cql2, str):
-        query["filter"] = cql2
-        return query, None
-    if cql2 is None:
-        return query, None
-    body = json.dumps(cql2, separators=(",", ":"), allow_nan=False, default=_json_default)
-    return query, body.encode()
 
 
 def _count(value: object) -> int | None:
@@ -460,22 +315,22 @@ class OGCService:
             self._collections = Collections.from_dict(json_object(resp))
         return self._collections
 
-    async def _traverse(
-        self,
-        url: str,
-        *,
-        method: str = "GET",
-        params: Mapping[str, str] | None = None,
-        content: bytes | None = None,
-        headers: Mapping[str, str] | None = None,
-    ) -> AsyncIterator[Page]:
-        """Yield each page from ``url`` on, following ``next`` links (D-34, D-38).
+    def _pieces(self, request: Request) -> Sequence[Request]:
+        """Split an items request into independent pieces, traversed in order (D-44).
 
-        Every request, the ``next`` links included, sends ``method``, ``content``, and
-        ``headers``: a ``GET`` to the ``next`` link of a CQL2 ``POST`` drops the filter.
-        ``params`` apply to the first request only.
+        The base service keeps it whole; a service that fans out overrides this (D-35).
         """
-        query: Mapping[str, str] = params or {}
+        return (request,)
+
+    async def _traverse(self, request: Request) -> AsyncIterator[Page]:
+        """Yield each page from ``request`` on, following ``next`` links (D-34, D-38).
+
+        Every request, the ``next`` links included, sends the method, body, and headers
+        of ``request``: a ``GET`` to the ``next`` link of a CQL2 ``POST`` drops the
+        filter. Its ``params`` apply to the first request only.
+        """
+        url, query, method = request.url, request.params, request.method
+        content, headers = request.body, request.headers
         followed: set[str] = set()
         while True:
             try:
@@ -581,16 +436,19 @@ class OGCService:
             host, and port of ``base_url``, or carries a credential in its query. Its one
             failure names that request or link by URL.
         """
-        url = f"{self.base_url}/collections/{quote(collection, safe='')}/items"
-        query, body = _items_query(
-            self._limited(params), bbox, geometry, _filter(filter, ids, id_property)
+        request = items_request(
+            self.base_url,
+            collection,
+            params=self._limited(params),
+            bbox=bbox,
+            geometry=geometry,
+            cql2=filter,
+            ids=ids,
+            id_property=id_property,
         )
-        headers = None if body is None else CQL2_JSON
-        method = "GET" if body is None else "POST"
-        async for page in self._traverse(
-            url, method=method, params=query, content=body, headers=headers
-        ):
-            yield page
+        for piece in self._pieces(request):
+            async for page in self._traverse(piece):
+                yield page
 
     async def collect(
         self,

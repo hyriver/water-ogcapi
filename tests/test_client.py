@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import dataclasses
 import json
 import pickle
 from pathlib import Path
@@ -14,6 +15,7 @@ import httpx2
 import pytest
 
 from water_ogcapi import OGCService, Page, QueryResult, ServiceProfile
+from water_ogcapi._query import Request
 from water_ogcapi._transport import Transport
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
@@ -412,9 +414,8 @@ def post_traversal(service: OGCService) -> tuple[list[Page], PaginationError | N
 
     async def run() -> None:
         url = f"{GEOCONNEX}/collections/hu02/items"
-        async for page in service._traverse(
-            url, method="POST", params={"f": "json"}, content=FILTER
-        ):
+        request = Request(url=url, method="POST", params={"f": "json"}, body=FILTER)
+        async for page in service._traverse(request):
             got.append(page)  # noqa: PERF401
 
     try:
@@ -758,7 +759,7 @@ def test_a_first_url_off_the_base_origin_sends_nothing(url: str) -> None:
     transport, seen = serve()
 
     async def run() -> None:
-        async for _ in Keyed(BASE, transport=transport)._traverse(url):
+        async for _ in Keyed(BASE, transport=transport)._traverse(Request(url=url)):
             pass
 
     with pytest.raises(PaginationError, match="refused a URL outside"):
@@ -832,3 +833,25 @@ def test_a_profile_supplies_the_base_url() -> None:
     assert Capped().base_url == GEOCONNEX
     with pytest.raises(TypeError, match="base_url is required"):
         OGCService()
+
+
+class Split(OGCService):
+    """A service that splits every items query into two pieces by year."""
+
+    def _pieces(self, request: Request) -> list[Request]:
+        return [
+            dataclasses.replace(request, params={**request.params, "datetime": year})
+            for year in ("2020", "2021")
+        ]
+
+
+def test_a_split_query_traverses_each_piece_in_order() -> None:
+    page = without_next(hu02()[0])
+    transport, seen = serve(page, page)
+    pages, err = traverse(Split(GEOCONNEX, transport=transport), "hu02", bbox=(-78, 38, -77, 39))
+    assert err is None
+    assert len(pages) == 2
+    assert [dict(r.url.params) for r in seen] == [
+        {"f": "json", "bbox": "-78.0,38.0,-77.0,39.0", "datetime": year}
+        for year in ("2020", "2021")
+    ]

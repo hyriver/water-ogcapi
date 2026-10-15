@@ -7,7 +7,7 @@ import asyncio
 import httpx2
 import pytest
 
-from water_ogcapi import NWIS, FabricData, OGCService, QueryResult, Transport
+from water_ogcapi import NWIS, FabricData, GeoConnex, OGCService, QueryResult, Transport
 from water_ogcapi.exceptions import PaginationError, ServiceError
 
 FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}
@@ -27,14 +27,17 @@ def recording() -> tuple[Transport, list[httpx2.Request]]:
     return Transport(transport=httpx2.MockTransport(handler), max_retries=0), seen
 
 
-def exercise(service: OGCService) -> None:
-    """Send one request of each kind: the collection index, an item, a GET and a POST query."""
+def exercise(*services: OGCService) -> None:
+    """Send, from each service at once, the collection index, an item, a GET and a POST query."""
 
-    async def run() -> None:
+    async def requests(service: OGCService) -> None:
         await service.collections()
         await service.item("c", "x")
         await service.collect("c")
         await service.collect("c", ids=["x"], id_property="id")
+
+    async def run() -> None:
+        await asyncio.gather(*map(requests, services))
 
     asyncio.run(run())
 
@@ -102,11 +105,25 @@ def test_fabricdata_sends_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert {r.url.host for r in seen} == {"api.water.usgs.gov"}
 
 
+def test_the_key_never_reaches_geoconnex_on_a_shared_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("USGS_API_KEY", "env-key")
+    transport, seen = recording()
+    exercise(NWIS(transport=transport), GeoConnex(transport=transport))
+    keys = {
+        host: [r.headers.get("x-api-key") for r in seen if r.url.host == host]
+        for host in ("api.waterdata.usgs.gov", "reference.geoconnex.us")
+    }
+    assert keys == {"api.waterdata.usgs.gov": ["env-key"] * 4, "reference.geoconnex.us": [None] * 4}
+
+
 @pytest.mark.parametrize(
-    ("service", "default", "cap"), [(NWIS, 10_000, 50_000), (FabricData, 1_000, 1_000)]
+    ("service", "default", "cap"),
+    [(NWIS, 10_000, 50_000), (FabricData, 1_000, 1_000), (GeoConnex, 500, 10_000)],
 )
 def test_a_service_sends_its_profile_page_sizes(
-    service: type[NWIS | FabricData], default: int, cap: int
+    service: type[NWIS | FabricData | GeoConnex], default: int, cap: int
 ) -> None:
     transport, seen = recording()
     client = service(transport=transport)
@@ -164,3 +181,15 @@ def test_fabricdata_finds_every_gage_in_the_dc_bbox() -> None:
     assert result.pagination.completeness == "complete"
     assert "count" in result.pagination.checks
     assert result.geojson["features"]
+
+
+@pytest.mark.network
+def test_geoconnex_returns_the_22_two_digit_hucs() -> None:
+    async def run() -> QueryResult:
+        async with Transport(max_retries=0) as transport, GeoConnex(transport=transport) as svc:
+            return await svc.collect("hu02", params={"skipGeometry": "true"})
+
+    result = asyncio.run(run())
+    assert sorted(f["id"] for f in result.geojson["features"]) == [f"{n:02d}" for n in range(1, 23)]
+    assert result.pagination.completeness == "complete"
+    assert "count" in result.pagination.checks

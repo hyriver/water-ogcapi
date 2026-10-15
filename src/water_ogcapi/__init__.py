@@ -26,7 +26,7 @@ from water_ogcapi._results import (
     QueryResult,
     StopReason,
 )
-from water_ogcapi._services import NWIS, FabricData
+from water_ogcapi._services import NWIS, FabricData, GeoConnex
 from water_ogcapi._transport import Transport
 
 try:
@@ -44,6 +44,7 @@ __all__ = [
     "CrsSource",
     "Extent",
     "FabricData",
+    "GeoConnex",
     "Link",
     "OGCService",
     "Page",

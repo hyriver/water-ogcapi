@@ -10,7 +10,7 @@ from water_ogcapi._client import OGCService, ServiceProfile
 if TYPE_CHECKING:
     from water_ogcapi._transport import Transport
 
-__all__ = ["NWIS", "FabricData"]
+__all__ = ["NWIS", "FabricData", "GeoConnex"]
 
 NWIS_PROFILE = ServiceProfile(
     # The landing page; without the slash it redirects to http:// with the key in its
@@ -27,6 +27,13 @@ FABRICDATA_PROFILE = ServiceProfile(
     default_limit=1_000,
     max_limit=1_000,
     rate_limit_headers=True,
+)
+
+GEOCONNEX_PROFILE = ServiceProfile(
+    base_url="https://reference.geoconnex.us/",
+    default_limit=500,
+    max_limit=10_000,
+    rate_limit_headers=False,
 )
 
 
@@ -81,6 +88,26 @@ class FabricData(OGCService):
     """
 
     profile = FABRICDATA_PROFILE
+
+    def __init__(self, *, transport: Transport | None = None) -> None:
+        super().__init__(transport=transport)
+
+
+class GeoConnex(OGCService):
+    """Async client for the GeoConnex reference features, which never get the USGS key.
+
+    GeoConnex is not a USGS host, so the key never goes there (D-13). Construction
+    performs no HTTP. Pages hold 500 features unless ``params`` set a ``limit``, and
+    10,000 at most (D-41).
+
+    Parameters
+    ----------
+    transport : Transport, optional
+        Sends every request, as for `OGCService`. Sharing one with an `NWIS` service
+        is safe, since the key travels with each NWIS request.
+    """
+
+    profile = GEOCONNEX_PROFILE
 
     def __init__(self, *, transport: Transport | None = None) -> None:
         super().__init__(transport=transport)

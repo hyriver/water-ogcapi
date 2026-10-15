@@ -7,8 +7,9 @@ import asyncio
 import httpx2
 import pytest
 
-from water_ogcapi import NWIS, OGCService
+from water_ogcapi import NWIS, FabricData, OGCService, QueryResult
 from water_ogcapi._transport import Transport
+from water_ogcapi.exceptions import PaginationError, ServiceError
 
 FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}
 EMPTY_PAGE = {"type": "FeatureCollection", "features": [], "links": []}
@@ -93,9 +94,20 @@ def test_nwis_refuses_a_key_that_is_not_printable_ascii(
     assert "SECRET" not in repr(excinfo.value)
 
 
-@pytest.mark.parametrize(("service", "default", "cap"), [(NWIS, 10_000, 50_000)])
+def test_fabricdata_sends_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("USGS_API_KEY", "env-key")
+    transport, seen = recording()
+    exercise(FabricData(transport=transport))
+    assert len(seen) == 4
+    assert not any("x-api-key" in r.headers for r in seen)
+    assert {r.url.host for r in seen} == {"api.water.usgs.gov"}
+
+
+@pytest.mark.parametrize(
+    ("service", "default", "cap"), [(NWIS, 10_000, 50_000), (FabricData, 1_000, 1_000)]
+)
 def test_a_service_sends_its_profile_page_sizes(
-    service: type[NWIS], default: int, cap: int
+    service: type[NWIS | FabricData], default: int, cap: int
 ) -> None:
     transport, seen = recording()
     client = service(transport=transport)
@@ -115,3 +127,41 @@ def test_nwis_fetches_the_potomac_gage() -> None:
             return (page.body or {}).get("id")
 
     assert asyncio.run(run()) == "USGS-01646500"
+
+
+def did_not_respond(err: PaginationError) -> bool:
+    """Whether a sent request timed out, lost its connection, or got a 5xx (D-14)."""
+    failure = err.failures[0]
+    return failure.attempts > 0 and (failure.status is None or failure.status >= 500)
+
+
+@pytest.mark.parametrize(
+    ("failure", "skips"),
+    [
+        (ServiceError("timed out", "u"), True),
+        (ServiceError("bad gateway", "u", status=502), True),
+        (ServiceError("not found", "u", status=404), False),
+        (ServiceError("a next link repeats one already followed", "u", attempts=0), False),
+    ],
+)
+def test_only_a_missing_response_skips_the_fabricdata_test(
+    failure: ServiceError, skips: bool
+) -> None:
+    assert did_not_respond(PaginationError([failure])) is skips
+
+
+@pytest.mark.network
+def test_fabricdata_finds_every_gage_in_the_dc_bbox() -> None:
+    async def run() -> QueryResult:
+        async with Transport(max_retries=0) as transport, FabricData(transport=transport) as svc:
+            return await svc.collect("gagesii", bbox=(-77.12, 38.80, -76.91, 38.99))
+
+    try:
+        result = asyncio.run(run())
+    except PaginationError as err:
+        if did_not_respond(err):
+            pytest.skip(f"FabricData did not respond: {err.failures[0]}")
+        raise
+    assert result.pagination.completeness == "complete"
+    assert "count" in result.pagination.checks
+    assert result.geojson["features"]

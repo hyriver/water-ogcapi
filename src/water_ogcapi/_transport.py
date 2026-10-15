@@ -394,7 +394,7 @@ class Transport:
             self._loop = loop
             self._sem = asyncio.Semaphore(self.max_concurrent)
             # follow_redirects stays off: httpx2 strips `Authorization` across
-            # hosts but not our `api_key` header, so a redirect would leak it.
+            # hosts but not our `X-Api-Key` header, so a redirect would leak it.
             self._client = httpx2.AsyncClient(
                 timeout=self.timeout,
                 http2=self.http2,
@@ -549,8 +549,8 @@ class Transport:
                 self.max_retries,
                 delay,
             )
-            # ponytail: no jitter, so concurrent retries stay in lockstep.
-            # Add it if offset fan-out (docs/design.md D-05) ever retries in bulk.
+            # shortcut: no jitter, so concurrent retries stay in lockstep. Add it if NWIS
+            # fan-out (docs/design.md D-35) ever retries in bulk.
             await asyncio.sleep(delay)
         # Unreachable: the last attempt returns or raises. Keeps the return type total.
         raise AssertionError  # pragma: no cover

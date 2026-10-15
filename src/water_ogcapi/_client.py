@@ -178,7 +178,7 @@ def _pagination(pages: list[Page], *, failed: bool, malformed: bool) -> Paginati
 class ServiceProfile:
     """What one service accepts and sends, read by its service class (D-13, D-41).
 
-    Attributes
+    Parameters
     ----------
     base_url : str
         The landing page.
@@ -435,8 +435,8 @@ class OGCService:
             ``id_property``, ``bbox`` or ``geometry`` is malformed, a CQL2-JSON filter
             holds a NaN or infinite number, a filter is empty,
             ``params`` also holds a parameter a keyword sets (``bbox``, ``filter``,
-            ``filter-lang``), or ``limit`` is not an integer from 1 to the profile's
-            ``max_limit``.
+            ``filter-lang``) or a credential such as ``api_key``, or ``limit`` is not an
+            integer from 1 to the profile's ``max_limit``.
         TypeError
             Before any request, when a CQL2-JSON filter holds a value JSON cannot
             encode, such as a set.

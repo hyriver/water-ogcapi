@@ -382,7 +382,10 @@ Layering rule for anything new:
     old ones so a rejected call changes nothing, and touches only the handlers it named.
     A lock serializes calls, and a retired handler that fails to close does not stop the
     swap. The transport logs a retry at INFO, a 429 retry at WARNING, and a successful
-    request at DEBUG. No record carries request headers (Q-08).
+    request at DEBUG. No record carries request headers (Q-08). At import, the package
+    raises the `hpack` logger to INFO unless the caller set its level first, since hpack
+    logs every HTTP/2 header value at DEBUG, the `X-Api-Key` included; h2 marks only
+    `authorization` and short cookies as sensitive.
 - **Why:** Isolation was chosen by the maintainer: a package that configures the root
     logger neither captures nor floods these records, and Jupyter shows each record
     once. Every call is declarative because the template mixed the two: a call that only
@@ -400,7 +403,8 @@ Layering rule for anything new:
     on the event loop's thread; move file output behind a `QueueHandler` if logging ever
     stalls offset fan-out. A record logged on another thread while `configure_logger()`
     swaps handlers can reach the retired file handler, which reopens its file in append
-    mode and leaks that handle.
+    mode and leaks that handle. A caller who sets `hpack` to DEBUG gets the key in those
+    records.
 - **Check:** `test_logs_name_each_retry_and_keep_the_key_out` and
     `tests/test_logging.py`.
 

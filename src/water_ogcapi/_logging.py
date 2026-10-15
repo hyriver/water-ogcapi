@@ -39,6 +39,12 @@ logger.setLevel(logging.DEBUG)
 # floods these records, and Jupyter shows each record once.
 logger.propagate = False
 
+# hpack logs every HTTP/2 header value at DEBUG, X-Api-Key included; a level the caller
+# set first wins.
+_hpack = logging.getLogger("hpack")
+if _hpack.level == logging.NOTSET:
+    _hpack.setLevel(logging.INFO)
+
 
 def _level(value: Level) -> int:
     number = _LEVELS.get(value.upper()) if isinstance(value, str) else value

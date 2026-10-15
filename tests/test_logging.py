@@ -132,3 +132,12 @@ def test_file_is_utf8_whatever_the_locale(tmp_path: Path, monkeypatch: pytest.Mo
     logger.warning("WAIĀKEA STREAM")
     configure_logger()
     assert "WAIĀKEA STREAM" in path.read_text(encoding="utf-8")
+
+
+def test_hpack_keeps_header_values_out_of_a_debug_root_logger(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    hpack = pytest.importorskip("hpack")
+    caplog.set_level(logging.DEBUG)
+    hpack.Encoder().encode([(b"x-api-key", b"SECRET")])
+    assert "SECRET" not in caplog.text

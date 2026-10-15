@@ -19,7 +19,10 @@ A request that fails, on its first attempt or after its last retry, raises
 code handles it.
 
 No record carries request headers. The API key travels only in the `X-Api-Key` header,
-so it never reaches a log.
+so it never reaches a log. Over HTTP/2, the `hpack` library logs every header value at
+DEBUG, the key included, so the package raises the `hpack` logger to INFO at import. A
+caller who sets `hpack` to DEBUG gets the key in those records
+([D-20](design.md#d-20-package-logger-isolated-from-the-root-logger)).
 
 ## Scripts and notebooks
 

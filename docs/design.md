@@ -115,10 +115,11 @@ Layering rule for anything new:
     belongs at fetch time, in the count and identifier checks of D-05.
 
 - **Rejected:** A fuller first version, cut after review. `schema`, `queryables`, and
-    `collection` on every result: they are cached on the client already, and a TTL cache
-    may predate the query, which weakens the provenance claim. Page bodies kept by
-    default: that doubles memory (D-02), so bodies are opt-in with `keep_pages=True`. A
-    separate `provenance` type: folded into `pagination` and `Page`.
+    `collection` on every result: they belong in the client's metadata cache (D-07), and
+    a TTL cache may predate the query, which weakens the provenance claim. Page bodies
+    kept by default: that doubles memory (D-02), so bodies are opt-in with
+    `keep_pages=True`. A separate `provenance` type: folded into `pagination` and
+    `Page`.
 
 ### D-04: Credentials are redacted at construction
 

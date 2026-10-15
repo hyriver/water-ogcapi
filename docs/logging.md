@@ -99,7 +99,7 @@ The HTTP library logs to its own `httpx2` logger, which propagates normally. At 
 writes one line per request:
 
 ```text
-HTTP Request: GET https://api.waterdata.usgs.gov/ogcapi/v0/collections?f=json "HTTP/1.1 200 OK"
+HTTP Request: GET https://api.waterdata.usgs.gov/ogcapi/v1/collections?f=json "HTTP/1.1 200 OK"
 ```
 
 These lines show up wherever the root logger is at INFO or below. The URL never holds

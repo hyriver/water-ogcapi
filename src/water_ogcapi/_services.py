@@ -10,7 +10,7 @@ from water_ogcapi._client import OGCService, ServiceProfile
 if TYPE_CHECKING:
     from water_ogcapi._transport import Transport
 
-__all__ = ["NWIS"]
+__all__ = ["NWIS", "FabricData"]
 
 NWIS_PROFILE = ServiceProfile(
     # The landing page; without the slash it redirects to http:// with the key in its
@@ -20,6 +20,13 @@ NWIS_PROFILE = ServiceProfile(
     max_limit=50_000,
     rate_limit_headers=True,
     key_env="USGS_API_KEY",
+)
+
+FABRICDATA_PROFILE = ServiceProfile(
+    base_url="https://api.water.usgs.gov/fabric/pygeoapi/",
+    default_limit=1_000,
+    max_limit=1_000,
+    rate_limit_headers=True,
 )
 
 
@@ -58,3 +65,22 @@ class NWIS(OGCService):
 
     def _headers(self) -> dict[str, str]:
         return {"X-Api-Key": self._api_key} if self._api_key else {}
+
+
+class FabricData(OGCService):
+    """Async client for the USGS FabricData service, which is sent no key (D-30).
+
+    Construction performs no HTTP. Pages hold 1,000 features unless ``params`` set a
+    smaller ``limit`` (D-41).
+
+    Parameters
+    ----------
+    transport : Transport, optional
+        Sends every request, as for `OGCService`. Pass
+        ``Transport(timeout=..., max_retries=...)`` to tune the timeout and retry count.
+    """
+
+    profile = FABRICDATA_PROFILE
+
+    def __init__(self, *, transport: Transport | None = None) -> None:
+        super().__init__(transport=transport)

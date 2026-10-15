@@ -26,7 +26,7 @@ from water_ogcapi._results import (
     QueryResult,
     StopReason,
 )
-from water_ogcapi._services import NWIS
+from water_ogcapi._services import NWIS, FabricData
 
 try:
     __version__ = version("water-ogcapi")
@@ -42,6 +42,7 @@ __all__ = [
     "Crs",
     "CrsSource",
     "Extent",
+    "FabricData",
     "Link",
     "OGCService",
     "Page",

@@ -251,7 +251,8 @@ Layering rule for anything new:
 
 ### D-14: Testing strategy
 
-- **Status:** accepted. D-35 drops the GeoConnex sort scenario.
+- **Status:** accepted. D-35 drops the GeoConnex sort scenario, and D-30 counts 22
+    two-digit HUCs.
 
 - **Decision:** Offline tests intercept HTTP with `httpx2.MockTransport`, and an
     unexpected call fails the test. Live tests carry `@pytest.mark.network`, stay out of

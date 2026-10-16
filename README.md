@@ -6,14 +6,15 @@
 
 An async-first Python client for USGS water data services over OGC API Features.
 
-**Status:** early development. The async query API works on all three services; the sync
-API, metadata cache, quota governor, and resume are in progress. The release candidate
-on PyPI only reserves the name and has no query API, so install from this repository
-until the first final release.
+**Status:** early development. The async and sync query APIs work on all three services;
+the metadata cache, quota governor, and resume are in progress. The release candidate on
+PyPI only reserves the name and has no query API, so install from this repository until
+the first final release.
 
 ## Features
 
 - Native async over HTTP/2, with bounded concurrency.
+- A blocking twin of each service class for scripts and notebooks, Jupyter included.
 - Retries transient failures with exponential backoff and honors `Retry-After`.
 - Two direct runtime dependencies, `httpx2` and `h2`. No pandas.
 
@@ -61,6 +62,16 @@ asyncio.run(main())
 for every page; `iter_pages()` streams each page as it arrives. The
 [design decisions](https://docs.hyriver.io/water-ogcapi/design/) (D-02 and D-03)
 describe both.
+
+Scripts and notebooks can use the blocking classes in `water_ogcapi.sync`, which take
+the same arguments:
+
+```python
+from water_ogcapi.sync import NWIS
+
+with NWIS() as nwis:
+    result = nwis.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
+```
 
 ## Documentation
 

@@ -84,13 +84,13 @@ def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
         raise ValueError(msg)
 
 
-def _reject_unsendable_headers(headers: Mapping[str, str] | None) -> None:
+def _reject_unsendable_headers(headers: Mapping[str, str]) -> None:
     """Refuse a header value that is not printable ASCII, naming only the header (D-43).
 
     httpx2 raises ``UnicodeEncodeError`` for a non-ASCII value, and its ``repr`` holds
     the whole value, API key included.
     """
-    for name, value in (headers or {}).items():
+    for name, value in headers.items():
         if not (value.isascii() and value.isprintable()):
             msg = f"header {name!r} must be printable ASCII"
             raise ValueError(msg)
@@ -487,6 +487,8 @@ class Transport:
             not printable ASCII. The message names the header, never its value.
         """
         reject_credentials(url, params)
+        # A copy, so every attempt sends the headers that passed the check.
+        headers = dict(headers or {})
         _reject_unsendable_headers(headers)
         method = method.upper()
         client, sem = self._bind()

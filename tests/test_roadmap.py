@@ -1,3 +1,5 @@
+"""Tests for the roadmap page generator."""
+
 from __future__ import annotations
 
 import datetime as dt

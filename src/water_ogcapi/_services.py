@@ -64,7 +64,7 @@ class NWIS(OGCService):
         super().__init__(transport=transport)
         if api_key is None and NWIS_PROFILE.key_env:
             api_key = os.environ.get(NWIS_PROFILE.key_env)
-        # httpx2 raises UnicodeEncodeError on a non-ASCII header, and its repr holds the key.
+        # Transport.request() refuses such a key too, but only once a query runs (D-43).
         if api_key and not (api_key.isascii() and api_key.isprintable()):
             msg = "the USGS API key must be printable ASCII"
             raise ValueError(msg)

@@ -466,6 +466,17 @@ def test_key_split_by_a_control_character_is_rejected(url: str) -> None:
     assert seen == []
 
 
+@pytest.mark.parametrize("value", ["SECRET_\u00e9", "SECRET\n", "SECRET\u00a0"])
+def test_header_value_that_is_not_printable_ascii_is_rejected(value: str) -> None:
+    """httpx2's UnicodeEncodeError for a non-ASCII value holds the whole value in its repr."""
+    mock, seen = responder(httpx2.Response(200, json={}))
+    with pytest.raises(ValueError, match="'X-Api-Key'") as excinfo:
+        asyncio.run(Transport(transport=mock).get(URL, headers={"X-Api-Key": value}))
+    assert seen == []
+    assert "SECRET" not in str(excinfo.value)
+    assert "SECRET" not in repr(excinfo.value)
+
+
 def test_timeout_bounds_the_whole_attempt() -> None:
     calls: list[int] = []
 

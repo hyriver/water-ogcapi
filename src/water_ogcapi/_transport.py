@@ -84,6 +84,18 @@ def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
         raise ValueError(msg)
 
 
+def _reject_unsendable_headers(headers: Mapping[str, str] | None) -> None:
+    """Refuse a header value that is not printable ASCII, naming only the header (D-43).
+
+    httpx2 raises ``UnicodeEncodeError`` for a non-ASCII value, and its ``repr`` holds
+    the whole value, API key included.
+    """
+    for name, value in (headers or {}).items():
+        if not (value.isascii() and value.isprintable()):
+            msg = f"header {name!r} must be printable ASCII"
+            raise ValueError(msg)
+
+
 def _merge_query(url: str, params: Mapping[str, str]) -> httpx2.URL:
     """Append ``params`` to the query in ``url``, keeping its other entries byte for byte.
 
@@ -448,7 +460,7 @@ class Transport:
             Query parameters, merged into any query already in ``url``. A name in both
             takes its value from ``params``. Credentials are not allowed here.
         headers : mapping of str to str, optional
-            Request headers, credentials included.
+            Request headers, credentials included. Each value must be printable ASCII.
         content : bytes, optional
             Request body, sent unchanged on every attempt.
 
@@ -471,9 +483,11 @@ class Transport:
         RuntimeError
             If called from an event loop other than the one this transport bound to.
         ValueError
-            If ``params`` carries a credential such as ``api_key``.
+            If ``params`` carries a credential such as ``api_key``, or a header value is
+            not printable ASCII. The message names the header, never its value.
         """
         reject_credentials(url, params)
+        _reject_unsendable_headers(headers)
         method = method.upper()
         client, sem = self._bind()
         # Every error names the request as sent, query included (docs/design.md D-24).

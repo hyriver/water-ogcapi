@@ -517,9 +517,11 @@ class OGCService:
                 ids=ids,
                 id_property=id_property,
             ):
-                body = page.body or {}
-                features.extend(body["features"])
-                malformed = malformed or _malformed_counts(body)
+                if page.body is None:
+                    # Unreachable: _page always sets the body. Keeps the type narrow.
+                    raise AssertionError  # pragma: no cover
+                features.extend(page.body["features"])
+                malformed = malformed or _malformed_counts(page.body)
                 pages.append(
                     dataclasses.replace(
                         page, body=None, content=page.content if keep_pages else None

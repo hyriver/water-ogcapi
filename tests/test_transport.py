@@ -477,6 +477,21 @@ def test_header_value_that_is_not_printable_ascii_is_rejected(value: str) -> Non
     assert "SECRET" not in repr(excinfo.value)
 
 
+@pytest.mark.usefixtures("no_sleep")
+def test_every_attempt_sends_the_checked_headers() -> None:
+    """A caller changing its mapping mid-request cannot slip a value past the check."""
+    headers = {"X-Api-Key": "SECRET"}
+    sent: list[str | None] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        sent.append(request.headers.get("x-api-key"))
+        headers["X-Api-Key"] = "SECRET_\u00e9"
+        return httpx2.Response(503 if len(sent) == 1 else 200, json={})
+
+    asyncio.run(Transport(transport=httpx2.MockTransport(handler)).get(URL, headers=headers))
+    assert sent == ["SECRET", "SECRET"]
+
+
 def test_timeout_bounds_the_whole_attempt() -> None:
     calls: list[int] = []
 

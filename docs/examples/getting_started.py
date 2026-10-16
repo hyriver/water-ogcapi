@@ -18,7 +18,7 @@
 # %% [markdown]
 # # Getting started
 #
-# A placeholder that exercises the docs pipeline: Markdown, code, text output, and a figure. Real examples arrive with the query API.
+# A placeholder that exercises the docs pipeline: Markdown, code, text output, and a figure. The README's quick start shows a query.
 
 # %% [markdown]
 # Errors carry the status code, the number of attempts, and the URL:

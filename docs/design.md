@@ -1039,7 +1039,9 @@ Layering rule for anything new:
 
 ### D-42: NWIS reads its key once and has a fixed base URL
 
-- **Status:** accepted.
+- **Status:** accepted. Since 2026-10-16 `Transport.request()` also refuses a key that
+    is not printable ASCII (D-43); `NWIS` keeps its check so the error comes at
+    construction.
 - **Date:** 2026-10-15.
 - **Decision:** `NWIS(api_key=None)` takes its key from the argument, else from
     `USGS_API_KEY`, read once at construction. An empty string sends no key, and a key
@@ -1060,7 +1062,8 @@ Layering rule for anything new:
 
 ### D-43: `Transport` is public
 
-- **Status:** accepted.
+- **Status:** accepted. Since 2026-10-16 `request()` refuses a header value that is not
+    printable ASCII (see Limits).
 - **Date:** 2026-10-15.
 - **Decision:** The package exports `Transport`. A caller tunes the timeout, retries,
     backoff, concurrency, and HTTP/2 by passing one to a service class, and several
@@ -1074,7 +1077,11 @@ Layering rule for anything new:
     without a public route.
 - **Limits:** The constructor, `request()`, `get()`, and `aclose()` become public API
     under D-21. `request()` returns the private `Response`, which a caller reads through
-    its documented attributes only.
+    its documented attributes only. A caller can pass any header, so `request()` raises
+    `ValueError` before sending for a header value that is not printable ASCII, naming
+    the header and never its value: httpx2's `UnicodeEncodeError` for a non-ASCII value
+    holds the whole value in its `repr`, and the check in `NWIS` (D-42) covers only its
+    own key.
 
 ### D-44: `_query.py` builds the request, and `_pieces()` is the fan-out seam
 
@@ -1104,9 +1111,9 @@ Layering rule for anything new:
 - **Decision:** #20 adds `ValidationError`, a subclass of both `WaterOGCAPIError` and
     `ValueError`, and every check that rejects caller input before sending raises it:
     the query forms (D-39), `limit` (D-41), path segments, an `api_key` in `params`
-    (D-18), a malformed key (D-42), and the `Transport` arguments. Its message lists the
-    valid options where a finite set exists. An unencodable CQL2-JSON value stays a
-    `TypeError`.
+    (D-18), a malformed key (D-42), a malformed header value (D-43), and the `Transport`
+    arguments. Its message lists the valid options where a finite set exists. An
+    unencodable CQL2-JSON value stays a `TypeError`.
 - **Why:** The 2026-10-15 project review counted about 12 sites raising bare
     `ValueError`, and every public Raises section promises it. Subclassing `ValueError`
     keeps those contracts and lets `except WaterOGCAPIError` catch input errors too, so

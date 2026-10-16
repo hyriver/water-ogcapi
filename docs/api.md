@@ -29,6 +29,26 @@ progress.
 
 ::: water_ogcapi.Pagination
 
+::: water_ogcapi.Link
+
+::: water_ogcapi.Crs
+
+## Collection metadata
+
+::: water_ogcapi.Collections
+
+::: water_ogcapi.Collection
+
+::: water_ogcapi.Extent
+
+::: water_ogcapi.SpatialExtent
+
+::: water_ogcapi.TemporalExtent
+
+::: water_ogcapi.Schema
+
+::: water_ogcapi.Property
+
 ## Logging and errors
 
 ::: water_ogcapi.configure_logger

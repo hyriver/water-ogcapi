@@ -42,8 +42,9 @@ One-line summaries of the decisions any code change can break. The IDs point int
     `iter_pages()` and `collect()`, never a method per form (D-39).
 - Any type that carries request headers or params redacts credentials at construction,
     using an allowlist (D-04).
-- The sync wrapper runs the async core on one background event-loop thread, never
-    `asyncio.run()` or `nest_asyncio` (D-08).
+- The sync API is `water_ogcapi.sync`, whose classes own their async service and run it
+    on one background event-loop thread, never `asyncio.run()` or `nest_asyncio` (D-08,
+    D-46).
 - No pandas, geopandas, xarray, Arrow, shapely, or STAC on the core import path (D-09).
 - Construction performs no HTTP (D-10), and redirects are never followed (D-12).
 - The USGS API key never goes to a non-USGS host such as GeoConnex (D-13).

@@ -180,7 +180,7 @@ Layering rule for anything new:
 
 ### D-08: Sync wrapper on a background event-loop thread
 
-- **Status:** accepted; verified by a probe script, not yet written.
+- **Status:** accepted; amended by D-46.
 - **Decision:** The sync API drives the async core from one daemon thread running
     `loop.run_forever()`, through
     `asyncio.run_coroutine_threadsafe(coro, loop).result()`. Async generators such as
@@ -1116,6 +1116,44 @@ Layering rule for anything new:
 - **Limits:** Until #20 lands the checks raise plain `ValueError`. Errors parsing a
     server's document (`_metadata.py`, `_results.py`) are not caller input and stay
     `ValueError`.
+
+### D-46: The sync API is a `water_ogcapi.sync` module of blocking twins
+
+- **Status:** accepted. Amends D-08.
+- **Date:** 2026-10-16.
+- **Decision:** `water_ogcapi.sync` holds `OGCService`, `NWIS`, `FabricData`, and
+    `GeoConnex` with the names and constructors of the async classes. Each builds its
+    own async service and runs every call on one event loop in a daemon thread, which
+    the first sync call in the process starts and every sync service shares. A typed
+    decorator copies each async method's signature and docstring onto its blocking twin,
+    and `iter_pages` returns an iterator that fetches one page per step. A call waits in
+    0.1 s slices, and an exception raised while it waits, such as a notebook interrupt,
+    cancels the call's task and its request before propagating. `close()` closes the
+    service's transport, created or passed, and a sync service sharing it reconnects on
+    its next request.
+- **Why:** A transport binds to the loop of its first request (D-10), so `*_sync`
+    methods on `OGCService` would break the first async call after a sync one in the
+    same notebook (2026-10-12 review). Matching names make switching an import change. A
+    blocked wait misses an interrupt that only sets the interrupt flag, as
+    `_thread.interrupt_main()` and ipykernel on Windows do. A passed transport is bound
+    to the background loop, where the caller cannot close it. Names and the `close()`
+    rule chosen by the maintainer.
+- **Rejected:** `*_sync` methods on the async classes. Top-level names with a suffix or
+    prefix (`NWISSync`, `SyncNWIS`). A wrapper around a caller's async service, which
+    binds that caller's transport to the background loop. Fetching the next page while
+    the caller handles the current one, which leaves a request running when the caller
+    abandons the iterator. Leaving a passed transport open, as `OGCService.aclose()`
+    does, and a blocking `Transport.close()`, which adds public API.
+- **Limits:** A `Transport` passed to a sync service binds to the background loop, so it
+    cannot also serve an async service on the caller's loop. The thread never stops, and
+    a transport closes only through `close()` or `with`. A child made by `os.fork()`
+    starts its own loop, where a transport bound in the parent raises (D-10). Each
+    iterator step runs in its own task, so an async iterator under the sync API must
+    hold no task group or `asyncio.timeout` across a `yield`. An abandoned iterator's
+    async generator closes through the loop's finalizer once nothing references it,
+    which a held traceback delays. #14's concurrent pieces put requests in flight
+    between steps, so #14 cancels them when its generator closes and revisits this
+    entry.
 
 ## Lessons
 

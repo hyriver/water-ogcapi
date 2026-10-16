@@ -210,21 +210,24 @@ def test_iter_pages_names_the_iterator_it_returns() -> None:
     ("blocking", "service"),
     [(sync.NWIS, NWIS), (sync.FabricData, FabricData), (sync.GeoConnex, GeoConnex)],
 )
-def test_each_class_wraps_its_service(
+def test_each_class_queries_its_own_service(
     blocking: type[sync.NWIS | sync.FabricData | sync.GeoConnex],
     service: type[NWIS | FabricData | GeoConnex],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    transport, seen = serve()
-    client = blocking(transport=transport)
-    assert type(client._service) is service
-    assert client.base_url == service(transport=transport).base_url
-    assert not seen
+    monkeypatch.setenv("USGS_API_KEY", "k")
+    seen: list[httpx2.Request] = []
 
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return httpx2.Response(200, json={"collections": []})
 
-def test_nwis_sends_its_key() -> None:
-    transport, seen = serve()
-    sync.NWIS(api_key="k", transport=transport).collect("c")
-    assert [request.headers["X-Api-Key"] for request in seen] == ["k", "k"]
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
+    blocking(transport=transport).collections()
+    assert service.profile is not None
+    assert str(seen[0].url).startswith(service.profile.base_url)
+    # The key goes only to NWIS (D-13).
+    assert seen[0].headers.get("X-Api-Key") == ("k" if service is NWIS else None)
 
 
 def test_close_closes_a_passed_transport() -> None:

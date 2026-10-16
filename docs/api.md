@@ -1,6 +1,7 @@
 # API reference
 
-The async query API. The sync API and the metadata types' fetch methods are in progress.
+The async query API and its blocking twin. The metadata types' fetch methods are in
+progress.
 
 ## Services
 
@@ -15,6 +16,10 @@ The async query API. The sync API and the metadata types' fetch methods are in p
 ::: water_ogcapi.ServiceProfile
 
 ::: water_ogcapi.Transport
+
+## Sync API
+
+::: water_ogcapi.sync
 
 ## Results
 

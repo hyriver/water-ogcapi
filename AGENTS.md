@@ -40,6 +40,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
     GeoJSON dict (D-03).
 - Query forms (`bbox`, `geometry`, `filter`, `ids`) are keyword arguments of
     `iter_pages()` and `collect()`, never a method per form (D-39).
+- Caller input errors raise `ValidationError`, a `ValueError` (D-45), and a query checks
+    its collection and names against cached metadata unless `validate=False` (D-47).
 - Any type that carries request headers or params redacts credentials at construction,
     using an allowlist (D-04).
 - The sync API is `water_ogcapi.sync`, whose classes own their async service and run it

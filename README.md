@@ -16,6 +16,9 @@ repository until the first final release.
 - Native async over HTTP/2, with bounded concurrency.
 - A blocking twin of each service class for scripts and notebooks, Jupyter included.
 - Retries transient failures with exponential backoff and honors `Retry-After`.
+- Checks a query's collection and parameter names against the service's metadata, so a
+    typo raises an error listing the valid names before it can return the whole
+    collection.
 - Two direct runtime dependencies, `httpx2` and `h2`. No pandas.
 
 ## Services

@@ -14,10 +14,11 @@ from typing import Any
 import httpx2
 import pytest
 
-from water_ogcapi import OGCService, Page, QueryResult, Schema, ServiceProfile
+from water_ogcapi import Page, QueryResult, Schema, ServiceProfile
 from water_ogcapi._cache import TTL
 from water_ogcapi._query import Request
 from water_ogcapi._transport import Transport
+from water_ogcapi.aio import OGCService
 from water_ogcapi.exceptions import (
     PaginationError,
     PartialResultsError,

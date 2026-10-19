@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from water_ogcapi import NWIS, OGCService, Transport, configure_logger
+from water_ogcapi import Transport, configure_logger
+from water_ogcapi.aio import NWIS, OGCService
 from water_ogcapi.exceptions import (
     PaginationError,
     RateLimitError,

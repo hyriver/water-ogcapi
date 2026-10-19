@@ -1,10 +1,13 @@
-"""An async-first Python client for USGS OGC API Features services."""
+"""A Python client for USGS OGC API Features services.
+
+The service classes here block; `water_ogcapi.aio` holds their async twins (D-48).
+"""
 
 from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-from water_ogcapi._client import OGCService, ServiceProfile
+from water_ogcapi._client import ServiceProfile
 from water_ogcapi._logging import configure_logger
 from water_ogcapi._metadata import (
     Collection,
@@ -26,7 +29,7 @@ from water_ogcapi._results import (
     QueryResult,
     StopReason,
 )
-from water_ogcapi._services import NWIS, FabricData, GeoConnex
+from water_ogcapi._sync import NWIS, FabricData, GeoConnex, OGCService
 from water_ogcapi._transport import Transport
 
 try:

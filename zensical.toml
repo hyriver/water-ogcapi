@@ -1,6 +1,6 @@
 [project]
 site_name = "Water OGC API"
-site_description = "An async-first Python client for USGS water data services over OGC API Features."
+site_description = "A Python client for USGS water data services over OGC API Features, blocking or async."
 site_url = "https://docs.hyriver.io/water-ogcapi/"
 repo_url = "https://github.com/hyriver/water-ogcapi"
 repo_name = "hyriver/water-ogcapi"

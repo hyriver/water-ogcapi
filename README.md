@@ -4,7 +4,8 @@
 [![Docs](https://github.com/hyriver/water-ogcapi/actions/workflows/docs.yml/badge.svg)](https://docs.hyriver.io/water-ogcapi/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/hyriver/water-ogcapi/blob/main/LICENSE)
 
-An async-first Python client for USGS water data services over OGC API Features.
+A Python client for USGS water data services over OGC API Features. Its service classes
+block, for scripts and notebooks, and `water_ogcapi.aio` holds their async twins.
 
 **Status:** early development. The async and sync query APIs and the metadata cache work
 on all three services; the quota governor and resume are in progress. The release
@@ -13,8 +14,8 @@ repository until the first final release.
 
 ## Features
 
-- Native async over HTTP/2, with bounded concurrency.
-- A blocking twin of each service class for scripts and notebooks, Jupyter included.
+- Blocking service classes for scripts and notebooks, Jupyter included.
+- Async twins in `water_ogcapi.aio`, over HTTP/2 with bounded concurrency.
 - Retries transient failures with exponential backoff and honors `Retry-After`.
 - Checks a query's collection and parameter names against the service's metadata, so a
     typo raises an error listing the valid names before it can return the whole
@@ -47,18 +48,11 @@ pip install git+https://github.com/hyriver/water-ogcapi
 The monitoring locations in a small box around Washington, DC:
 
 ```python
-import asyncio
-
 from water_ogcapi import NWIS
 
-
-async def main() -> None:
-    async with NWIS() as nwis:
-        result = await nwis.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
-    print(len(result.geojson["features"]), result.pagination.completeness)
-
-
-asyncio.run(main())
+with NWIS() as nwis:
+    result = nwis.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
+print(len(result.geojson["features"]), result.pagination.completeness)
 ```
 
 `collect()` returns one `QueryResult` holding the aggregated GeoJSON and the evidence
@@ -66,14 +60,21 @@ for every page; `iter_pages()` streams each page as it arrives. The
 [design decisions](https://docs.hyriver.io/water-ogcapi/design/) (D-02 and D-03)
 describe both.
 
-Scripts and notebooks can use the blocking classes in `water_ogcapi.sync`, which take
-the same arguments:
+Code that runs its own event loop can use the async classes in `water_ogcapi.aio`, which
+take the same arguments:
 
 ```python
-from water_ogcapi.sync import NWIS
+import asyncio
 
-with NWIS() as nwis:
-    result = nwis.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
+from water_ogcapi.aio import NWIS
+
+
+async def main() -> None:
+    async with NWIS() as nwis:
+        result = await nwis.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
+
+
+asyncio.run(main())
 ```
 
 ## Documentation

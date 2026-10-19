@@ -7,7 +7,7 @@ requires = [
 
 [project]
 name = "water-ogcapi"
-description = "An async-first Python client for USGS water data services over OGC API Features."
+description = "A Python client for USGS water data services over OGC API Features, blocking or async."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [ { name = "Taher Chegini", email = "cheginit@gmail.com" } ]

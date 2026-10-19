@@ -5,8 +5,9 @@ docs site renders this file as its contributing guide.
 
 ## Project
 
-`water-ogcapi` is an async-first Python client for USGS water data services (NWIS,
-FabricData, GeoConnex) over OGC API Features. `README.md` lists the endpoints.
+`water-ogcapi` is a Python client for USGS water data services (NWIS, FabricData,
+GeoConnex) over OGC API Features, with blocking service classes at the package root and
+async twins in `water_ogcapi.aio`. `README.md` lists the endpoints.
 
 USGS operates these APIs. Before any request to a live endpoint, read
 `.agents/skills/live-api/SKILL.md`.
@@ -44,9 +45,9 @@ One-line summaries of the decisions any code change can break. The IDs point int
     its collection and names against cached metadata unless `validate=False` (D-47).
 - Any type that carries request headers or params redacts credentials at construction,
     using an allowlist (D-04).
-- The sync API is `water_ogcapi.sync`, whose classes own their async service and run it
-    on one background event-loop thread, never `asyncio.run()` or `nest_asyncio` (D-08,
-    D-46).
+- The package root exports the blocking service classes and `water_ogcapi.aio` the async
+    ones. Each blocking class owns its async service and runs it on one background
+    event-loop thread, never `asyncio.run()` or `nest_asyncio` (D-08, D-46, D-48).
 - No pandas, geopandas, xarray, Arrow, shapely, or STAC on the core import path (D-09).
 - Construction performs no HTTP (D-10), and redirects are never followed (D-12).
 - The USGS API key never goes to a non-USGS host such as GeoConnex (D-13).

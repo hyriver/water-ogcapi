@@ -16,6 +16,8 @@ import threading
 from pathlib import Path
 from typing import Literal
 
+from water_ogcapi.exceptions import ValidationError
+
 __all__ = ["configure_logger", "logger"]
 
 type Level = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] | int
@@ -50,7 +52,7 @@ def _level(value: Level) -> int:
     number = _LEVELS.get(value.upper()) if isinstance(value, str) else value
     if number is None or number not in _LEVELS.values():
         msg = f"invalid log level {value!r}; use one of {', '.join(_LEVELS)}"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     return number
 
 
@@ -89,7 +91,7 @@ def configure_logger(
 
     Raises
     ------
-    ValueError
+    ValidationError
         If a level or ``file_mode`` is invalid, or ``file_only`` is set without
         ``file``. The previous configuration stays in place.
     OSError
@@ -102,10 +104,10 @@ def configure_logger(
     file_level_number = _level(file_level)
     if file_mode not in {"a", "w"}:
         msg = f"invalid file_mode {file_mode!r}; use 'a' or 'w'"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     if file_only and file is None:
         msg = "file_only=True requires file"
-        raise ValueError(msg)
+        raise ValidationError(msg)
 
     # Build every new handler before removing the old ones, so a failure changes nothing.
     handlers: list[logging.Handler] = []

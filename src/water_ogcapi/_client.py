@@ -15,7 +15,12 @@ from water_ogcapi._query import Request, items_request, path_segment
 from water_ogcapi._redact import REDACTED
 from water_ogcapi._results import Page, Pagination, QueryResult, crs_of
 from water_ogcapi._transport import Transport, parse_count, reject_credentials
-from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
+from water_ogcapi.exceptions import (
+    PaginationError,
+    PartialResultsError,
+    ServiceError,
+    ValidationError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Sequence
@@ -291,7 +296,7 @@ class OGCService:
 
         Raises
         ------
-        ValueError
+        ValidationError
             If ``limit`` is not an integer from 1 to the profile's ``max_limit``.
         """
         if self.profile is None:
@@ -303,7 +308,7 @@ class OGCService:
             msg = (
                 f"limit takes an integer from 1 to {self.profile.max_limit}, got {query['limit']!r}"
             )
-            raise ValueError(msg)
+            raise ValidationError(msg)
         return {**query, "limit": str(count)}
 
     async def _send(
@@ -388,7 +393,7 @@ class OGCService:
         ServiceError
             If the request fails, with status 404 for an unknown collection, or the
             body is not a JSON object with a ``properties`` object.
-        ValueError
+        ValidationError
             Before any request, if ``collection`` is empty, ``.``, or ``..``.
         """
         url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/queryables"
@@ -409,7 +414,7 @@ class OGCService:
         ServiceError
             If the request fails, with status 404 for an unknown collection, or the
             body is not a JSON object with a ``properties`` object.
-        ValueError
+        ValidationError
             Before any request, if ``collection`` is empty, ``.``, or ``..``.
         """
         url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/schema"
@@ -527,14 +532,14 @@ class OGCService:
 
         Raises
         ------
-        ValueError
+        ValidationError
             Before any request, when ``collection`` is empty, ``.``, or ``..``, both
-            ``bbox`` and ``geometry``, or ``ids`` and ``filter``, are given, ``ids`` is a ``str`` or ``bytes``, empty, or lacks
-            ``id_property``, ``bbox`` or ``geometry`` is malformed, a CQL2-JSON filter
-            holds a NaN or infinite number, a filter is empty,
-            ``params`` also holds a parameter a keyword sets (``bbox``, ``filter``,
-            ``filter-lang``) or a credential such as ``api_key``, or ``limit`` is not an
-            integer from 1 to the profile's ``max_limit``.
+            ``bbox`` and ``geometry``, or ``ids`` and ``filter``, are given, ``ids`` is a
+            ``str`` or ``bytes``, empty, or lacks ``id_property``, ``bbox`` or
+            ``geometry`` is malformed, a CQL2-JSON filter holds a NaN or infinite
+            number, a filter is empty, ``params`` also holds a parameter a keyword sets
+            (``bbox``, ``filter``, ``filter-lang``) or a credential such as ``api_key``,
+            or ``limit`` is not an integer from 1 to the profile's ``max_limit``.
         TypeError
             Before any request, when a CQL2-JSON filter holds a value JSON cannot
             encode, such as a set.
@@ -589,7 +594,7 @@ class OGCService:
 
         Raises
         ------
-        ValueError
+        ValidationError
             Before any request, on a malformed query, as for `iter_pages`.
         TypeError
             Before any request, when a CQL2-JSON filter holds a value JSON cannot
@@ -665,7 +670,7 @@ class OGCService:
         ServiceError
             If the request fails, with status 404 for an unknown id, or the body is not
             a Feature whose ``links`` member, when present, is a list.
-        ValueError
+        ValidationError
             Before any request, if ``collection`` or ``item_id`` is empty, ``.``, or
             ``..``, which would address another path, or ``params`` carries a credential
             such as ``api_key``.

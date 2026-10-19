@@ -47,5 +47,7 @@ paths = ["src"]
 
 [project.plugins.mkdocstrings.handlers.python.options]
 docstring_style = "numpy"
+# Documents the blocking twins of water_ogcapi._sync as methods.
+extensions = ["scripts/griffe_twins.py"]
 members_order = "source"
 show_source = false

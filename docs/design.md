@@ -1224,7 +1224,9 @@ Layering rule for anything new:
     blocking side.
 - **Limits:** A blocking call made inside a coroutine blocks that event loop until it
     returns. The async core stays the primitive (D-02), so each blocking call pays one
-    thread hop (D-08).
+    thread hop (D-08). Static analysis reads each generated twin as an attribute, so the
+    griffe extension `scripts/griffe_twins.py` documents it on the API page with the
+    async method's parameters and docstring, and fails the docs build if it finds none.
 
 ## Lessons
 

@@ -1,7 +1,6 @@
 # API reference
 
-The async query API and its blocking twin. The metadata types' fetch methods are in
-progress.
+The async query API and its blocking twin.
 
 ## Services
 

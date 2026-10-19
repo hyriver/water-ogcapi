@@ -350,7 +350,7 @@ def _properties(value: object) -> ReadOnlyDict[Property] | None:
 class Schema:
     """A ``/queryables`` or ``/schema`` document.
 
-    ``/queryables`` lists the properties a query can filter and sort on, ``/schema``
+    ``/queryables`` lists the properties a query can filter on, ``/schema``
     the properties a feature carries.
 
     Parameters

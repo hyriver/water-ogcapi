@@ -1,12 +1,12 @@
-"""Blocking twins of the service classes, for scripts and notebooks (D-08, D-46).
+"""The blocking service classes that `water_ogcapi` exports (D-08, D-46, D-48).
 
-Each class has the name, constructor, and methods of its async class. A method blocks
-until the async method of the same name returns, and `iter_pages` returns an iterator
-that fetches one page per step. Every call runs on one background event loop, so it
-works where a loop is already running, as in Jupyter.
+Each class has the name, constructor, and methods of its async twin in
+`water_ogcapi.aio`. A method blocks until the async method of the same name returns, and
+`iter_pages` returns an iterator that fetches one page per step. Every call runs on one
+background event loop, so it works where a loop is already running, as in Jupyter.
 
 ```python
-from water_ogcapi.sync import NWIS
+from water_ogcapi import NWIS
 
 with NWIS() as nwis:
     result = nwis.collect("daily", params={"monitoring_location_id": "USGS-01646500"})
@@ -134,7 +134,7 @@ def _iterating[**P, T](
 class OGCService:
     """Blocking client for one OGC API Features service.
 
-    Runs a `water_ogcapi.OGCService` of its own on the background loop. Its methods
+    Runs a `water_ogcapi.aio.OGCService` of its own on the background loop. Its methods
     `collections`, `queryables`, `schema`, `iter_pages`, `collect`, and `item` block on
     the async methods of the same name. A `Transport` passed here binds to that loop, so
     share it only among sync services (D-10); `close()` closes it, and a service sharing
@@ -143,9 +143,9 @@ class OGCService:
     Parameters
     ----------
     base_url : str
-        The service's landing page, as for `water_ogcapi.OGCService`.
+        The service's landing page, as for `water_ogcapi.aio.OGCService`.
     transport : Transport, optional
-        Sends every request, as for `water_ogcapi.OGCService`.
+        Sends every request, as for `water_ogcapi.aio.OGCService`.
     """
 
     _service: _client.OGCService
@@ -184,12 +184,12 @@ class OGCService:
 
 
 class NWIS(OGCService):
-    """Blocking client for the USGS Water Data OGC API, as `water_ogcapi.NWIS`.
+    """Blocking client for the USGS Water Data OGC API, as `water_ogcapi.aio.NWIS`.
 
     Parameters
     ----------
     api_key : str, optional
-        A USGS API key, as for `water_ogcapi.NWIS`.
+        A USGS API key, as for `water_ogcapi.aio.NWIS`.
     transport : Transport, optional
         Sends every request, as for `OGCService`.
 
@@ -205,7 +205,7 @@ class NWIS(OGCService):
 
 
 class FabricData(OGCService):
-    """Blocking client for the USGS FabricData service, as `water_ogcapi.FabricData`.
+    """Blocking client for the USGS FabricData service, as `water_ogcapi.aio.FabricData`.
 
     Parameters
     ----------
@@ -219,7 +219,7 @@ class FabricData(OGCService):
 
 
 class GeoConnex(OGCService):
-    """Blocking client for the GeoConnex reference features, as `water_ogcapi.GeoConnex`.
+    """Blocking client for the GeoConnex reference features, as `water_ogcapi.aio.GeoConnex`.
 
     Parameters
     ----------

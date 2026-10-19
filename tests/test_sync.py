@@ -1,9 +1,10 @@
-"""Tests for the sync API."""
+"""Tests for the blocking classes the package root exports (D-46, D-48)."""
 
 from __future__ import annotations
 
 import _thread
 import asyncio
+import importlib
 import inspect
 import multiprocessing
 import sys
@@ -13,7 +14,9 @@ from typing import TYPE_CHECKING, Any
 import httpx2
 import pytest
 
-from water_ogcapi import NWIS, FabricData, GeoConnex, OGCService, Page, QueryResult, Transport, sync
+import water_ogcapi
+from water_ogcapi import Page, QueryResult, Transport, _sync, aio
+from water_ogcapi.aio import NWIS, FabricData, GeoConnex, OGCService
 from water_ogcapi.exceptions import PaginationError, ValidationError
 
 if TYPE_CHECKING:
@@ -58,7 +61,7 @@ def settled_tasks() -> int:
             await asyncio.sleep(0.01)
         return len(asyncio.all_tasks()) - 1
 
-    return sync._run(count())
+    return _sync._run(count())
 
 
 def test_a_query_works_inside_a_running_loop() -> None:
@@ -66,7 +69,7 @@ def test_a_query_works_inside_a_running_loop() -> None:
 
     async def notebook_cell() -> QueryResult:
         # A notebook cell runs while the kernel's loop is running.
-        with sync.OGCService(BASE, transport=transport) as service:
+        with water_ogcapi.OGCService(BASE, transport=transport) as service:
             return service.collect("c")
 
     result = asyncio.run(notebook_cell())
@@ -76,11 +79,11 @@ def test_a_query_works_inside_a_running_loop() -> None:
 
 def test_calls_reuse_one_transport() -> None:
     transport, seen = serve()
-    service = sync.OGCService(BASE, transport=transport)
+    service = water_ogcapi.OGCService(BASE, transport=transport)
     service.collect("c")
     client = transport._client
     assert client is not None
-    assert transport._loop is sync._loop()
+    assert transport._loop is _sync._loop()
     service.collect("c")
     assert transport._client is client
     assert len(seen) == 4
@@ -89,7 +92,7 @@ def test_calls_reuse_one_transport() -> None:
 def test_an_async_service_still_works_after_a_sync_call() -> None:
     sync_transport, _ = serve()
     async_transport, _ = serve()
-    blocking = sync.OGCService(BASE, transport=sync_transport)
+    blocking = water_ogcapi.OGCService(BASE, transport=sync_transport)
     service = OGCService(BASE, transport=async_transport)
 
     async def mixed() -> list[int]:
@@ -103,7 +106,7 @@ def test_an_async_service_still_works_after_a_sync_call() -> None:
 
 def test_each_step_sends_one_request() -> None:
     transport, seen = serve()
-    pages = sync.OGCService(BASE, transport=transport).iter_pages("c")
+    pages = water_ogcapi.OGCService(BASE, transport=transport).iter_pages("c")
     assert not seen
     assert next(pages).feature_count == 1
     assert len(seen) == 1
@@ -123,7 +126,7 @@ def test_an_abandoned_iterator_leaves_no_request_running() -> None:
             finally:
                 closed.set()
 
-    service = sync.OGCService(BASE, transport=transport)
+    service = water_ogcapi.OGCService(BASE, transport=transport)
     service._service = Recording(BASE, transport=transport)
     pages = service.iter_pages("c")
     next(pages)
@@ -152,7 +155,7 @@ def test_an_interrupt_cancels_the_request() -> None:
             _thread.interrupt_main()
 
     transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
-    service = sync.OGCService(BASE, transport=transport)
+    service = water_ogcapi.OGCService(BASE, transport=transport)
     threading.Thread(target=interrupt, daemon=True).start()
     with pytest.raises(KeyboardInterrupt):
         service.collect("c")
@@ -164,18 +167,29 @@ def test_errors_propagate_with_their_type() -> None:
     transport = Transport(
         transport=httpx2.MockTransport(lambda _: httpx2.Response(404)), max_retries=0
     )
-    service = sync.OGCService(BASE, transport=transport)
+    service = water_ogcapi.OGCService(BASE, transport=transport)
     with pytest.raises(PaginationError):
         service.collect("c", validate=False)
     with pytest.raises(ValidationError, match="would address another path"):
         next(service.iter_pages(".."))
 
 
+@pytest.mark.parametrize("name", ["OGCService", "NWIS", "FabricData", "GeoConnex"])
+def test_the_root_classes_block_and_the_aio_classes_await(name: str) -> None:
+    assert not inspect.iscoroutinefunction(getattr(water_ogcapi, name).collect)
+    assert inspect.iscoroutinefunction(getattr(aio, name).collect)
+
+
+def test_the_sync_module_is_gone() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("water_ogcapi.sync")
+
+
 PAIRS = [
-    (sync.OGCService, OGCService),
-    (sync.NWIS, NWIS),
-    (sync.FabricData, FabricData),
-    (sync.GeoConnex, GeoConnex),
+    (water_ogcapi.OGCService, OGCService),
+    (water_ogcapi.NWIS, NWIS),
+    (water_ogcapi.FabricData, FabricData),
+    (water_ogcapi.GeoConnex, GeoConnex),
 ]
 TWINS = {"aclose": "close"}
 
@@ -192,7 +206,7 @@ def async_methods(service: type[OGCService]) -> list[str]:
 
 @pytest.mark.parametrize(("blocking", "service"), PAIRS)
 def test_every_async_method_has_a_blocking_twin(
-    blocking: type[sync.OGCService], service: type[OGCService]
+    blocking: type[water_ogcapi.OGCService], service: type[OGCService]
 ) -> None:
     missing = [
         name for name in async_methods(service) if not hasattr(blocking, TWINS.get(name, name))
@@ -202,21 +216,27 @@ def test_every_async_method_has_a_blocking_twin(
 
 @pytest.mark.parametrize("name", [n for n in async_methods(OGCService) if n not in TWINS])
 def test_methods_copy_the_async_parameters_and_docstring(name: str) -> None:
-    method, original = getattr(sync.OGCService, name), getattr(OGCService, name)
+    method, original = getattr(water_ogcapi.OGCService, name), getattr(OGCService, name)
     assert inspect.signature(method).parameters == inspect.signature(original).parameters
     assert method.__doc__ == original.__doc__
 
 
 def test_iter_pages_names_the_iterator_it_returns() -> None:
-    assert inspect.signature(sync.OGCService.iter_pages).return_annotation == "Iterator[Page]"
+    assert (
+        inspect.signature(water_ogcapi.OGCService.iter_pages).return_annotation == "Iterator[Page]"
+    )
 
 
 @pytest.mark.parametrize(
     ("blocking", "service"),
-    [(sync.NWIS, NWIS), (sync.FabricData, FabricData), (sync.GeoConnex, GeoConnex)],
+    [
+        (water_ogcapi.NWIS, NWIS),
+        (water_ogcapi.FabricData, FabricData),
+        (water_ogcapi.GeoConnex, GeoConnex),
+    ],
 )
 def test_each_class_queries_its_own_service(
-    blocking: type[sync.NWIS | sync.FabricData | sync.GeoConnex],
+    blocking: type[water_ogcapi.NWIS | water_ogcapi.FabricData | water_ogcapi.GeoConnex],
     service: type[NWIS | FabricData | GeoConnex],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -237,7 +257,7 @@ def test_each_class_queries_its_own_service(
 
 def test_close_closes_a_passed_transport() -> None:
     transport, _ = serve()
-    with sync.OGCService(BASE, transport=transport) as service:
+    with water_ogcapi.OGCService(BASE, transport=transport) as service:
         service.collect("c")
         assert transport._client is not None
     assert transport._client is None
@@ -245,7 +265,7 @@ def test_close_closes_a_passed_transport() -> None:
 
 def test_a_service_sharing_a_closed_transport_reconnects() -> None:
     transport, seen = serve()
-    first, second = (sync.OGCService(BASE, transport=transport) for _ in range(2))
+    first, second = (water_ogcapi.OGCService(BASE, transport=transport) for _ in range(2))
     first.collect("c")
     first.close()
     assert len(second.collect("c").geojson["features"]) == 2
@@ -254,17 +274,17 @@ def test_a_service_sharing_a_closed_transport_reconnects() -> None:
 
 def collect_in_child() -> None:
     transport, _ = serve()
-    sync.OGCService(BASE, transport=transport).collect("c")
+    water_ogcapi.OGCService(BASE, transport=transport).collect("c")
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="no fork on Windows")
 @pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
 def test_a_forked_child_starts_its_own_loop() -> None:
-    sync._loop()
+    _sync._loop()
     held = threading.Event()
 
     def hold_the_lock() -> None:
-        with sync._LOCK:
+        with _sync._LOCK:
             held.set()
             threading.Event().wait(0.2)
 

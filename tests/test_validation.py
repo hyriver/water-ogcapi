@@ -10,7 +10,9 @@ from typing import Any
 import httpx2
 import pytest
 
-from water_ogcapi import OGCService, Transport, sync
+import water_ogcapi
+from water_ogcapi import Transport
+from water_ogcapi.aio import OGCService
 from water_ogcapi.exceptions import ServiceError, ValidationError
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -212,4 +214,4 @@ def test_a_property_that_is_not_an_object_still_names_a_queryable() -> None:
 def test_the_sync_api_raises_the_same_error() -> None:
     transport, _ = serve(nwis_routes())
     with pytest.raises(ValidationError, match="unknown collection"):
-        sync.OGCService(BASE, transport=transport).collect("dayly")
+        water_ogcapi.OGCService(BASE, transport=transport).collect("dayly")

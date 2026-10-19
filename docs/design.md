@@ -25,11 +25,11 @@ Each decision lists its status, the decision, why, what was rejected, and its li
 
 ## Scope
 
-`water-ogcapi` is a lean, async-first client for the USGS OGC API Features endpoints:
-NWIS, FabricData, and GeoConnex (base URLs in `README.md`). It complements
-`dataretrieval` and offers a small runtime dependency footprint with no pandas, native
-async, raw GeoJSON with the evidence of how it was fetched, GeoConnex and FabricData
-coverage, and metadata caching.
+`water-ogcapi` is a lean client for the USGS OGC API Features endpoints, blocking by
+default over an async core (D-48): NWIS, FabricData, and GeoConnex (base URLs in
+`README.md`). It complements `dataretrieval` and offers a small runtime dependency
+footprint with no pandas, native async, raw GeoJSON with the evidence of how it was
+fetched, GeoConnex and FabricData coverage, and metadata caching.
 
 Planned surface: bbox queries, CQL2 spatial predicates, CQL2-JSON and CQL2-Text
 passthrough, identifier filters, direct item fetch, a metadata cache (D-07), typed
@@ -1135,7 +1135,8 @@ Layering rule for anything new:
 
 ### D-46: The sync API is a `water_ogcapi.sync` module of blocking twins
 
-- **Status:** accepted. Amends D-08.
+- **Status:** accepted. Amends D-08. D-48 moves the blocking classes to the package root
+    and the async ones to `water_ogcapi.aio`.
 - **Date:** 2026-10-16.
 - **Decision:** `water_ogcapi.sync` holds `OGCService`, `NWIS`, `FabricData`, and
     `GeoConnex` with the names and constructors of the async classes. Each builds its
@@ -1198,6 +1199,32 @@ Layering rule for anything new:
 - **Limits:** A server parameter outside `QUERY_PARAMS` needs `validate=False`. A failed
     metadata request raises `ServiceError` before any page request. `item()` checks only
     the collection. Each unknown name costs one revalidation of a cached document.
+
+### D-48: The blocking classes are the top-level names, the async ones are in `aio`
+
+- **Status:** accepted. Supersedes the module layout of D-46.
+- **Date:** 2026-10-19.
+- **Decision:** `water_ogcapi` exports the blocking `OGCService`, `NWIS`, `FabricData`,
+    and `GeoConnex`, and `water_ogcapi.aio` exports the async classes under the same
+    names. `water_ogcapi.sync` is removed. `Page`, `QueryResult`, `Transport`,
+    `ServiceProfile`, the metadata types, and the exceptions stay at the top level for
+    both. The rest of D-46 stands: each blocking class owns its async service and runs
+    it on the background loop. Chosen by the maintainer.
+- **Why:** Most users work in scripts and notebooks. With the async classes at the top
+    level, `NWIS().collect("daily")` without `await` returns an un-awaited coroutine and
+    a `RuntimeWarning`, the first thing a new user meets. With the blocking classes
+    there, an async user who forgets `aio` gets a call that works and blocks the event
+    loop, a mistake that user can diagnose. `redis` uses the same layout
+    (`redis.asyncio`). No release has carried a query API, so the deprecation cycle of
+    D-21 does not apply.
+- **Rejected:** Keeping the async classes at the top level with `water_ogcapi.sync`
+    (D-46). `water_ogcapi.asyncio` as the namespace, since
+    `from water_ogcapi import   asyncio` shadows the standard library module in the
+    caller's file. Prefixed names such as `AsyncNWIS`, the shape D-46 rejected for the
+    blocking side.
+- **Limits:** A blocking call made inside a coroutine blocks that event loop until it
+    returns. The async core stays the primitive (D-02), so each blocking call pays one
+    thread hop (D-08).
 
 ## Lessons
 

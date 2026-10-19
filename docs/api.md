@@ -1,6 +1,7 @@
 # API reference
 
-The async query API and its blocking twin.
+The blocking service classes, their async twins in `water_ogcapi.aio`, and the types
+both return.
 
 ## Services
 
@@ -16,9 +17,9 @@ The async query API and its blocking twin.
 
 ::: water_ogcapi.Transport
 
-## Sync API
+## Async API
 
-::: water_ogcapi.sync
+::: water_ogcapi.aio
 
 ## Results
 

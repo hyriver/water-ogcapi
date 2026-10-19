@@ -135,10 +135,10 @@ class OGCService:
     """Blocking client for one OGC API Features service.
 
     Runs a `water_ogcapi.OGCService` of its own on the background loop. Its methods
-    `collections`, `iter_pages`, `collect`, and `item` block on the async methods of the
-    same name. A `Transport` passed here binds to that loop, so share it only among sync
-    services (D-10); `close()` closes it, and a service sharing it reconnects on its next
-    request.
+    `collections`, `queryables`, `schema`, `iter_pages`, `collect`, and `item` block on
+    the async methods of the same name. A `Transport` passed here binds to that loop, so
+    share it only among sync services (D-10); `close()` closes it, and a service sharing
+    it reconnects on its next request.
 
     Parameters
     ----------
@@ -152,6 +152,8 @@ class OGCService:
     _transport: Transport
 
     collections = _blocking(_client.OGCService.collections)
+    queryables = _blocking(_client.OGCService.queryables)
+    schema = _blocking(_client.OGCService.schema)
     iter_pages = _iterating(_client.OGCService.iter_pages)
     collect = _blocking(_client.OGCService.collect)
     item = _blocking(_client.OGCService.item)
@@ -164,6 +166,10 @@ class OGCService:
     def base_url(self) -> str:
         """The landing page URL, without a trailing slash."""
         return self._service.base_url
+
+    def refresh(self) -> None:
+        """Drop every cached metadata document, so the next call fetches it again."""
+        self._service.refresh()
 
     def close(self) -> None:
         """Close the transport, whether this service created it or it was passed."""

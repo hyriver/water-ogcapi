@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import time
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 from urllib.parse import urljoin, urlsplit
 
-from water_ogcapi._metadata import Collections, parse_link
+from water_ogcapi._cache import CacheEntry
+from water_ogcapi._metadata import Collections, Schema, parse_link
 from water_ogcapi._query import Request, items_request, path_segment
 from water_ogcapi._redact import REDACTED
 from water_ogcapi._results import Page, Pagination, QueryResult, crs_of
@@ -16,7 +18,7 @@ from water_ogcapi._transport import Transport, parse_count, reject_credentials
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Sequence
+    from collections.abc import AsyncIterator, Callable, Sequence
 
     from water_ogcapi._query import GeoInterface
     from water_ogcapi._results import Check, Completeness, Link
@@ -56,6 +58,39 @@ def json_object(
             request_body=request_body,
         )
     return cast("dict[str, Any]", doc)
+
+
+def _collection_index(resp: Response) -> Collections:
+    """Parse a ``/collections`` response.
+
+    Raises
+    ------
+    ServiceError
+        If the body is not a JSON object with a ``collections`` list, such as a
+        gateway's error document sent with a 200.
+    ValueError
+        If an entry of ``collections`` is not an object with a string ``id``.
+    """
+    doc = json_object(resp)
+    if not isinstance(doc.get("collections"), list):
+        msg = "response is not a collection index with a collections list"
+        raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+    return Collections.from_dict(doc)
+
+
+def _schema(resp: Response) -> Schema:
+    """Parse a ``/queryables`` or ``/schema`` response.
+
+    Raises
+    ------
+    ServiceError
+        If the body is not a JSON object with a ``properties`` object.
+    """
+    doc = json_object(resp)
+    if not isinstance(doc.get("properties"), dict):
+        msg = "response is not a JSON Schema with a properties object"
+        raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+    return Schema.from_dict(doc)
 
 
 def _count(value: object) -> int | None:
@@ -236,7 +271,7 @@ class OGCService:
         self._base_url = base_url.rstrip("/")
         self._owns_transport = transport is None
         self._transport = Transport() if transport is None else transport
-        self._collections: Collections | None = None
+        self._cache: dict[str, CacheEntry] = {}
 
     @property
     def base_url(self) -> str:
@@ -300,8 +335,31 @@ class OGCService:
             content=content,
         )
 
+    async def _metadata[T](self, url: str, parse: Callable[[Response], T]) -> T:
+        """Return the document at ``url`` as ``parse`` reads it, cached for an hour (D-07).
+
+        An expired entry is revalidated with its ``ETag`` and ``Last-Modified``, and a
+        304 keeps its payload. Only a response that ``parse`` accepts is stored. The
+        payload is the cached object itself, so a public method returns a copy.
+        """
+        entry = self._cache.get(url)
+        if entry is not None and not entry.expired():
+            return entry.payload
+        headers = entry.validators() if entry is not None else {}
+        resp = await self._send("GET", url, params={"f": "json"}, headers=headers)
+        if resp.status != 304:
+            self._cache[url] = CacheEntry.store(parse(resp), resp.headers)
+        elif entry is not None and headers:
+            self._cache[url] = CacheEntry.store(entry.payload, resp.headers, entry)
+        else:
+            msg = "HTTP 304 to a request that sent no validators"
+            raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+        return self._cache[url].payload
+
     async def collections(self) -> Collections:
-        """Return the collection index, fetching ``/collections`` on the first call.
+        """Return the collection index from ``/collections``.
+
+        The index is cached for an hour, then revalidated (D-07); `refresh` drops it.
 
         Raises
         ------
@@ -311,16 +369,55 @@ class OGCService:
         ValueError
             If an entry of ``collections`` is not an object with a string ``id``.
         """
-        if self._collections is None:
-            url = f"{self.base_url}/collections"
-            resp = await self._send("GET", url, params={"f": "json"})
-            doc = json_object(resp)
-            if not isinstance(doc.get("collections"), list):
-                # A gateway's 200 error document would otherwise be cached as the index.
-                msg = "response is not a collection index with a collections list"
-                raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
-            self._collections = Collections.from_dict(doc)
-        return self._collections
+        index = await self._metadata(f"{self.base_url}/collections", _collection_index)
+        # A deep copy: nested values in ``extra`` are plain lists and dicts (D-33).
+        return copy.deepcopy(index)
+
+    async def queryables(self, collection: str) -> Schema:
+        """Return the properties a query on ``collection`` can filter on.
+
+        The document is cached for an hour, then revalidated (D-07); `refresh` drops it.
+
+        Parameters
+        ----------
+        collection : str
+            The collection id.
+
+        Raises
+        ------
+        ServiceError
+            If the request fails, with status 404 for an unknown collection, or the
+            body is not a JSON object with a ``properties`` object.
+        ValueError
+            Before any request, if ``collection`` is empty, ``.``, or ``..``.
+        """
+        url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/queryables"
+        return copy.deepcopy(await self._metadata(url, _schema))
+
+    async def schema(self, collection: str) -> Schema:
+        """Return the properties each feature of ``collection`` carries.
+
+        The document is cached for an hour, then revalidated (D-07); `refresh` drops it.
+
+        Parameters
+        ----------
+        collection : str
+            The collection id.
+
+        Raises
+        ------
+        ServiceError
+            If the request fails, with status 404 for an unknown collection, or the
+            body is not a JSON object with a ``properties`` object.
+        ValueError
+            Before any request, if ``collection`` is empty, ``.``, or ``..``.
+        """
+        url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/schema"
+        return copy.deepcopy(await self._metadata(url, _schema))
+
+    def refresh(self) -> None:
+        """Drop every cached metadata document, so the next call fetches it again."""
+        self._cache.clear()
 
     def _pieces(self, request: Request) -> Sequence[Request]:
         """Split an items request into independent pieces, traversed in order (D-44).

@@ -14,7 +14,7 @@ import httpx2
 import pytest
 
 from water_ogcapi import NWIS, FabricData, GeoConnex, OGCService, Page, QueryResult, Transport, sync
-from water_ogcapi.exceptions import PaginationError
+from water_ogcapi.exceptions import PaginationError, ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -162,7 +162,7 @@ def test_errors_propagate_with_their_type() -> None:
     service = sync.OGCService(BASE, transport=transport)
     with pytest.raises(PaginationError):
         service.collect("c")
-    with pytest.raises(ValueError, match="would address another path"):
+    with pytest.raises(ValidationError, match="would address another path"):
         next(service.iter_pages(".."))
 
 

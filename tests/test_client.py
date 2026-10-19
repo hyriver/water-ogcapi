@@ -18,7 +18,12 @@ from water_ogcapi import OGCService, Page, QueryResult, Schema, ServiceProfile
 from water_ogcapi._cache import TTL
 from water_ogcapi._query import Request
 from water_ogcapi._transport import Transport
-from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
+from water_ogcapi.exceptions import (
+    PaginationError,
+    PartialResultsError,
+    ServiceError,
+    ValidationError,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BASE = "https://api.waterdata.usgs.gov/ogcapi/v1"
@@ -779,11 +784,12 @@ def test_a_spatial_predicate_and_a_bbox_combine_in_one_post() -> None:
 @pytest.mark.parametrize(
     ("query", "error"),
     [
-        ({"filter": ""}, ValueError),
-        ({"filter": {}}, ValueError),
-        ({"filter": "a = 1", "params": {"filter": "b = 2"}}, ValueError),
-        ({"filter": SITES, "params": {"filter-lang": "cql2-text"}}, ValueError),
-        ({"filter": {"op": "=", "args": [{"property": "x"}, float("nan")]}}, ValueError),
+        ({"filter": ""}, ValidationError),
+        ({"filter": {}}, ValidationError),
+        ({"filter": "a = 1", "params": {"filter": "b = 2"}}, ValidationError),
+        ({"filter": SITES, "params": {"filter-lang": "cql2-text"}}, ValidationError),
+        ({"filter": {"op": "=", "args": [{"property": "x"}, float("nan")]}}, ValidationError),
+        ({"filter": {"op": "<", "args": [{"property": "x"}, float("-inf")]}}, ValidationError),
         ({"filter": {"op": "in", "args": [{"property": "x"}, {1, 2}]}}, TypeError),
     ],
 )

@@ -19,7 +19,7 @@ import httpx2
 
 from water_ogcapi._logging import logger
 from water_ogcapi._redact import CREDENTIAL_PARAMS
-from water_ogcapi.exceptions import RateLimitError, ServiceError
+from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -81,7 +81,7 @@ def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
         leaked = _mentions_credential(parts.fragment)
     if leaked or CREDENTIAL_PARAMS & names:
         msg = "pass the API key in the X-Api-Key header, not as a query parameter"
-        raise ValueError(msg)
+        raise ValidationError(msg)
 
 
 def _reject_unsendable_headers(headers: Mapping[str, str]) -> None:
@@ -93,7 +93,7 @@ def _reject_unsendable_headers(headers: Mapping[str, str]) -> None:
     for name, value in headers.items():
         if not (value.isascii() and value.isprintable()):
             msg = f"header {name!r} must be printable ASCII"
-            raise ValueError(msg)
+            raise ValidationError(msg)
 
 
 def _merge_query(url: str, params: Mapping[str, str]) -> httpx2.URL:
@@ -331,7 +331,7 @@ class Transport:
 
     Raises
     ------
-    ValueError
+    ValidationError
         If ``max_concurrent`` is below 1, or ``max_retries`` or ``backoff`` is
         negative. A zero-permit semaphore would block every request forever.
     """
@@ -348,13 +348,13 @@ class Transport:
     ) -> None:
         if max_concurrent < 1:
             msg = f"max_concurrent must be at least 1, got {max_concurrent}"
-            raise ValueError(msg)
+            raise ValidationError(msg)
         if max_retries < 0:
             msg = f"max_retries must not be negative, got {max_retries}"
-            raise ValueError(msg)
+            raise ValidationError(msg)
         if backoff < 0:
             msg = f"backoff must not be negative, got {backoff}"
-            raise ValueError(msg)
+            raise ValidationError(msg)
         # Read-only through properties: the client and semaphore capture these on the
         # first request, so a later assignment would silently change nothing.
         self._timeout = timeout
@@ -482,7 +482,7 @@ class Transport:
             ran while the call waited for a permit or a backoff.
         RuntimeError
             If called from an event loop other than the one this transport bound to.
-        ValueError
+        ValidationError
             If ``params`` carries a credential such as ``api_key``, or a header value is
             not printable ASCII. The message names the header, never its value.
         """

@@ -195,7 +195,7 @@ class NWIS(OGCService):
 
     Raises
     ------
-    ValueError
+    ValidationError
         If the key holds a character other than printable ASCII.
     """
 

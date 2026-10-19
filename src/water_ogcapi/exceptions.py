@@ -16,12 +16,21 @@ __all__ = [
     "PartialResultsError",
     "RateLimitError",
     "ServiceError",
+    "ValidationError",
     "WaterOGCAPIError",
 ]
 
 
 class WaterOGCAPIError(Exception):
     """Base exception for all water_ogcapi errors."""
+
+
+class ValidationError(WaterOGCAPIError, ValueError):
+    """Raised before a request is sent when caller input is invalid (docs/design.md D-45).
+
+    Its message names the valid options where a finite set exists, such as the
+    collections of a service or the properties a query can filter on.
+    """
 
 
 class ServiceError(WaterOGCAPIError):

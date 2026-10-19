@@ -11,6 +11,8 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 from urllib.parse import quote
 
+from water_ogcapi.exceptions import ValidationError
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -56,7 +58,7 @@ def _coordinate(value: object) -> float:
     """Return ``value`` as a float, raising for anything but a finite real number."""
     if type(value) is bool or not isinstance(value, numbers.Real) or not math.isfinite(value):
         msg = f"a coordinate must be a finite number, got {value!r}"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     return float(value)
 
 
@@ -69,7 +71,7 @@ def _bbox_param(bbox: Sequence[float]) -> str:
             "bbox takes (west, south, east, north) or (west, south, low, east, north, high), "
             "with south <= north and low <= high"
         )
-        raise ValueError(msg)
+        raise ValidationError(msg)
     return ",".join(format(Decimal(repr(v)), "f") for v in coords)
 
 
@@ -93,19 +95,19 @@ def _geometry_bbox(geometry: object) -> tuple[float, ...]:
         node = stack.pop()
         if not isinstance(node, list | tuple):
             msg = "geometry must be a GeoJSON geometry with nested coordinate arrays"
-            raise ValueError(msg)  # noqa: TRY004
+            raise ValidationError(msg)
         items = cast("list[object] | tuple[object, ...]", node)
         if items and not isinstance(items[0], list | tuple):
             if len(items) < 2:
                 msg = f"a position needs two coordinates, got {list(items)!r}"
-                raise ValueError(msg)
+                raise ValidationError(msg)
             xs.append(_coordinate(items[0]))
             ys.append(_coordinate(items[1]))
         else:
             stack.extend(items)
     if not xs:
         msg = "geometry has no positions"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     return min(xs), min(ys), max(xs), max(ys)
 
 
@@ -118,7 +120,7 @@ def _filter(
 
     Raises
     ------
-    ValueError
+    ValidationError
         If ``ids`` comes with a filter, is a ``str`` or ``bytes``, is empty, or lacks
         ``id_property``.
     """
@@ -126,11 +128,11 @@ def _filter(
         return cql2
     if cql2 is not None:
         msg = "pass ids or filter, not both; combine them in one CQL2 filter"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     values = [] if ids is None or isinstance(ids, str | bytes | bytearray) else list(ids)
     if not values or not id_property:
         msg = "ids takes a non-empty sequence of identifiers, and id_property their property"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     return {"op": "in", "args": [{"property": id_property}, values]}
 
 
@@ -154,7 +156,7 @@ def _items_query(
 
     Raises
     ------
-    ValueError
+    ValidationError
         If both ``bbox`` and ``geometry`` are given, either is malformed, a CQL2-JSON
         filter holds a NaN or infinite number, a filter is empty, or ``params`` already
         holds a parameter a keyword sets.
@@ -164,17 +166,17 @@ def _items_query(
     query = {"f": "json", **(params or {})}
     if cql2 is not None and not cql2:
         msg = "filter is empty; pass None for no filter"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     if bbox is not None and geometry is not None:
         msg = "pass bbox or geometry, not both"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     box = _geometry_bbox(geometry) if geometry is not None else bbox
     claimed = ({"bbox"} if box is not None else set()) | (
         {"filter", "filter-lang"} if cql2 is not None else set()
     )
     if clash := sorted(claimed & query.keys()):
         msg = f"{', '.join(clash)} given both as a keyword and in params"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     if box is not None:
         query["bbox"] = _bbox_param(box)
     if isinstance(cql2, str):
@@ -182,7 +184,12 @@ def _items_query(
         return query, None
     if cql2 is None:
         return query, None
-    body = json.dumps(cql2, separators=(",", ":"), allow_nan=False, default=_json_default)
+    try:
+        body = json.dumps(cql2, separators=(",", ":"), allow_nan=False, default=_json_default)
+    except ValueError as exc:
+        # A NaN or infinite number, or a mapping that contains itself.
+        msg = f"filter cannot be sent as JSON: {exc}"
+        raise ValidationError(msg) from None
     return query, body.encode()
 
 
@@ -191,13 +198,13 @@ def path_segment(value: str | int, name: str) -> str:
 
     Raises
     ------
-    ValueError
+    ValidationError
         If ``value`` is empty, ``.``, or ``..``, which would address another path.
     """
     text = str(value)
     if text in {"", ".", ".."}:
         msg = f"{name} {value!r} would address another path"
-        raise ValueError(msg)
+        raise ValidationError(msg)
     return quote(text, safe="")
 
 
@@ -218,7 +225,7 @@ def items_request(
 
     Raises
     ------
-    ValueError, TypeError
+    ValidationError, TypeError
         On a malformed query, as `OGCService.iter_pages` documents.
     """
     url = f"{base_url}/collections/{path_segment(collection, 'collection')}/items"

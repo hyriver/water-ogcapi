@@ -6,6 +6,7 @@ import os
 from typing import TYPE_CHECKING
 
 from water_ogcapi._client import OGCService, ServiceProfile
+from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
     from water_ogcapi._transport import Transport
@@ -54,7 +55,7 @@ class NWIS(OGCService):
 
     Raises
     ------
-    ValueError
+    ValidationError
         If the key holds a character other than printable ASCII, such as a newline.
     """
 
@@ -67,7 +68,7 @@ class NWIS(OGCService):
         # Transport.request() refuses such a key too, but only once a query runs (D-43).
         if api_key and not (api_key.isascii() and api_key.isprintable()):
             msg = "the USGS API key must be printable ASCII"
-            raise ValueError(msg)
+            raise ValidationError(msg)
         self._api_key = api_key or None
 
     def _headers(self) -> dict[str, str]:

@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import pickle
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from water_ogcapi.exceptions import PaginationError, RateLimitError, ServiceError
+from water_ogcapi import NWIS, OGCService, Transport, configure_logger
+from water_ogcapi.exceptions import (
+    PaginationError,
+    RateLimitError,
+    ServiceError,
+    ValidationError,
+    WaterOGCAPIError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -54,3 +62,27 @@ def test_a_service_error_masks_a_credential_in_its_url() -> None:
     for text in (str(err), repr(err.failures[0]), pickle.dumps(err).decode("latin-1")):
         assert "SECRET" not in text
     assert err.failures[0].url == f"{URL}?api_key=REDACTED&f=json"
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        lambda: OGCService("https://example.com").iter_pages("c", bbox=[1, 2, 3]).__anext__(),
+        lambda: OGCService("https://example.com").item("..", "x"),
+        lambda: NWIS(api_key="", transport=None).collect("c", params={"limit": "0"}),
+        lambda: Transport(max_concurrent=0),
+        lambda: NWIS(api_key="key\n"),
+        lambda: configure_logger(level="LOUD"),
+    ],
+    ids=["bbox", "path-segment", "limit", "transport", "key", "log-level"],
+)
+def test_input_errors_are_validation_errors(check: Any) -> None:
+    async def run() -> None:
+        result = check()
+        if asyncio.iscoroutine(result):
+            await result
+
+    with pytest.raises(ValidationError) as excinfo:
+        asyncio.run(run())
+    assert isinstance(excinfo.value, WaterOGCAPIError)
+    assert isinstance(excinfo.value, ValueError)

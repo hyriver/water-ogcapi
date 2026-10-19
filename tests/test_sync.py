@@ -33,10 +33,15 @@ LAST = {
 
 
 def serve() -> tuple[Transport, list[httpx2.Request]]:
-    """A transport serving a two-page collection."""
+    """A transport serving a two-page collection ``c``, recording each page request.
+
+    The collection index the query check reads is served without a record.
+    """
     seen: list[httpx2.Request] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path.endswith("/collections"):
+            return httpx2.Response(200, json={"collections": [{"id": "c"}]})
         seen.append(request)
         return httpx2.Response(200, json=LAST if "offset" in str(request.url) else FIRST)
 
@@ -161,7 +166,7 @@ def test_errors_propagate_with_their_type() -> None:
     )
     service = sync.OGCService(BASE, transport=transport)
     with pytest.raises(PaginationError):
-        service.collect("c")
+        service.collect("c", validate=False)
     with pytest.raises(ValidationError, match="would address another path"):
         next(service.iter_pages(".."))
 

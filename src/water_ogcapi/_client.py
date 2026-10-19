@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import dataclasses
 import time
@@ -23,7 +24,7 @@ from water_ogcapi.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Sequence
+    from collections.abc import AsyncIterator, Callable, Collection, Sequence
 
     from water_ogcapi._query import GeoInterface
     from water_ogcapi._results import Check, Completeness, Link
@@ -33,6 +34,28 @@ __all__ = ["OGCService", "ServiceProfile"]
 
 DEFAULT_PORTS = {"http": 80, "https": 443}
 JSON_TYPES = frozenset({"application/geo+json", "application/json"})
+# The parameters pygeoapi reserves on an items request. Any other name filters on a
+# property, and pygeoapi drops a name its provider does not know, widening the query.
+QUERY_PARAMS = frozenset(
+    {
+        "bbox",
+        "bbox-crs",
+        "crs",
+        "datetime",
+        "f",
+        "filter",
+        "filter-crs",
+        "filter-lang",
+        "lang",
+        "limit",
+        "offset",
+        "properties",
+        "q",
+        "resulttype",
+        "skipGeometry",
+        "sortby",
+    }
+)
 
 
 def json_object(
@@ -96,6 +119,15 @@ def _schema(resp: Response) -> Schema:
         msg = "response is not a JSON Schema with a properties object"
         raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
     return Schema.from_dict(doc)
+
+
+def _collection_ids(index: Collections) -> list[str]:
+    return [collection.id for collection in index.collections or ()]
+
+
+def _property_names(schema: Schema) -> list[str]:
+    # A properties object with a member that is not an object stays whole in extra (D-33).
+    return list(schema.properties or schema.extra.get("properties", {}))
 
 
 def _count(value: object) -> int | None:
@@ -277,6 +309,8 @@ class OGCService:
         self._owns_transport = transport is None
         self._transport = Transport() if transport is None else transport
         self._cache: dict[str, CacheEntry] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._locks_loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def base_url(self) -> str:
@@ -340,26 +374,92 @@ class OGCService:
             content=content,
         )
 
-    async def _metadata[T](self, url: str, parse: Callable[[Response], T]) -> T:
+    async def _metadata[T](
+        self, url: str, parse: Callable[[Response], T], *, stale: CacheEntry | None = None
+    ) -> T:
         """Return the document at ``url`` as ``parse`` reads it, cached for an hour (D-07).
 
         An expired entry is revalidated with its ``ETag`` and ``Last-Modified``, and a
         304 keeps its payload. Only a response that ``parse`` accepts is stored. The
-        payload is the cached object itself, so a public method returns a copy.
+        payload is the cached object itself, so a public method returns a copy. Concurrent
+        calls for one URL send one request. An entry that is still ``stale`` is
+        revalidated however fresh, and stays cached as it was if that fails.
         """
-        entry = self._cache.get(url)
-        if entry is not None and not entry.expired():
-            return entry.payload
-        headers = entry.validators() if entry is not None else {}
-        resp = await self._send("GET", url, params={"f": "json"}, headers=headers)
-        if resp.status != 304:
-            self._cache[url] = CacheEntry.store(parse(resp), resp.headers)
-        elif entry is not None and headers:
-            self._cache[url] = CacheEntry.store(entry.payload, resp.headers, entry)
-        else:
-            msg = "HTTP 304 to a request that sent no validators"
-            raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
-        return self._cache[url].payload
+        loop = asyncio.get_running_loop()
+        if loop is not self._locks_loop:
+            # A lock that has made a caller wait is bound to that loop.
+            self._locks, self._locks_loop = {}, loop
+        async with self._locks.setdefault(url, asyncio.Lock()):
+            entry = self._cache.get(url)
+            if entry is not None and entry is not stale and not entry.expired():
+                return entry.payload
+            headers = entry.validators() if entry is not None else {}
+            resp = await self._send("GET", url, params={"f": "json"}, headers=headers)
+            if resp.status != 304:
+                self._cache[url] = CacheEntry.store(parse(resp), resp.headers)
+            elif entry is not None and headers:
+                self._cache[url] = CacheEntry.store(entry.payload, resp.headers, entry)
+            else:
+                msg = "HTTP 304 to a request that sent no validators"
+                raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+            return self._cache[url].payload
+
+    async def _listed[T](
+        self,
+        url: str,
+        parse: Callable[[Response], T],
+        names: Callable[[T], list[str]],
+        wanted: Collection[str],
+    ) -> list[str]:
+        """Return the names the document at ``url`` lists, as ``names`` reads them.
+
+        When a copy cached before this call lacks a name in ``wanted``, the copy is
+        revalidated once, since the server may have added the name since.
+        """
+        before = self._cache.get(url)
+        found = names(await self._metadata(url, parse))
+        entry = self._cache[url]
+        if entry is before and not set(wanted) <= set(found):
+            found = names(await self._metadata(url, parse, stale=entry))
+        return found
+
+    async def _validate(
+        self, collection: str, params: Mapping[str, str] | None, id_property: str | None
+    ) -> None:
+        """Check a query against the cached collection index and queryables (D-47).
+
+        Raises
+        ------
+        ValidationError
+            If the index lacks ``collection``, a name in ``params`` is neither in
+            ``QUERY_PARAMS`` nor a queryable, or ``id_property`` is not a queryable.
+        ServiceError
+            If a metadata request fails.
+        """
+        index = f"{self.base_url}/collections"
+        ids = await self._listed(index, _collection_index, _collection_ids, [collection])
+        if collection not in ids:
+            msg = f"unknown collection {collection!r}; use one of {', '.join(ids)}"
+            raise ValidationError(msg)
+        filters = sorted(set(params or {}) - QUERY_PARAMS)
+        wanted = filters + ([id_property] if id_property else [])
+        if not wanted:
+            return
+        url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/queryables"
+        queryables = await self._listed(url, _schema, _property_names, wanted)
+        listing = ", ".join(queryables)
+        if unknown := [name for name in filters if name not in queryables]:
+            msg = (
+                f"unknown query parameter {', '.join(map(repr, unknown))} for {collection!r}; "
+                f"use a queryable ({listing}) or one of {', '.join(sorted(QUERY_PARAMS))}"
+            )
+            raise ValidationError(msg)
+        if id_property and id_property not in queryables:
+            msg = (
+                f"id_property {id_property!r} is not a queryable of {collection!r}; "
+                f"use one of {listing}"
+            )
+            raise ValidationError(msg)
 
     async def collections(self) -> Collections:
         """Return the collection index from ``/collections``.
@@ -486,6 +586,7 @@ class OGCService:
         filter: str | Mapping[str, Any] | None = None,  # noqa: A002
         ids: Sequence[str | int] | None = None,
         id_property: str | None = None,
+        validate: bool = True,
     ) -> AsyncIterator[Page]:
         """Yield each page of a collection's items, following ``next`` links (D-34).
 
@@ -523,6 +624,13 @@ class OGCService:
         id_property : str, optional
             The property ``ids`` matches, such as ``id`` for feature ids or
             ``monitoring_location_id`` for the sites of an NWIS time series.
+        validate : bool, optional
+            Before the first page request, check ``collection`` against the collection
+            index, and each name in ``params`` outside ``QUERY_PARAMS``, and
+            ``id_property``, against the collection's queryables, from metadata cached
+            for an hour (D-07). pygeoapi drops a name it does not know, so an unchecked
+            typo returns the whole collection. Defaults to ``True``; ``False`` skips the
+            check, for a server that accepts a name its queryables leave out.
 
         Yields
         ------
@@ -539,10 +647,14 @@ class OGCService:
             ``geometry`` is malformed, a CQL2-JSON filter holds a NaN or infinite
             number, a filter is empty, ``params`` also holds a parameter a keyword sets
             (``bbox``, ``filter``, ``filter-lang``) or a credential such as ``api_key``,
-            or ``limit`` is not an integer from 1 to the profile's ``max_limit``.
+            or ``limit`` is not an integer from 1 to the profile's ``max_limit``. With
+            ``validate``, before the first page request, when the collection, a name in
+            ``params``, or ``id_property`` is unknown; the message lists the valid ones.
         TypeError
             Before any request, when a CQL2-JSON filter holds a value JSON cannot
             encode, such as a set.
+        ServiceError
+            With ``validate``, when a metadata request fails.
         PaginationError
             When a request fails, a body is not a FeatureCollection with well-formed
             links, or a ``next`` link repeats one already followed, leaves the scheme,
@@ -559,6 +671,10 @@ class OGCService:
             ids=ids,
             id_property=id_property,
         )
+        if validate:
+            # The transport refuses a credential in params too, but only after validation sends.
+            reject_credentials(request.url, request.params)
+            await self._validate(collection, params, id_property)
         for piece in self._pieces(request):
             async for page in self._traverse(piece):
                 yield page
@@ -573,6 +689,7 @@ class OGCService:
         filter: str | Mapping[str, Any] | None = None,  # noqa: A002
         ids: Sequence[str | int] | None = None,
         id_property: str | None = None,
+        validate: bool = True,
         keep_pages: bool = False,
     ) -> QueryResult:
         """Fetch every page of a collection's items into one `QueryResult` (D-22).
@@ -581,8 +698,8 @@ class OGCService:
         ----------
         collection : str
             The collection id.
-        params, bbox, geometry, filter, ids, id_property
-            The query, as for `iter_pages`.
+        params, bbox, geometry, filter, ids, id_property, validate
+            The query and its check, as for `iter_pages`.
         keep_pages : bool, optional
             Keep each page's response bytes in ``Page.content`` (D-23). Page bodies
             are always dropped.
@@ -595,10 +712,13 @@ class OGCService:
         Raises
         ------
         ValidationError
-            Before any request, on a malformed query, as for `iter_pages`.
+            On a malformed query or, with ``validate``, an unknown name, as for
+            `iter_pages`.
         TypeError
             Before any request, when a CQL2-JSON filter holds a value JSON cannot
             encode, as for `iter_pages`.
+        ServiceError
+            With ``validate``, when a metadata request fails.
         PartialResultsError
             When a page fails after at least one succeeded. Its ``result`` holds the
             pages that succeeded.
@@ -618,6 +738,7 @@ class OGCService:
                 filter=filter,
                 ids=ids,
                 id_property=id_property,
+                validate=validate,
             ):
                 if page.body is None:
                     # Unreachable: _page always sets the body. Keeps the type narrow.
@@ -644,7 +765,12 @@ class OGCService:
         raise PartialResultsError(failure.failures, result) from failure
 
     async def item(
-        self, collection: str, item_id: str | int, *, params: Mapping[str, str] | None = None
+        self,
+        collection: str,
+        item_id: str | int,
+        *,
+        params: Mapping[str, str] | None = None,
+        validate: bool = True,
     ) -> Page:
         """Fetch one feature of a collection by its id (D-22).
 
@@ -657,6 +783,9 @@ class OGCService:
         params : mapping of str to str, optional
             Query parameters, such as ``crs`` or ``skipGeometry``, with ``f=json`` added
             unless given.
+        validate : bool, optional
+            Before the request, check ``collection`` against the cached collection
+            index, as `iter_pages` does. Defaults to ``True``.
 
         Returns
         -------
@@ -669,17 +798,21 @@ class OGCService:
         ------
         ServiceError
             If the request fails, with status 404 for an unknown id, or the body is not
-            a Feature whose ``links`` member, when present, is a list.
+            a Feature whose ``links`` member, when present, is a list. With
+            ``validate``, also when the metadata request fails.
         ValidationError
             Before any request, if ``collection`` or ``item_id`` is empty, ``.``, or
             ``..``, which would address another path, or ``params`` carries a credential
-            such as ``api_key``.
+            such as ``api_key``. With ``validate``, if the collection is unknown.
         """
         url = (
             f"{self.base_url}/collections/{path_segment(collection, 'collection')}"
             f"/items/{path_segment(item_id, 'item_id')}"
         )
         query = {"f": "json", **(params or {})}
+        if validate:
+            reject_credentials(url, query)
+            await self._validate(collection, None, None)
         resp = await self._send("GET", url, params=query)
         body = json_object(resp)
         links = body.get("links", [])

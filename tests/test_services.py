@@ -12,6 +12,8 @@ from water_ogcapi.exceptions import PaginationError, ServiceError
 
 FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}
 EMPTY_PAGE = {"type": "FeatureCollection", "features": [], "links": []}
+INDEX = {"collections": [{"id": "c"}]}
+QUERYABLES = {"type": "object", "properties": {"id": {"type": "string"}}}
 
 
 def recording() -> tuple[Transport, list[httpx2.Request]]:
@@ -21,15 +23,25 @@ def recording() -> tuple[Transport, list[httpx2.Request]]:
     def handler(request: httpx2.Request) -> httpx2.Response:
         seen.append(request)
         path = request.url.path
-        index = {"collections": []}
-        doc = FEATURE if "/items/" in path else EMPTY_PAGE if path.endswith("/items") else index
+        doc = (
+            FEATURE
+            if "/items/" in path
+            else EMPTY_PAGE
+            if path.endswith("/items")
+            else QUERYABLES
+            if path.endswith("/queryables")
+            else INDEX
+        )
         return httpx2.Response(200, json=doc)
 
     return Transport(transport=httpx2.MockTransport(handler), max_retries=0), seen
 
 
 def exercise(*services: OGCService) -> None:
-    """Send, from each service at once, the collection index, an item, a GET and a POST query."""
+    """Send, from each service at once, the collection index, an item, a GET and a POST query.
+
+    The POST query's check also fetches the queryables, so each service sends five requests.
+    """
 
     async def requests(service: OGCService) -> None:
         await service.collections()
@@ -51,7 +63,7 @@ def test_nwis_sends_the_key_read_at_construction_on_every_request(
     service = NWIS(transport=transport)
     monkeypatch.setenv("USGS_API_KEY", "changed")
     exercise(service)
-    assert [r.headers.get("x-api-key") for r in seen] == ["env-key"] * 4
+    assert [r.headers.get("x-api-key") for r in seen] == ["env-key"] * 5
     assert {r.url.host for r in seen} == {"api.waterdata.usgs.gov"}
 
 
@@ -82,7 +94,7 @@ def test_nwis_sends_the_key_to_a_next_link(monkeypatch: pytest.MonkeyPatch) -> N
         return httpx2.Response(200, json=first if len(seen) == 1 else EMPTY_PAGE)
 
     transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
-    asyncio.run(NWIS(transport=transport).collect("c"))
+    asyncio.run(NWIS(transport=transport).collect("c", validate=False))
     assert [(str(r.url), r.headers.get("x-api-key")) for r in seen][1] == (href, "env-key")
     assert seen[0].headers.get("x-api-key") == "env-key"
 
@@ -101,7 +113,7 @@ def test_fabricdata_sends_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("USGS_API_KEY", "env-key")
     transport, seen = recording()
     exercise(FabricData(transport=transport))
-    assert len(seen) == 4
+    assert len(seen) == 5
     assert not any("x-api-key" in r.headers for r in seen)
     assert {r.url.host for r in seen} == {"api.water.usgs.gov"}
 
@@ -116,7 +128,7 @@ def test_the_key_never_reaches_geoconnex_on_a_shared_transport(
         host: [r.headers.get("x-api-key") for r in seen if r.url.host == host]
         for host in ("api.waterdata.usgs.gov", "reference.geoconnex.us")
     }
-    assert keys == {"api.waterdata.usgs.gov": ["env-key"] * 4, "reference.geoconnex.us": [None] * 4}
+    assert keys == {"api.waterdata.usgs.gov": ["env-key"] * 5, "reference.geoconnex.us": [None] * 5}
 
 
 @pytest.mark.parametrize(
@@ -128,7 +140,7 @@ def test_a_service_sends_its_profile_page_sizes(
 ) -> None:
     transport, seen = recording()
     client = service(transport=transport)
-    asyncio.run(client.collect("c"))
+    asyncio.run(client.collect("c", validate=False))
     assert seen[0].url.params["limit"] == str(default)
     assert str(seen[0].url).startswith(f"{client.base_url}/collections/c/items?")
     with pytest.raises(ValueError, match=f"from 1 to {cap},"):

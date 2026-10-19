@@ -29,6 +29,16 @@ FIXTURES = Path(__file__).parent / "fixtures"
 BASE = "https://api.waterdata.usgs.gov/ogcapi/v1"
 
 
+@pytest.fixture(autouse=True)
+def unchecked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Send no metadata request before a query; tests/test_validation.py covers the check."""
+
+    async def skip(*_: object) -> None:
+        return None
+
+    monkeypatch.setattr(OGCService, "_validate", skip)
+
+
 def body(path: str) -> dict[str, Any]:
     return json.loads((FIXTURES / path).read_text())["response"]["body"]
 

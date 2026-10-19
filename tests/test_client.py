@@ -14,7 +14,8 @@ from typing import Any
 import httpx2
 import pytest
 
-from water_ogcapi import OGCService, Page, QueryResult, ServiceProfile
+from water_ogcapi import OGCService, Page, QueryResult, Schema, ServiceProfile
+from water_ogcapi._cache import TTL
 from water_ogcapi._query import Request
 from water_ogcapi._transport import Transport
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ServiceError
@@ -54,7 +55,7 @@ def test_collections_are_fetched_once() -> None:
         return await service.collections(), await service.collections()
 
     first, second = asyncio.run(run())
-    assert first is second
+    assert first == second
     assert first.collections
     assert [str(r.url) for r in seen] == [f"{BASE}/collections?f=json"]
 
@@ -79,6 +80,153 @@ def test_a_body_without_a_collections_list_is_not_cached() -> None:
         return await service.collections()
 
     assert asyncio.run(run()).collections
+    assert len(seen) == 2
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """The cache's clock, advanced by adding to its one element."""
+    now = [1000.0]
+    monkeypatch.setattr("water_ogcapi._cache.monotonic", lambda: now[0])
+    return now
+
+
+def test_an_expired_entry_revalidates_and_a_304_keeps_its_payload(clock: list[float]) -> None:
+    transport, seen = serve(
+        httpx2.Response(200, json=body("nwis/collections.json"), headers={"ETag": '"v1"'}),
+        httpx2.Response(304, headers={"ETag": '"v2"'}),
+        httpx2.Response(304),
+        httpx2.Response(304),
+    )
+    service = OGCService(BASE, transport=transport)
+
+    async def run() -> list[Any]:
+        results = [await service.collections()]
+        clock[0] += TTL
+        results += [await service.collections(), await service.collections()]
+        for _ in range(2):
+            clock[0] += TTL
+            results.append(await service.collections())
+        return results
+
+    results = asyncio.run(run())
+    assert all(result == results[0] for result in results)
+    # The third call is served from the entry the 304 renewed. A 304's ETag replaces
+    # the stored one, and a 304 without one keeps it.
+    assert [r.headers.get("if-none-match") for r in seen] == [None, '"v1"', '"v2"', '"v2"']
+
+
+def test_last_modified_revalidates_with_if_modified_since(clock: list[float]) -> None:
+    stamp = "Wed, 07 Oct 2026 12:00:00 GMT"
+    transport, seen = serve(
+        httpx2.Response(200, json=body("nwis/collections.json"), headers={"Last-Modified": stamp}),
+        httpx2.Response(304),
+    )
+    service = OGCService(BASE, transport=transport)
+
+    async def run() -> None:
+        await service.collections()
+        clock[0] += TTL
+        await service.collections()
+
+    asyncio.run(run())
+    assert seen[1].headers.get("if-modified-since") == stamp
+    assert "if-none-match" not in seen[1].headers
+
+
+def test_an_expired_entry_without_validators_is_replaced(clock: list[float]) -> None:
+    transport, seen = serve(body("nwis/collections.json"), body("geoconnex/collections.json"))
+    service = OGCService(BASE, transport=transport)
+
+    async def run() -> tuple[Any, Any]:
+        first = await service.collections()
+        clock[0] += TTL
+        return first, await service.collections()
+
+    first, second = asyncio.run(run())
+    assert first != second
+    assert not {"if-none-match", "if-modified-since"} & set(seen[1].headers)
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_a_304_to_a_request_without_validators_raises(clock: list[float], cached: bool) -> None:
+    replies = [body("nwis/collections.json")] if cached else []
+    transport, _ = serve(*replies, httpx2.Response(304))
+    service = OGCService(BASE, transport=transport)
+
+    async def run() -> None:
+        if cached:
+            await service.collections()
+            clock[0] += TTL
+        await service.collections()
+
+    with pytest.raises(ServiceError, match="sent no validators"):
+        asyncio.run(run())
+
+
+def test_a_caller_changing_a_result_leaves_the_cache_alone() -> None:
+    transport, _ = serve(body("nwis/daily/queryables.json"))
+    service = OGCService(BASE, transport=transport)
+
+    async def run() -> tuple[Any, Any]:
+        first = await service.queryables("daily")
+        for prop in first.properties.values():
+            for value in prop.extra.values():
+                if isinstance(value, list | dict):
+                    value.clear()
+        return first, await service.queryables("daily")
+
+    first, second = asyncio.run(run())
+    assert first != second
+    assert second == Schema.from_dict(body("nwis/daily/queryables.json"))
+
+
+def test_refresh_drops_the_cache_without_a_request() -> None:
+    transport, seen = serve(body("nwis/collections.json"), body("nwis/collections.json"))
+    service = OGCService(BASE, transport=transport)
+
+    async def run() -> int:
+        await service.collections()
+        service.refresh()
+        sent = len(seen)
+        await service.collections()
+        return sent
+
+    assert asyncio.run(run()) == 1
+    assert len(seen) == 2
+
+
+@pytest.mark.parametrize("name", ["queryables", "schema"])
+def test_property_documents_are_cached_per_collection(name: str) -> None:
+    doc = body(f"nwis/daily/{name}.json")
+    transport, seen = serve(doc, doc)
+    service = OGCService(BASE, transport=transport)
+    fetch = getattr(service, name)
+
+    async def run() -> tuple[Any, Any]:
+        first, again = await fetch("daily"), await fetch("daily")
+        await fetch("latest-daily")
+        return first, again
+
+    first, again = asyncio.run(run())
+    assert first == again
+    assert first.properties
+    assert [str(r.url) for r in seen] == [
+        f"{BASE}/collections/daily/{name}?f=json",
+        f"{BASE}/collections/latest-daily/{name}?f=json",
+    ]
+
+
+def test_a_property_document_without_properties_is_not_cached() -> None:
+    transport, seen = serve({"code": "InternalError"}, body("nwis/daily/queryables.json"))
+    service = OGCService(BASE, transport=transport)
+
+    async def run() -> Any:
+        with pytest.raises(ServiceError, match="properties object"):
+            await service.queryables("daily")
+        return await service.queryables("daily")
+
+    assert asyncio.run(run()).properties
     assert len(seen) == 2
 
 

@@ -181,8 +181,8 @@ Layering rule for anything new:
     document per URL for one hour (`_cache.TTL`) on the monotonic clock. A 304 renews
     the entry and replaces any validator it carries. A 304 to a request that sent no
     validators raises `ServiceError`. Each call returns a deep copy, since nested
-    `extra` values are plain lists and dicts (D-33). Concurrent misses on one URL each
-    send a request.
+    `extra` values are plain lists and dicts (D-33). Concurrent calls for one URL wait
+    on one request, behind a lock per URL that is dropped when the event loop changes.
 - **Limits:** No response from the three services carries `ETag` or `Last-Modified` (the
     NWIS probes of 2026-10-07 and every fixture), so revalidation never fires there and
     the cache works on its TTL alone. CloudFront in front of the USGS hosts serves
@@ -1116,23 +1116,22 @@ Layering rule for anything new:
 
 ### D-45: Input errors become a `ValidationError` that is also a `ValueError`
 
-- **Status:** accepted; lands with #20.
+- **Status:** accepted; built in #20, amended by D-47.
 - **Date:** 2026-10-15.
 - **Decision:** #20 adds `ValidationError`, a subclass of both `WaterOGCAPIError` and
     `ValueError`, and every check that rejects caller input before sending raises it:
     the query forms (D-39), `limit` (D-41), path segments, an `api_key` in `params`
-    (D-18), a malformed key (D-42), a malformed header value (D-43), and the `Transport`
-    arguments. Its message lists the valid options where a finite set exists. An
-    unencodable CQL2-JSON value stays a `TypeError`.
+    (D-18), a malformed key (D-42), a malformed header value (D-43), the `Transport`
+    arguments, and the `configure_logger` arguments. Its message lists the valid options
+    where a finite set exists. An unencodable CQL2-JSON value stays a `TypeError`.
 - **Why:** The 2026-10-15 project review counted about 12 sites raising bare
     `ValueError`, and every public Raises section promises it. Subclassing `ValueError`
     keeps those contracts and lets `except WaterOGCAPIError` catch input errors too, so
     #20 adds a type without breaking a caller. Chosen by the maintainer.
 - **Rejected:** A `ValidationError` under `WaterOGCAPIError` alone, which breaks every
     documented `ValueError` and any caller catching it.
-- **Limits:** Until #20 lands the checks raise plain `ValueError`. Errors parsing a
-    server's document (`_metadata.py`, `_results.py`) are not caller input and stay
-    `ValueError`.
+- **Limits:** Errors parsing a server's document (`_metadata.py`, `_results.py`) are not
+    caller input and stay `ValueError`.
 
 ### D-46: The sync API is a `water_ogcapi.sync` module of blocking twins
 
@@ -1171,6 +1170,34 @@ Layering rule for anything new:
     which a held traceback delays. #14's concurrent pieces put requests in flight
     between steps, so #14 cancels them when its generator closes and revisits this
     entry.
+
+### D-47: Queries are checked against cached metadata before the first page request
+
+- **Status:** accepted.
+- **Date:** 2026-10-19.
+- **Decision:** `iter_pages()`, `collect()`, and `item()` take `validate=True`. Before
+    the first page request each checks the collection against the cached collection
+    index, and `iter_pages()` and `collect()` also check `id_property` and each `params`
+    name outside `QUERY_PARAMS`, pygeoapi's 16 reserved names, against the collection's
+    cached `/queryables`. An unknown name raises `ValidationError` (D-45) listing the
+    valid ones. A copy cached before the call that lacks the name is revalidated once
+    first, since the server may have added it; a failed revalidation raises
+    `ServiceError` and leaves the copy as it was. `validate=False` skips the check.
+    Concurrent checks share one request per metadata URL (D-07). Chosen by the
+    maintainer.
+- **Why:** pygeoapi, which all three services run, drops a query parameter its provider
+    does not know. On 2026-10-19, `no_such_property=x` returned the whole collection
+    from GeoConnex `hu02` (22 features) and FabricData `gagesii` (9,322). NWIS answers
+    400 to an unknown property, but on the other two a typo widens the query and spends
+    quota. The check costs at most two metadata requests per collection per hour.
+- **Rejected:** Diagnosing a server's 400 or 404 after the fact, which sends no extra
+    request and misses the silent widening. A check with no way to skip it: OGC lets a
+    server accept a property its `/queryables` leaves out. Checking `sortby` and
+    `properties` values or CQL2 property references: `/queryables` lists filter
+    properties, and NWIS `daily` refuses `sortby=id` although `id` is a queryable.
+- **Limits:** A server parameter outside `QUERY_PARAMS` needs `validate=False`. A failed
+    metadata request raises `ServiceError` before any page request. `item()` checks only
+    the collection. Each unknown name costs one revalidation of a cached document.
 
 ## Lessons
 

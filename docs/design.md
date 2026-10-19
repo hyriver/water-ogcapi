@@ -170,13 +170,23 @@ Layering rule for anything new:
 
 ### D-07: In-memory, success-only metadata cache
 
-- **Status:** accepted; not yet written.
+- **Status:** accepted; built in #17.
 - **Decision:** Per-URL TTL. Writes only on 2xx. Revalidation with `ETag` and
     `Last-Modified`. Expired entries are kept so they can revalidate, and a 304 keeps
     the original payload. `refresh()` clears the cache and the collection index. No
     SQLite and no disk.
 - **Why:** Credentials travel in headers, so cache keys never contain them. The
     transport returns a 304 as a response so revalidation works.
+- **Current state:** `collections()`, `queryables()`, and `schema()` keep the parsed
+    document per URL for one hour (`_cache.TTL`) on the monotonic clock. A 304 renews
+    the entry and replaces any validator it carries. A 304 to a request that sent no
+    validators raises `ServiceError`. Each call returns a deep copy, since nested
+    `extra` values are plain lists and dicts (D-33). Concurrent misses on one URL each
+    send a request.
+- **Limits:** No response from the three services carries `ETag` or `Last-Modified` (the
+    NWIS probes of 2026-10-07 and every fixture), so revalidation never fires there and
+    the cache works on its TTL alone. CloudFront in front of the USGS hosts serves
+    metadata up to a day old, whatever this cache holds.
 
 ### D-08: Sync wrapper on a background event-loop thread
 

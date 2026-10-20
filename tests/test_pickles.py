@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from water_ogcapi import (
+    CRS,
     Collections,
-    Crs,
     Link,
     Page,
     Pagination,
@@ -42,7 +42,7 @@ PICKLED_PATHS = {
     ("water_ogcapi._metadata", "Schema"),
     ("water_ogcapi._metadata", "SpatialExtent"),
     ("water_ogcapi._metadata", "TemporalExtent"),
-    ("water_ogcapi._results", "Crs"),
+    ("water_ogcapi._results", "CRS"),
     ("water_ogcapi._results", "Link"),
     ("water_ogcapi._results", "Page"),
     ("water_ogcapi._results", "Pagination"),
@@ -89,7 +89,7 @@ def everything_pickled() -> list[object]:
         geojson={"type": "FeatureCollection", "features": []},
         pages=(page,),
         pagination=Pagination(None, 0, 1, "complete"),
-        crs=Crs(None, (), CRS84, "default"),
+        crs=CRS(None, (), CRS84, "default"),
     )
     failure = RateLimitError("rate limit exceeded", URL, retry_after=7.0, remaining=0)
     return [

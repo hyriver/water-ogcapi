@@ -22,10 +22,10 @@ if TYPE_CHECKING:
     type Members = Mapping[str, tuple[str, Callable[[Any], Any]]]
 
 __all__ = [
+    "CRS",
+    "CRSSource",
     "Check",
     "Completeness",
-    "Crs",
-    "CrsSource",
     "Link",
     "Page",
     "Pagination",
@@ -36,7 +36,7 @@ __all__ = [
 Check = Literal["end_of_links", "count"]
 Completeness = Literal["complete", "limited", "unknown"]
 StopReason = Literal["limit", "failure"]
-CrsSource = Literal["content_crs", "default", "unconfirmed", "unknown"]
+CRSSource = Literal["content_crs", "default", "unconfirmed", "unknown"]
 
 # Response headers a Page keeps. Anything unlisted is dropped, so a header nobody
 # thought of cannot carry a credential into a result.
@@ -330,7 +330,7 @@ class Pagination:
 
 
 @dataclass(frozen=True, slots=True)
-class Crs:
+class CRS:
     """The coordinate reference system of a result and how it was determined (D-37).
 
     Parameters
@@ -354,7 +354,7 @@ class Crs:
     requested: str | None
     page_crs: tuple[str | None, ...]
     effective: str | None
-    source: CrsSource
+    source: CRSSource
 
 
 CRS84 = "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
@@ -372,24 +372,24 @@ def _named_crs(page: Page) -> tuple[str, ...]:
     return tuple(dict.fromkeys(filter(None, (part.strip().strip("<>") for part in parts))))
 
 
-def crs_of(pages: Sequence[Page]) -> Crs:
+def crs_of(pages: Sequence[Page]) -> CRS:
     """Determine the CRS of ``pages`` from their ``Content-Crs`` headers and requests."""
     requested = _requested_crs(pages[0]) if pages else None
     per_page = [_named_crs(p) for p in pages]
     seen = tuple(", ".join(uris) or None for uris in per_page)
     named = {uri for uris in per_page for uri in uris}
     if len(named) == 1 and all(per_page):
-        return Crs(requested, seen, named.pop(), "content_crs")
+        return CRS(requested, seen, named.pop(), "content_crs")
     if named:
-        return Crs(requested, seen, None, "unknown")
+        return CRS(requested, seen, None, "unknown")
     # No page named a CRS. Each request's own query decides, since a next link may
     # drop or change the parameter. A server that applies crs must name it in
     # Content-Crs (OGC API Features Part 2, requirement 15), so a request no page
     # confirmed may have been ignored.
     asked = {None if crs == CRS84 else crs for crs in map(_requested_crs, pages)}
     if asked <= {None}:
-        return Crs(requested, seen, CRS84, "default")
-    return Crs(requested, seen, None, "unconfirmed" if len(asked) == 1 else "unknown")
+        return CRS(requested, seen, CRS84, "default")
+    return CRS(requested, seen, None, "unconfirmed" if len(asked) == 1 else "unknown")
 
 
 @dataclass(frozen=True, slots=True)
@@ -405,14 +405,14 @@ class QueryResult:
         bytes only with ``keep_pages=True`` (D-23).
     pagination : Pagination
         Counts and completeness of the traversal.
-    crs : Crs
+    crs : CRS
         The requested, per-page, and effective CRS, and how it was determined.
     """
 
     geojson: dict[str, Any] = field(repr=False)
     pages: tuple[Page, ...]
     pagination: Pagination
-    crs: Crs
+    crs: CRS
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "pages", _all_of(tuple(self.pages), Page, "pages"))

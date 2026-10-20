@@ -928,9 +928,10 @@ Layering rule for anything new:
 
 ### D-37: CRS provenance comes from `Content-Crs`, else the default
 
-- **Status:** accepted.
+- **Status:** accepted. Since 2026-10-20 the types are `CRS` and `CRSSource`,
+    capitalized as the acronym.
 - **Date:** 2026-10-13.
-- **Decision:** `QueryResult.crs` is a `Crs` with the first request's `crs` parameter
+- **Decision:** `QueryResult.crs` is a `CRS` with the first request's `crs` parameter
     (`requested`), each page's `Content-Crs` (`page_crs`), the CRS of the geometries
     (`effective`), and `source`. `effective` is the header when every page names the
     same CRS (`content_crs`), and `None` when pages name different CRSs or only some

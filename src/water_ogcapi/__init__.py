@@ -21,10 +21,10 @@ from water_ogcapi._metadata import (
     TemporalExtent,
 )
 from water_ogcapi._results import (
+    CRS,
     Check,
     Completeness,
-    Crs,
-    CrsSource,
+    CRSSource,
     Link,
     Page,
     Pagination,
@@ -40,13 +40,13 @@ except PackageNotFoundError:
     __version__ = "0.0.0+unknown"
 
 __all__ = [
+    "CRS",
     "NWIS",
+    "CRSSource",
     "Check",
     "Collection",
     "Collections",
     "Completeness",
-    "Crs",
-    "CrsSource",
     "Extent",
     "FabricData",
     "GeoConnex",

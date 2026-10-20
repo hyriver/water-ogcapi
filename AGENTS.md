@@ -199,6 +199,8 @@ Comments and commits:
 
 Reviews and reports, including API findings:
 
+- A code review follows `REVIEW.md`: what failure looks like here, what to skip, how to
+    report, and how deep to go.
 - Say which claims you checked against the source and which you infer.
 - Reserve prose for what changes the conclusion. Minor issues go in a numbered list at
     the end.

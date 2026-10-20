@@ -1,7 +1,8 @@
 """Collection metadata: the ``/collections``, ``/queryables``, and ``/schema`` documents.
 
 Each type carries the members it names as typed fields and every other member in a
-read-only ``extra``, so ``from_dict(doc).to_dict() == doc`` (L-04, D-33).
+read-only ``extra``, so ``from_dict(doc).to_dict() == doc`` (L-04, D-33). The parsers at
+the end build them from a service's responses (D-50).
 """
 
 from __future__ import annotations
@@ -10,11 +11,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
 from water_ogcapi._results import Link, ReadOnlyDict, as_str, empty_extra, from_members, to_members
+from water_ogcapi.exceptions import ServiceError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from water_ogcapi._results import Members
+    from water_ogcapi._transport import Response
 
 __all__ = [
     "Collection",
@@ -380,3 +383,75 @@ class Schema:
     def to_dict(self) -> dict[str, Any]:
         """Return the document as the server sent it."""
         return to_members(self, self._MEMBERS, self.extra)
+
+
+def json_object(
+    resp: Response, *, method: str = "GET", request_body: bytes | None = None
+) -> dict[str, Any]:
+    """Decode a response body that must be a JSON object.
+
+    ``method`` and ``request_body`` name the request in the error (D-38).
+
+    Raises
+    ------
+    ServiceError
+        If the body is not JSON, or is JSON of another type, such as a list.
+    """
+    try:
+        doc = resp.json()
+    except ValueError:
+        doc = None
+    if not isinstance(doc, dict):
+        # Raised outside the except block: a JSONDecodeError holds the whole body.
+        msg = "response body is not a JSON object"
+        raise ServiceError(
+            msg,
+            resp.url,
+            status=resp.status,
+            attempts=resp.attempts,
+            method=method,
+            request_body=request_body,
+        )
+    return cast("dict[str, Any]", doc)
+
+
+def parse_collections(resp: Response) -> Collections:
+    """Parse a ``/collections`` response.
+
+    Raises
+    ------
+    ServiceError
+        If the body is not a JSON object with a ``collections`` list, such as a
+        gateway's error document sent with a 200.
+    ValueError
+        If an entry of ``collections`` is not an object with a string ``id``.
+    """
+    doc = json_object(resp)
+    if not isinstance(doc.get("collections"), list):
+        msg = "response is not a collection index with a collections list"
+        raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+    return Collections.from_dict(doc)
+
+
+def parse_schema(resp: Response) -> Schema:
+    """Parse a ``/queryables`` or ``/schema`` response.
+
+    Raises
+    ------
+    ServiceError
+        If the body is not a JSON object with a ``properties`` object.
+    """
+    doc = json_object(resp)
+    if not isinstance(doc.get("properties"), dict):
+        msg = "response is not a JSON Schema with a properties object"
+        raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+    return Schema.from_dict(doc)
+
+
+def collection_ids(index: Collections) -> list[str]:
+    return [collection.id for collection in index.collections or ()]
+
+
+def property_names(schema: Schema) -> list[str]:
+    # A properties object with a member that is not an object stays whole in extra (D-33).
+    return list(schema.properties or schema.extra.get("properties", {}))

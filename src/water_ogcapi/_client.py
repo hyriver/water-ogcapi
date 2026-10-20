@@ -7,15 +7,25 @@ import copy
 import dataclasses
 import time
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 from urllib.parse import urljoin, urlsplit
 
 from water_ogcapi._cache import CacheEntry
 from water_ogcapi._governor import Governor
-from water_ogcapi._metadata import Collections, Schema, parse_link
+from water_ogcapi._metadata import (
+    Collections,
+    Schema,
+    collection_ids,
+    json_object,
+    parse_collections,
+    parse_link,
+    parse_schema,
+    property_names,
+)
+from water_ogcapi._paging import malformed_counts, next_href, parse_page, summarize
 from water_ogcapi._query import Request, items_request, path_segment
 from water_ogcapi._redact import REDACTED
-from water_ogcapi._results import Page, Pagination, QueryResult, crs_of
+from water_ogcapi._results import Page, QueryResult, crs_of
 from water_ogcapi._transport import Transport, parse_count, reject_credentials
 from water_ogcapi.exceptions import (
     PaginationError,
@@ -28,13 +38,11 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Collection, Sequence
 
     from water_ogcapi._query import GeoInterface
-    from water_ogcapi._results import Check, Completeness, Link
     from water_ogcapi._transport import Response
 
 __all__ = ["OGCService", "ServiceProfile"]
 
 DEFAULT_PORTS = {"http": 80, "https": 443}
-JSON_TYPES = frozenset({"application/geo+json", "application/json"})
 # The parameters pygeoapi reserves on an items request. Any other name filters on a
 # property, and pygeoapi drops a name its provider does not know, widening the query.
 QUERY_PARAMS = frozenset(
@@ -59,162 +67,6 @@ QUERY_PARAMS = frozenset(
 )
 
 
-def json_object(
-    resp: Response, *, method: str = "GET", request_body: bytes | None = None
-) -> dict[str, Any]:
-    """Decode a response body that must be a JSON object.
-
-    ``method`` and ``request_body`` name the request in the error (D-38).
-
-    Raises
-    ------
-    ServiceError
-        If the body is not JSON, or is JSON of another type, such as a list.
-    """
-    try:
-        doc = resp.json()
-    except ValueError:
-        doc = None
-    if not isinstance(doc, dict):
-        # Raised outside the except block: a JSONDecodeError holds the whole body.
-        msg = "response body is not a JSON object"
-        raise ServiceError(
-            msg,
-            resp.url,
-            status=resp.status,
-            attempts=resp.attempts,
-            method=method,
-            request_body=request_body,
-        )
-    return cast("dict[str, Any]", doc)
-
-
-def _collection_index(resp: Response) -> Collections:
-    """Parse a ``/collections`` response.
-
-    Raises
-    ------
-    ServiceError
-        If the body is not a JSON object with a ``collections`` list, such as a
-        gateway's error document sent with a 200.
-    ValueError
-        If an entry of ``collections`` is not an object with a string ``id``.
-    """
-    doc = json_object(resp)
-    if not isinstance(doc.get("collections"), list):
-        msg = "response is not a collection index with a collections list"
-        raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
-    return Collections.from_dict(doc)
-
-
-def _schema(resp: Response) -> Schema:
-    """Parse a ``/queryables`` or ``/schema`` response.
-
-    Raises
-    ------
-    ServiceError
-        If the body is not a JSON object with a ``properties`` object.
-    """
-    doc = json_object(resp)
-    if not isinstance(doc.get("properties"), dict):
-        msg = "response is not a JSON Schema with a properties object"
-        raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
-    return Schema.from_dict(doc)
-
-
-def _collection_ids(index: Collections) -> list[str]:
-    return [collection.id for collection in index.collections or ()]
-
-
-def _property_names(schema: Schema) -> list[str]:
-    # A properties object with a member that is not an object stays whole in extra (D-33).
-    return list(schema.properties or schema.extra.get("properties", {}))
-
-
-def _count(value: object) -> int | None:
-    """Return a JSON count, or ``None`` for anything but a non-negative integer."""
-    return value if type(value) is int and value >= 0 else None
-
-
-def _malformed_counts(body: Mapping[str, Any]) -> bool:
-    """Whether ``numberMatched`` or ``numberReturned`` is present but not a usable count.
-
-    A null reads as absent.
-    """
-    members = ("numberMatched", "numberReturned")
-    return any(body.get(key) is not None and _count(body[key]) is None for key in members)
-
-
-def _broken_next(link: object) -> bool:
-    """Whether ``link`` is a ``next`` link without a string ``href``."""
-    if not isinstance(link, dict):
-        return False
-    member = cast("dict[str, Any]", link)
-    return member.get("rel") == "next" and not isinstance(member.get("href"), str)
-
-
-def _page(
-    resp: Response, params: Mapping[str, str], method: str, request_body: bytes | None
-) -> Page:
-    """Build a `Page` from a response whose body is a FeatureCollection.
-
-    Raises
-    ------
-    ServiceError
-        If the body is not a FeatureCollection with a ``features`` list, or its
-        ``links`` member is not a list or holds a ``next`` link without a string
-        ``href``. Either would otherwise read as the last page (D-34).
-    """
-    body = json_object(resp, method=method, request_body=request_body)
-    features = body.get("features")
-    links = body.get("links", [])
-    if body.get("type") != "FeatureCollection" or not isinstance(features, list):
-        msg = "response is not a FeatureCollection with a features list"
-        raise ServiceError(
-            msg,
-            resp.url,
-            status=resp.status,
-            attempts=resp.attempts,
-            method=method,
-            request_body=request_body,
-        )
-    if not isinstance(links, list) or any(map(_broken_next, links)):
-        msg = "response has a malformed links member or next link"
-        raise ServiceError(
-            msg,
-            resp.url,
-            status=resp.status,
-            attempts=resp.attempts,
-            method=method,
-            request_body=request_body,
-        )
-    return Page(
-        url=resp.url,
-        params=params,
-        status=resp.status,
-        headers=resp.headers,
-        links=tuple(filter(None, map(parse_link, links))),
-        fetched_at=time.time(),
-        number_matched=_count(body.get("numberMatched")),
-        number_returned=_count(body.get("numberReturned")),
-        feature_count=len(features),
-        body=body,
-        content=resp.content,
-        method=method,
-        request_body=request_body,
-    )
-
-
-def _next_href(links: tuple[Link, ...]) -> str | None:
-    """Return the ``next`` link to follow: the first of a JSON or unstated type, else the first."""
-    nexts = [link for link in links if link.rel == "next"]
-    for link in nexts:
-        media_type = (link.type or "application/json").partition(";")[0].strip().lower()
-        if media_type in JSON_TYPES:
-            return link.href
-    return nexts[0].href if nexts else None
-
-
 def _origin(url: str) -> tuple[str, str | None, int | None] | None:
     """Return the scheme, host, and port of ``url``, the port defaulted by scheme."""
     try:
@@ -224,28 +76,6 @@ def _origin(url: str) -> tuple[str, str | None, int | None] | None:
         return None
     scheme = parts.scheme.lower()
     return scheme, parts.hostname, DEFAULT_PORTS.get(scheme) if port is None else port
-
-
-def _pagination(pages: list[Page], *, failed: bool, malformed: bool) -> Pagination:
-    """Summarize a traversal: counts, the checks that passed, and completeness (D-36)."""
-    reported = {p.number_matched for p in pages if p.number_matched is not None}
-    matched = next(iter(reported)) if len(reported) == 1 else None
-    returned = sum(p.feature_count for p in pages)
-    sort_by = pages[0].params.get("sortby") if pages else None
-    if failed:
-        return Pagination(matched, returned, len(pages), "limited", "failure", sort_by)
-    # The traversal ended on a page without a next link. A malformed count, a count that
-    # disagrees with numberMatched, a page whose numberReturned differs from its features,
-    # or pages that disagree with each other, leave the result unknown.
-    checks: tuple[Check, ...] = ("end_of_links",)
-    if matched is not None and matched == returned:
-        checks += ("count",)
-    short = any(p.number_returned not in (None, p.feature_count) for p in pages)
-    mismatch = matched is not None and matched != returned
-    completeness: Completeness = (
-        "unknown" if malformed or short or len(reported) > 1 or mismatch else "complete"
-    )
-    return Pagination(matched, returned, len(pages), completeness, sort_by=sort_by, checks=checks)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -442,7 +272,7 @@ class OGCService:
             If a metadata request fails.
         """
         index = f"{self.base_url}/collections"
-        ids = await self._listed(index, _collection_index, _collection_ids, [collection])
+        ids = await self._listed(index, parse_collections, collection_ids, [collection])
         if collection not in ids:
             msg = f"unknown collection {collection!r}; use one of {', '.join(ids)}"
             raise ValidationError(msg)
@@ -451,7 +281,7 @@ class OGCService:
         if not wanted:
             return
         url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/queryables"
-        queryables = await self._listed(url, _schema, _property_names, wanted)
+        queryables = await self._listed(url, parse_schema, property_names, wanted)
         listing = ", ".join(queryables)
         if unknown := [name for name in filters if name not in queryables]:
             msg = (
@@ -479,7 +309,7 @@ class OGCService:
         ValueError
             If an entry of ``collections`` is not an object with a string ``id``.
         """
-        index = await self._metadata(f"{self.base_url}/collections", _collection_index)
+        index = await self._metadata(f"{self.base_url}/collections", parse_collections)
         # A deep copy: nested values in ``extra`` are plain lists and dicts (D-33).
         return copy.deepcopy(index)
 
@@ -502,7 +332,7 @@ class OGCService:
             Before any request, if ``collection`` is empty, ``.``, or ``..``.
         """
         url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/queryables"
-        return copy.deepcopy(await self._metadata(url, _schema))
+        return copy.deepcopy(await self._metadata(url, parse_schema))
 
     async def schema(self, collection: str) -> Schema:
         """Return the properties each feature of ``collection`` carries.
@@ -523,7 +353,7 @@ class OGCService:
             Before any request, if ``collection`` is empty, ``.``, or ``..``.
         """
         url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/schema"
-        return copy.deepcopy(await self._metadata(url, _schema))
+        return copy.deepcopy(await self._metadata(url, parse_schema))
 
     def refresh(self) -> None:
         """Drop every cached metadata document, so the next call fetches it again."""
@@ -549,13 +379,13 @@ class OGCService:
         while True:
             try:
                 resp = await self._send(method, url, params=query, headers=headers, content=content)
-                page = _page(resp, query, method.upper(), content)
+                page = parse_page(resp, query, method.upper(), content)
             except ServiceError as err:
                 raise PaginationError([err]) from err
             yield page
             # Holds the first request as sent too, so a next link back to it is a repeat.
             followed.add(page.url)
-            href = _next_href(page.links)
+            href = next_href(page.links)
             if href is None:
                 return
             # RFC 8288 allows a relative reference; the origin check needs it absolute.
@@ -746,10 +576,10 @@ class OGCService:
                 validate=validate,
             ):
                 if page.body is None:
-                    # Unreachable: _page always sets the body. Keeps the type narrow.
+                    # Unreachable: parse_page always sets the body. Keeps the type narrow.
                     raise AssertionError  # pragma: no cover
                 features.extend(page.body["features"])
-                malformed = malformed or _malformed_counts(page.body)
+                malformed = malformed or malformed_counts(page.body)
                 pages.append(
                     dataclasses.replace(
                         page, body=None, content=page.content if keep_pages else None
@@ -760,7 +590,7 @@ class OGCService:
         result = QueryResult(
             geojson={"type": "FeatureCollection", "features": features},
             pages=tuple(pages),
-            pagination=_pagination(pages, failed=failure is not None, malformed=malformed),
+            pagination=summarize(pages, failed=failure is not None, malformed=malformed),
             crs=crs_of(pages),
         )
         if failure is None:

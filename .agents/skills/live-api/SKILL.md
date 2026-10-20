@@ -20,6 +20,11 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
     server may echo query parameters into the `next` links of the response body.
 - Scrub at record time, before anything is written to disk. Store no request headers.
 - GeoConnex takes no key. Never send it one.
+- The HTTP/2 encoder logs headers: `hpack` writes every header value, the key included,
+    at DEBUG on its own logger, and the package raises that logger to INFO at import
+    (D-20). A test that the key never reaches a log captures the root logger at DEBUG
+    while the real encoder runs. A mocked transport skips the encoder, so it proves only
+    the layers above it.
 - A server can echo the key back: a redirect's `Location` has carried it as a query
     parameter. Pipe every probe's output through a filter that replaces the key's value,
     and request a base URL with its trailing slash, since the bare form redirects.

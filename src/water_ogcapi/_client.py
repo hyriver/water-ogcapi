@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 from urllib.parse import urljoin, urlsplit
 
 from water_ogcapi._cache import CacheEntry
+from water_ogcapi._governor import Governor
 from water_ogcapi._metadata import Collections, Schema, parse_link
 from water_ogcapi._query import Request, items_request, path_segment
 from water_ogcapi._redact import REDACTED
@@ -259,18 +260,20 @@ class ServiceProfile:
         The ``limit`` an items query sends when its ``params`` hold none.
     max_limit : int
         The largest ``limit`` the service accepts.
-    rate_limit_headers : bool
-        Whether responses carry ``X-RateLimit-*`` headers (D-06).
     key_env : str or None, optional
         The environment variable that holds the service's API key, sent in the
         ``X-Api-Key`` header (D-18). ``None``, the default, for a service sent no key.
+    rate_limit_window : float or None, optional
+        Seconds over which the service's ``X-RateLimit-Limit`` counts, read by its
+        `Governor` (D-49). ``None``, the default, for a service that sends no
+        ``X-RateLimit-*`` headers.
     """
 
     base_url: str
     default_limit: int
     max_limit: int
-    rate_limit_headers: bool
     key_env: str | None = None
+    rate_limit_window: float | None = None
 
 
 class OGCService:
@@ -292,9 +295,9 @@ class OGCService:
     Attributes
     ----------
     profile : ServiceProfile or None
-        The service's page sizes and key convention, set by each service class.
-        ``None`` here: a query sends the server's default ``limit`` and any ``limit``
-        goes unchecked.
+        The service's page sizes, key convention, and rate-limit window, set by each
+        service class. ``None`` here: a query sends the server's default ``limit``, any
+        ``limit`` goes unchecked, and requests start 1 s apart (D-49).
     """
 
     profile: ClassVar[ServiceProfile | None] = None
@@ -308,6 +311,7 @@ class OGCService:
         self._base_url = base_url.rstrip("/")
         self._owns_transport = transport is None
         self._transport = Transport() if transport is None else transport
+        self._governor = Governor(None if self.profile is None else self.profile.rate_limit_window)
         self._cache: dict[str, CacheEntry] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._locks_loop: asyncio.AbstractEventLoop | None = None
@@ -372,6 +376,7 @@ class OGCService:
             params=params,
             headers={**self._headers(), **(headers or {})},
             content=content,
+            governor=self._governor,
         )
 
     async def _metadata[T](

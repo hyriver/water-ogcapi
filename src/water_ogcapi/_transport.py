@@ -24,6 +24,8 @@ from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationErro
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from water_ogcapi._governor import Governor
+
 __all__ = ["Response", "Transport"]
 
 RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
@@ -136,13 +138,27 @@ def _describe_location(location: str) -> str:
     return f"{target} (query omitted)" if parts.query or parts.fragment else target
 
 
+class _Unpaced:
+    """The governor of a request sent without one: no waits, nothing read."""
+
+    async def wait(self) -> None:
+        return None
+
+    def observe(self, _status: int, _headers: Mapping[str, str]) -> None:
+        return None
+
+
+_UNPACED = _Unpaced()
+
+
 class _RedirectedError(Exception):
     """A redirect, caught before httpx2 parses its ``Location``."""
 
-    def __init__(self, status: int, location: str) -> None:
+    def __init__(self, status: int, location: str, headers: Mapping[str, str]) -> None:
         super().__init__(status, location)
         self.status = status
         self.location = location
+        self.headers = headers
 
 
 async def _stop_at_redirect(response: httpx2.Response) -> None:
@@ -152,7 +168,7 @@ async def _stop_at_redirect(response: httpx2.Response) -> None:
     malformed ``Location`` then raises a ``RemoteProtocolError`` that reads as transient.
     """
     if response.has_redirect_location:
-        raise _RedirectedError(response.status_code, response.headers["location"])
+        raise _RedirectedError(response.status_code, response.headers["location"], response.headers)
 
 
 def _is_digits(value: str) -> bool:
@@ -426,15 +442,27 @@ class Transport:
         # this large already exceeds MAX_SLEEP.
         return min(self.backoff * 2 ** min(attempt, 1000), MAX_SLEEP)
 
+    def _retry_delay(self, resp: httpx2.Response, attempt: int) -> float | None:
+        """Seconds to wait before retrying ``resp``, or ``None`` to return or raise it now."""
+        if resp.status_code not in RETRY_STATUS:
+            return None
+        wait = parse_retry_after(resp.headers.get("retry-after"), resp.headers.get("date"))
+        if wait is not None and wait > MAX_SLEEP:
+            # Retrying earlier than asked would burn the remaining attempts against a
+            # window that has not reopened. Hand the wait to the caller.
+            return None
+        return self._delay(attempt) if wait is None else wait
+
     async def get(
         self,
         url: str,
         *,
         params: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
+        governor: Governor | None = None,
     ) -> Response:
         """Send a ``GET`` through `request`, which documents the parameters and errors."""
-        return await self.request("GET", url, params=params, headers=headers)
+        return await self.request("GET", url, params=params, headers=headers, governor=governor)
 
     async def request(
         self,
@@ -444,6 +472,7 @@ class Transport:
         params: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
         content: bytes | None = None,
+        governor: Governor | None = None,
     ) -> Response:
         """Send a request, retrying transient failures.
 
@@ -463,6 +492,9 @@ class Transport:
             Request headers, credentials included. Each value must be printable ASCII.
         content : bytes, optional
             Request body, sent unchanged on every attempt.
+        governor : Governor, optional
+            Paces every attempt, retries included, and reads the rate-limit headers of
+            every response (D-06). Each service class passes its own.
 
         Returns
         -------
@@ -492,11 +524,14 @@ class Transport:
         _reject_unsendable_headers(headers)
         method = method.upper()
         client, sem = self._bind()
+        pacer = _UNPACED if governor is None else governor
         # Every error names the request as sent, query included (docs/design.md D-24).
         sent = url
         for attempt in range(self.max_retries + 1):
             final = attempt == self.max_retries
             status: int | None = None
+            # Outside the permit, so a paced wait never blocks another service.
+            await pacer.wait()
             try:
                 async with sem, asyncio.timeout(self.timeout):
                     # Parsed inside the try so a malformed URL raises a typed ServiceError.
@@ -516,19 +551,16 @@ class Transport:
                 failure = f"TimeoutError: attempt exceeded {self.timeout} s"
                 transient = True
             except _RedirectedError as redirect:
+                pacer.observe(redirect.status, redirect.headers)
                 failure = f"server redirected to {_describe_location(redirect.location)}"
                 transient, status = False, redirect.status
             except (httpx2.HTTPError, httpx2.InvalidURL) as exc:
                 failure, transient = _describe(exc), _is_transient(exc)
             else:
-                if resp.status_code not in RETRY_STATUS or final:
+                pacer.observe(resp.status_code, resp.headers)
+                delay = None if final else self._retry_delay(resp, attempt)
+                if delay is None:
                     return _finalize(resp, attempts=attempt + 1, body=content)
-                wait = parse_retry_after(resp.headers.get("retry-after"), resp.headers.get("date"))
-                if wait is not None and wait > MAX_SLEEP:
-                    # Retrying earlier than asked would burn the remaining attempts
-                    # against a window that has not reopened. Hand the wait to the caller.
-                    return _finalize(resp, attempts=attempt + 1, body=content)
-                delay = self._delay(attempt) if wait is None else wait
                 logger.log(
                     logging.WARNING if resp.status_code == 429 else logging.INFO,
                     "%s %s returned HTTP %d; retry %d of %d in %.1f s",

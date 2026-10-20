@@ -17,6 +17,8 @@ both return.
 
 ::: water_ogcapi.Transport
 
+::: water_ogcapi.Governor
+
 ## Async API
 
 ::: water_ogcapi.aio

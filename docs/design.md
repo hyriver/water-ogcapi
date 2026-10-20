@@ -152,7 +152,7 @@ Layering rule for anything new:
 
 ### D-06: Quota governor per service
 
-- **Status:** accepted; the transport part exists, the governor does not.
+- **Status:** accepted; built in #18, as D-49 records.
 - **Decision:** Where rate-limit headers exist, read `X-RateLimit-Remaining` on every
     response and slow down before it runs out. Handle `Retry-After` when present and
     never assume it. Services without the headers get a conservative static default.
@@ -166,7 +166,8 @@ Layering rule for anything new:
     the wait. Other statuses raise at once. A `Retry-After` above 60 seconds
     (`MAX_SLEEP`) is raised to the caller, as `RateLimitError` on a 429 and
     `ServiceError` otherwise, since retrying earlier than asked burns the remaining
-    attempts against a window that has not reopened.
+    attempts against a window that has not reopened. The governor (D-49) paces every
+    attempt from the counts on the responses.
 
 ### D-07: In-memory, success-only metadata cache
 
@@ -690,9 +691,9 @@ Layering rule for anything new:
     `QueryResult` holds no headers or params of its own, so its pages carry its
     redaction.
 - **Why:** Each kept header has a consumer: CRS provenance (#22), the metadata cache
-    (D-07), the quota governor (D-06), and the gateway's request id, which identifies a
-    request in a report to USGS. A masked value keeps the evidence that a credential was
-    sent.
+    (D-07), a caller checking the counts the quota governor read from the transport's
+    responses (D-49), and the gateway's request id, which identifies a request in a
+    report to USGS. A masked value keeps the evidence that a credential was sent.
 - **Rejected:** Dropping a credential entry from the URL, which hides that it was sent.
     `MappingProxyType` for `params` and `headers`, which neither pickles nor passes
     through `dataclasses.asdict`. Redacting `body`, `content`, or `geojson`, which
@@ -1029,17 +1030,19 @@ Layering rule for anything new:
 - **Status:** accepted. Amends D-13.
 - **Date:** 2026-10-15.
 - **Decision:** `ServiceProfile` holds a service's base URL, its default and maximum
-    `limit`, whether it sends `X-RateLimit-*` headers (read by the governor, D-06), and
-    the environment variable holding its key (D-18). Each service class sets `profile`;
-    the base `OGCService` has none and sends no `limit`. An items query adds the
-    profile's `default_limit` when `params` hold no `limit`, and raises `ValueError`
-    before sending when `limit` is not an integer from 1 to `max_limit`. The defaults
-    are 10,000 on NWIS (D-13), 1,000 on FabricData, and 500 on GeoConnex.
-- **Why:** FabricData's server default of 10 spends 100 of its 300 requests a minute on
-    1,000 features. GeoConnex's 500 is its server default, sent explicitly so a server
-    change does not move it, and its HUC polygons make a 10,000-feature page large.
-    Chosen by the maintainer. NWIS and FabricData answer a `limit` above the cap with a
-    400 (D-30), and raising first names the cap.
+    `limit`, the environment variable holding its key (D-18), and, since D-49, the
+    window its `X-RateLimit-Limit` counts over, which the governor reads (D-06), or
+    `None` where it sends no such headers. Each service class sets `profile`; the base
+    `OGCService` has none and sends no `limit`. An items query adds the profile's
+    `default_limit` when `params` hold no `limit`, and raises `ValueError` before
+    sending when `limit` is not an integer from 1 to `max_limit`. The defaults are
+    10,000 on NWIS (D-13), 1,000 on FabricData, and 500 on GeoConnex.
+- **Why:** FabricData's server default of 10 spends 100 of its 300 requests on 1,000
+    features, a third of a minute's budget on the maintainer's reading (D-30).
+    GeoConnex's 500 is its server default, sent explicitly so a server change does not
+    move it, and its HUC polygons make a 10,000-feature page large. Chosen by the
+    maintainer. NWIS and FabricData answer a `limit` above the cap with a 400 (D-30),
+    and raising first names the cap.
 - **Rejected:** A sort key and a fan-out flag in the profile (D-35); the NWIS class
     carries fan-out (#14). Clamping an oversized `limit`, which changes the request
     without saying so.
@@ -1227,6 +1230,75 @@ Layering rule for anything new:
     thread hop (D-08). Static analysis reads each generated twin as an attribute, so the
     griffe extension `scripts/griffe_twins.py` documents it on the API page with the
     async method's parameters and docstring, and fails the docs build if it finds none.
+
+### D-49: The governor paces every attempt over the last eighth of the quota
+
+- **Status:** accepted. Amends D-06, D-41, and D-43.
+
+- **Date:** 2026-10-20.
+
+- **Decision:** Every `OGCService` builds a `Governor` from its profile's
+    `rate_limit_window` and passes it to `Transport.request()`, which awaits `wait()`
+    before every attempt, retries included, outside the concurrency permit, and calls
+    `observe()` on every response, a refused redirect included. With `remaining` of
+    `limit` left, a start waits this many seconds after the previous one, from 0 at an
+    eighth of the quota (`RAMP`) up to 60 (`MAX_SLEEP`), and 60 at zero:
+
+    ```text
+    window / remaining - 8 * window / limit
+    ```
+
+    Each `X-RateLimit-Limit` value keeps its own reading, and the widest interval read in
+    the last `window` seconds applies. A response with `x-cache: Hit` or a nonzero
+    `age`, or without both counts, changes no reading. While no reading from the last
+    `window` seconds applies, starts are 1 s apart (`STATIC_INTERVAL`), the only spacing
+    GeoConnex, unkeyed NWIS, and an `OGCService` without a profile get. A 429's
+    `Retry-After` holds back every later start, up to 60 s, and that 429's counts are
+    skipped. A wait rechecks when it wakes, so a reading or a 429 that arrives during it
+    applies, and a start is booked only when the request goes, so a cancelled wait books
+    nothing. `ServiceProfile.rate_limit_window` replaces the `rate_limit_headers` flag:
+    3,600 s on NWIS, the hour api.data.gov documents, 60 s on FabricData, and `None`,
+    the default, for a service that sends no `X-RateLimit-*` headers. A wait longer than
+    the static interval is logged at INFO.
+
+- **Why:** The retry loop consumes the 429 and 5xx responses, and a retry after a 0.5 s
+    backoff would jump a paced queue, so the hook sits in the transport, as D-01
+    planned. No service sends a reset header. Under a rolling window, spacing of
+    `window / remaining` cannot run the count out, and subtracting `8 * window / limit`
+    leaves the first seven eighths unpaced with no jump where the ramp starts: on a
+    default NWIS key, 7.2 s at 100 left, 43 s at 50, and the cap from 41. At a steady
+    rate the ramp settles at 89% of the quota. Against a mock rolling quota of 1,000 an
+    hour, a 2,500-page traversal sent 992 and 954 requests in its first two hours, with
+    no 429. A default NWIS key reports 1000 on `/items` and 4000 on metadata (D-30), and
+    a metadata reading must not relax a low items one. A CDN hit carries the cached
+    response's counts (D-30). The 1 s default keeps a host with no documented limit
+    under 3,600 requests an hour, and D-06 promises it to every service without the
+    headers. The 60 s cap keeps a long query moving at one request a minute, and if the
+    count still runs out, the transport's 429 handling takes over. A 429's `Retry-After`
+    is the server's own wait, which its zero count would stretch to 60 s. The maintainer
+    chose the transport hook, the 1 s default, the cap, the ramp, pacing a service without
+    a profile, and the single profile field, after advice from Codex, Gemini, and Fable.
+
+- **Rejected:** The governor in `OGCService._send()`, which leaves the transport as it
+    was but reads only the final response and leaves retries unpaced. State in
+    `Transport` keyed by origin, which merges keyed and unkeyed traffic and different
+    keys. A ramp that starts at the full quota, which settles at 62% of a rolling quota
+    (Fable's derivation). A constant spacing of `window / (0.8 * limit)` from the first
+    request, 4.5 s on a default NWIS key for every query. A static default of 5 s or 0.2
+    s. Raising an error once the wait passes 60 s, which stops a query the window may
+    still serve.
+
+- **Limits:** State is per service instance, so two instances sharing a key, or another
+    program using it, each see the server's count but not each other's requests.
+    `Remaining` lags a burst by seconds (D-30), and the first seven eighths go unpaced,
+    so concurrent requests can start on a stale reading near the ramp. A request that
+    waits for a transport permit after its slot starts late, so up to `max_concurrent`
+    can start together. A slower response with a higher count replaces a newer, lower
+    reading. A raised limit keeps the old limit's reading live for a full window. Below
+    about 41 left on a default NWIS key, the cap keeps the spacing short of what the
+    rolling window needs. FabricData's 60 s window rests on one probe. A response whose
+    headers arrive and whose body times out is not read. `request()` and `get()` take
+    the governor as a public keyword (D-43).
 
 ## Lessons
 

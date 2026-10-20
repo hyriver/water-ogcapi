@@ -15,6 +15,11 @@ docs/design.md it touches. -->
 - [ ] `pixi r -e test315 test`
 - [ ] `pixi r docs` (needed when `docs/`, `README.md`, or `zensical.toml` changed)
 
+## Risk and revert
+
+<!-- What this could break and for whom, the review depth REVIEW.md asks for, and how to
+undo it: a revert of this PR, or, after a release, a fix release. -->
+
 ## Design record
 
 - [ ] `docs/design.md` is updated, or this change makes, reverses, or answers nothing

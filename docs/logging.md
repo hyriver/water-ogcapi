@@ -12,6 +12,7 @@ records nor changes how they print, and a notebook shows each record once.
 | ------- | --------------------------------------------------------------------- |
 | WARNING | A 429 response that the transport waits out and retries               |
 | INFO    | A retry after a connection failure, a timeout, or a 5xx response      |
+| INFO    | A wait the quota governor adds for a low rate-limit count or a 429    |
 | DEBUG   | Each completed request, with its final URL, status, and attempt count |
 
 A request that fails, on its first attempt or after its last retry, raises

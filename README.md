@@ -8,7 +8,7 @@ A Python client for USGS water data services over OGC API Features. Its service 
 block, for scripts and notebooks, and `water_ogcapi.aio` holds their async twins.
 
 **Status:** early development. The async and sync query APIs and the metadata cache work
-on all three services; the quota governor and resume are in progress. The release
+on all three services, with the quota governor; resume is in progress. The release
 candidate on PyPI only reserves the name and has no query API, so install from this
 repository until the first final release.
 
@@ -17,6 +17,8 @@ repository until the first final release.
 - Blocking service classes for scripts and notebooks, Jupyter included.
 - Async twins in `water_ogcapi.aio`, over HTTP/2 with bounded concurrency.
 - Retries transient failures with exponential backoff and honors `Retry-After`.
+- Spaces requests further apart as a service's `X-RateLimit-Remaining` runs down, and
+    one second apart on a service that sends no rate-limit headers.
 - Checks a query's collection and parameter names against the service's metadata, so a
     typo raises an error listing the valid names before it can return the whole
     collection.

@@ -1207,7 +1207,9 @@ Layering rule for anything new:
 
 ### D-48: The blocking classes are the top-level names, the async ones are in `aio`
 
-- **Status:** accepted. Supersedes the module layout of D-46.
+- **Status:** accepted. Supersedes the module layout of D-46. Since 2026-10-20 a plain
+    `import water_ogcapi` binds `aio` and `exceptions`, both in `__all__`, so
+    `water_ogcapi.aio.NWIS` works and type-checks.
 - **Date:** 2026-10-19.
 - **Decision:** `water_ogcapi` exports the blocking `OGCService`, `NWIS`, `FabricData`,
     and `GeoConnex`, and `water_ogcapi.aio` exports the async classes under the same

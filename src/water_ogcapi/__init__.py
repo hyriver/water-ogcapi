@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from water_ogcapi import aio, exceptions
 from water_ogcapi._client import ServiceProfile
 from water_ogcapi._governor import Governor
 from water_ogcapi._logging import configure_logger
@@ -63,5 +64,7 @@ __all__ = [
     "TemporalExtent",
     "Transport",
     "__version__",
+    "aio",
     "configure_logger",
+    "exceptions",
 ]

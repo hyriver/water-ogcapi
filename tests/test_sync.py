@@ -7,6 +7,7 @@ import asyncio
 import importlib
 import inspect
 import multiprocessing
+import subprocess
 import sys
 import threading
 from typing import TYPE_CHECKING, Any
@@ -178,6 +179,12 @@ def test_errors_propagate_with_their_type() -> None:
 def test_the_root_classes_block_and_the_aio_classes_await(name: str) -> None:
     assert not inspect.iscoroutinefunction(getattr(water_ogcapi, name).collect)
     assert inspect.iscoroutinefunction(getattr(aio, name).collect)
+
+
+def test_a_plain_import_binds_aio_and_exceptions() -> None:
+    # A fresh interpreter: this one imported both submodules already.
+    code = "import water_ogcapi as w; w.aio.NWIS; w.exceptions.ServiceError"
+    subprocess.run([sys.executable, "-c", code], check=True)
 
 
 def test_the_sync_module_is_gone() -> None:

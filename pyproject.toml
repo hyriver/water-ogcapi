@@ -175,6 +175,7 @@ lint.ignore = [
   "TC003",   # stdlib typing-only imports are cheap, keep simple for docs
   "TRY301",  # raising within try/except is fine for us
 ]
+lint.per-file-ignores.".agents/skills/*/*.py" = [ "INP001" ]
 lint.per-file-ignores."docs/examples/*.{ipynb,py}" = [
   "B018",   # a bare expression displays a value in a notebook
   "E402",   # imports sit in the cell that first needs them

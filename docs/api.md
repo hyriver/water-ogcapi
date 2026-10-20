@@ -33,7 +33,7 @@ both return.
 
 ::: water_ogcapi.Link
 
-::: water_ogcapi.Crs
+::: water_ogcapi.CRS
 
 ## Collection metadata
 

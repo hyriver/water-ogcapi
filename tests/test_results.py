@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import pytest
 
-from water_ogcapi import Crs, Link, Page, Pagination, QueryResult
+from water_ogcapi import CRS, Link, Page, Pagination, QueryResult
 from water_ogcapi._results import CRS84, REDACTED, crs_of, redact_url
 
 SECRET = "SECRET"
@@ -41,7 +41,7 @@ def make_result(*pages: Page) -> QueryResult:
         geojson={"type": "FeatureCollection", "features": []},
         pages=pages,
         pagination=pagination,
-        crs=Crs(None, (), CRS84, "default"),
+        crs=CRS(None, (), CRS84, "default"),
     )
 
 
@@ -224,7 +224,7 @@ def test_crs_reads_the_request_as_sent() -> None:
 
 
 def test_crs_of_no_pages_is_the_default() -> None:
-    assert crs_of([]) == Crs(None, (), CRS84, "default")
+    assert crs_of([]) == CRS(None, (), CRS84, "default")
 
 
 def test_crs_is_unknown_when_a_next_link_drops_or_changes_the_requested_crs() -> None:

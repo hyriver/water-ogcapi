@@ -676,7 +676,7 @@ Layering rule for anything new:
 
 ### D-29: What a `Page` keeps of a request and response
 
-- **Status:** accepted.
+- **Status:** accepted. D-51 keeps the paths these types pickle under.
 - **Date:** 2026-10-08.
 - **Decision:** `Page` redacts in its constructor. Its `url` and each `Link.href` mask
     the value of a credential query parameter (`api_key`, read percent-decoded, in any
@@ -1327,6 +1327,28 @@ Layering rule for anything new:
 - **Limits:** D-44's reason for keeping page parsing in place, that neither #14 nor #21
     adds to it, still holds; the move is for reading. `_metadata.py` imports
     `ServiceError`, so the metadata types now load the exception module.
+
+### D-51: Pickled results keep their module paths across releases
+
+- **Status:** accepted. Amends D-29.
+- **Date:** 2026-10-20.
+- **Decision:** A pickle names each type by its defining module, such as
+    `water_ogcapi._results.Page`. Those paths, listed as `PICKLED_PATHS` in
+    `tests/test_pickles.py`, stay importable across releases: a module move leaves an
+    alias at the old path, and a newly pickled type joins the list. The exported classes
+    keep their real `__module__`.
+- **Why:** pickle imports a class from the path it recorded, so a later release loads a
+    saved `QueryResult` only while that path resolves. The test pickles a result, the
+    metadata types, `ServiceProfile`, and each public exception, and fails when the set
+    of paths changes, so a move cannot land without its alias. Chosen by the maintainer.
+- **Rejected:** Setting `__module__ = "water_ogcapi"` on the exported classes, as httpx
+    does. Pickles would name the public paths and modules could move freely, but
+    `inspect.getsource` and Jupyter's `Page??` raise `OSError` for every exported class
+    (checked on Python 3.12 and 3.15), and the private `ReadOnlyDict` would still need a
+    pinned path. Promising nothing across versions.
+- **Limits:** The promise covers paths only. A frozen slots dataclass pickles its fields
+    as a list in field order, so adding, removing, or reordering a field still breaks an
+    old pickle of that type. Only the types the test pickles are pinned.
 
 ## Lessons
 

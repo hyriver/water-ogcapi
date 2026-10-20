@@ -8,6 +8,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 
 from water_ogcapi._client import ServiceProfile
+from water_ogcapi._governor import Governor
 from water_ogcapi._logging import configure_logger
 from water_ogcapi._metadata import (
     Collection,
@@ -48,6 +49,7 @@ __all__ = [
     "Extent",
     "FabricData",
     "GeoConnex",
+    "Governor",
     "Link",
     "OGCService",
     "Page",

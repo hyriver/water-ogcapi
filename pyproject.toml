@@ -273,6 +273,7 @@ ini_options.addopts = [
 ]
 ini_options.markers = [
   "network: tests that make requests to external services",
+  "paced: tests that keep the quota governor's waits, which tests/conftest.py skips",
 ]
 
 [tool.coverage]

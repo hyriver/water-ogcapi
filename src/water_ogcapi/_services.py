@@ -19,22 +19,23 @@ NWIS_PROFILE = ServiceProfile(
     base_url="https://api.waterdata.usgs.gov/ogcapi/v1/",
     default_limit=10_000,
     max_limit=50_000,
-    rate_limit_headers=True,
     key_env="USGS_API_KEY",
+    # The hour api.data.gov documents.
+    rate_limit_window=3_600.0,
 )
 
 FABRICDATA_PROFILE = ServiceProfile(
     base_url="https://api.water.usgs.gov/fabric/pygeoapi/",
     default_limit=1_000,
     max_limit=1_000,
-    rate_limit_headers=True,
+    # One probe fits a rolling minute (D-30); USGS states no window.
+    rate_limit_window=60.0,
 )
 
 GEOCONNEX_PROFILE = ServiceProfile(
     base_url="https://reference.geoconnex.us/",
     default_limit=500,
     max_limit=10_000,
-    rate_limit_headers=False,
 )
 
 

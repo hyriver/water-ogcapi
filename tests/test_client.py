@@ -1010,9 +1010,7 @@ def test_pagination_records_the_requested_sort_key() -> None:
 class Capped(OGCService):
     """A service whose profile sends 10 features a page by default and accepts 50."""
 
-    profile = ServiceProfile(
-        base_url=GEOCONNEX, default_limit=10, max_limit=50, rate_limit_headers=False
-    )
+    profile = ServiceProfile(base_url=GEOCONNEX, default_limit=10, max_limit=50)
 
 
 @pytest.mark.parametrize(

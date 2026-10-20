@@ -1098,7 +1098,8 @@ Layering rule for anything new:
 
 ### D-44: `_query.py` builds the request, and `_pieces()` is the fan-out seam
 
-- **Status:** accepted. Amends D-38 and D-39.
+- **Status:** accepted. Amends D-38 and D-39. D-50 moved page parsing out of
+    `_client.py` after all.
 - **Date:** 2026-10-15.
 - **Decision:** `_query.py` builds the first request of an items query with no I/O:
     `items_request()` validates the query forms (D-39) and returns a `Request` holding
@@ -1114,8 +1115,9 @@ Layering rule for anything new:
 - **Rejected:** Moving page parsing (`_page()`, `_pagination()`) out as well; neither
     #14 nor #21 adds to it.
 - **Limits:** The base `iter_pages()` runs pieces one after another; #14 adds the
-    concurrency. `_pagination()` summarizes one traversal, so across pieces it takes
-    `sort_by` from the first page and its `numberMatched` agreement check does not hold.
+    concurrency. `summarize()` (`_pagination()` before D-50) summarizes one traversal,
+    so across pieces it takes `sort_by` from the first page and its `numberMatched`
+    agreement check does not hold.
 
 ### D-45: Input errors become a `ValidationError` that is also a `ValueError`
 
@@ -1299,6 +1301,32 @@ Layering rule for anything new:
     rolling window needs. FabricData's 60 s window rests on one probe. A response whose
     headers arrive and whose body times out is not read. `request()` and `get()` take
     the governor as a public keyword (D-43).
+
+### D-50: `_client.py` holds the service class, and response parsing lives beside its types
+
+- **Status:** accepted. Amends D-44.
+- **Date:** 2026-10-20.
+- **Decision:** The package keeps flat private modules at its root. `_metadata.py` holds
+    the parsers of metadata responses (`json_object()`, `parse_collections()`,
+    `parse_schema()`, `collection_ids()`, `property_names()`), and `_paging.py` holds
+    page parsing and the traversal summary (`parse_page()`, `next_href()`,
+    `malformed_counts()`, `summarize()`). `_client.py` keeps `ServiceProfile`,
+    `OGCService`, the origin check, and the reserved query names.
+- **Why:** `_client.py` had reached 850 lines holding three concerns: metadata response
+    parsing, page parsing and completeness accounting, and the service class. A reader
+    looking for how a page is checked now opens a 126-line module. The moved functions
+    are unchanged apart from their names, which drop the underscore because they cross a
+    module boundary. Chosen by the maintainer, after advice from Codex.
+- **Rejected:** One private package (`_utils/` or `_internal/`) holding modules with
+    plain names, which moves the privacy marker up one level, lengthens every import and
+    doc path, and changes about 45 test references and `scripts/griffe_twins.py`'s
+    `pkg["_sync"]` lookup without changing what a reader must follow. Private
+    subpackages by layer, such as `_http/`, before #14, #21, or the HyRiver shared
+    client give a boundary a consumer; `_redact.py` serves the result and error types,
+    so it would not sit in an HTTP package.
+- **Limits:** D-44's reason for keeping page parsing in place, that neither #14 nor #21
+    adds to it, still holds; the move is for reading. `_metadata.py` imports
+    `ServiceError`, so the metadata types now load the exception module.
 
 ## Lessons
 

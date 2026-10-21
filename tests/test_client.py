@@ -44,7 +44,9 @@ def body(path: str) -> dict[str, Any]:
     return json.loads((FIXTURES / path).read_text())["response"]["body"]
 
 
-def serve(*replies: dict[str, Any] | httpx2.Response) -> tuple[Transport, list[httpx2.Request]]:
+def serve(
+    *replies: dict[str, Any] | httpx2.Response, max_concurrent: int = 4
+) -> tuple[Transport, list[httpx2.Request]]:
     """A transport answering each request with the next reply, a dict as JSON."""
     seen: list[httpx2.Request] = []
     queue = list(replies)
@@ -54,7 +56,10 @@ def serve(*replies: dict[str, Any] | httpx2.Response) -> tuple[Transport, list[h
         reply = queue.pop(0)
         return reply if isinstance(reply, httpx2.Response) else httpx2.Response(200, json=reply)
 
-    return Transport(transport=httpx2.MockTransport(handler), max_retries=0), seen
+    transport = Transport(
+        transport=httpx2.MockTransport(handler), max_retries=0, max_concurrent=max_concurrent
+    )
+    return transport, seen
 
 
 def test_no_io_on_construction() -> None:
@@ -1102,20 +1107,21 @@ def test_a_profile_supplies_the_base_url() -> None:
 class Split(OGCService):
     """A service that splits every items query into two pieces by year."""
 
-    def _pieces(self, request: Request) -> list[Request]:
+    def _pieces(self, request: Request, *_: object) -> list[Request]:
         return [
             dataclasses.replace(request, params={**request.params, "datetime": year})
             for year in ("2020", "2021")
         ]
 
 
-def test_a_split_query_traverses_each_piece_in_order() -> None:
+def test_a_split_query_traverses_each_piece() -> None:
     page = without_next(hu02()[0])
     transport, seen = serve(page, page)
     pages, err = traverse(Split(GEOCONNEX, transport=transport), "hu02", bbox=(-78, 38, -77, 39))
     assert err is None
     assert len(pages) == 2
-    assert [dict(r.url.params) for r in seen] == [
+    sent = sorted((dict(r.url.params) for r in seen), key=lambda params: params["datetime"])
+    assert sent == [
         {"f": "json", "bbox": "-78.0,38.0,-77.0,39.0", "datetime": year}
         for year in ("2020", "2021")
     ]
@@ -1312,9 +1318,9 @@ def test_a_fabricdata_resume_keeps_its_port_443_links() -> None:
 
 
 def test_a_split_query_resumes_every_unsent_piece() -> None:
-    """A failure in the first piece leaves the second piece pending (D-52)."""
+    """A failure in the first piece leaves the second piece pending (D-52, D-56)."""
     page = without_next(hu02()[0])
-    transport, _ = serve(hu02()[0], httpx2.Response(500))
+    transport, _ = serve(hu02()[0], httpx2.Response(500), max_concurrent=1)
     _, err = collected(Split(GEOCONNEX, transport=transport))
     assert isinstance(err, PartialResultsError)
     assert err.checkpoint is not None
@@ -1350,7 +1356,7 @@ def test_a_refused_piece_keeps_the_other_pieces_pending() -> None:
     """The refused link goes last, so a resume runs the second piece and then refuses."""
     doc = hu02()[0]
     away = {**doc, "links": [{"rel": "next", "href": "https://elsewhere.test/items"}]}
-    transport, _ = serve(away)
+    transport, _ = serve(away, max_concurrent=1)
     _, err = collected(Split(GEOCONNEX, transport=transport))
     assert isinstance(err, PartialResultsError)
     assert err.checkpoint is not None
@@ -1358,6 +1364,7 @@ def test_a_refused_piece_keeps_the_other_pieces_pending() -> None:
     transport, seen = serve(without_next(doc))
     _, again = collected(Split(GEOCONNEX, transport=transport), resume=err.result)
     assert len(seen) == 1
+    assert dict(seen[0].url.params)["datetime"] == "2021"
     assert isinstance(again, PartialResultsError)
     assert "refused a URL outside" in str(again)
     assert again.checkpoint is None

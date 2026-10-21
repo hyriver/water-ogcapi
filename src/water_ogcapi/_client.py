@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 import dataclasses
 import time
+from collections import deque
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 from urllib.parse import urljoin, urlsplit
 
 from water_ogcapi._cache import CacheEntry
@@ -41,7 +43,14 @@ from water_ogcapi.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Collection, Sequence
+    from collections.abc import (
+        AsyncGenerator,
+        AsyncIterator,
+        Callable,
+        Collection,
+        Coroutine,
+        Sequence,
+    )
 
     from water_ogcapi._query import GeoInterface, RequestId
     from water_ogcapi._transport import Response
@@ -49,6 +58,7 @@ if TYPE_CHECKING:
 __all__ = ["OGCService", "ServiceProfile"]
 
 DEFAULT_PORTS = {"http": 80, "https": 443}
+REPEAT = "a next link repeats one already followed"
 # The parameters pygeoapi reserves on an items request. Any other name filters on a
 # property, and pygeoapi drops a name its provider does not know, widening the query.
 QUERY_PARAMS = frozenset(
@@ -116,6 +126,130 @@ class ServiceProfile:
     max_limit: int
     key_env: str | None = None
     rate_limit_window: float | None = None
+
+
+class _Run:
+    """The state of one `OGCService._run`: requests pending, in flight, and failed (D-56)."""
+
+    def __init__(
+        self,
+        start: Checkpoint,
+        *,
+        fetch: Callable[[Request], Coroutine[Any, Any, Page]],
+        refusal: Callable[[Request, Collection[RequestId]], str | None],
+        following: Callable[
+            [Page, Request, Collection[RequestId]], tuple[Request | None, ServiceError | None]
+        ],
+        width: int,
+    ) -> None:
+        self._start = start
+        self._fetch = fetch
+        self._refusal = refusal
+        self._following = following
+        self._width = width
+        self._queue = deque(start.pending)
+        self._held = Held.start(start.held)
+        self._malformed = start.malformed
+        # Insertion order is start order; a task stays here until its page is yielded.
+        self.running: dict[asyncio.Task[Page], Request] = {}
+        # Finished tasks in the order they finished, filled by a done callback.
+        self.arrived: deque[asyncio.Task[Page]] = deque()
+        self._chained: list[Request] = []
+        self._failed: list[Request] = []
+        self._refused: list[Request] = []
+        self.failures: list[ServiceError] = []
+
+    def checkpoint(self) -> Checkpoint | None:
+        """Return where the query stands, or ``None`` with nothing left but refusals."""
+        retry = [*self._failed, *self.running.values(), *self._chained, *self._queue]
+        if not retry:
+            return None
+        return Checkpoint(
+            base_url=self._start.base_url,
+            collection=self._start.collection,
+            pending=(*retry, *self._refused),
+            held=self._held.snapshot(),
+            malformed=self._malformed,
+        )
+
+    def _refused_as(self, request: Request) -> str | None:
+        """Return why ``request`` must not be sent: held, off origin, or already in flight."""
+        reason = self._refusal(request, self._held)
+        if reason is None and request.identity() in {r.identity() for r in self.running.values()}:
+            reason = REPEAT
+        return reason
+
+    def _refuse(self, request: Request, reason: str) -> None:
+        url = request.identity()[1]
+        self.failures.append(
+            ServiceError(reason, url, attempts=0, method=request.method, request_body=request.body)
+        )
+        self._refused.append(request)
+
+    def _send(self, request: Request) -> None:
+        """Start ``request``, or record its refusal."""
+        if (reason := self._refused_as(request)) is not None:
+            self._refuse(request, reason)
+            return
+        task = asyncio.create_task(self._fetch(request))
+        # Added before any waiter's callback, so a task is listed when a wait returns.
+        task.add_done_callback(self.arrived.append)
+        self.running[task] = request
+
+    def _failing(self) -> bool:
+        """Whether a request failed, received or not; a done task's callback may not have run."""
+        return bool(self.failures) or any(
+            t.done() and not t.cancelled() and isinstance(t.exception(), ServiceError)
+            for t in self.running
+        )
+
+    def launch(self) -> None:
+        """Start each waiting ``next`` link, then pending requests up to the width."""
+        # A chain in flight runs to its end; after a failure no new piece starts, though
+        # the failure may have arrived while the caller held a page.
+        while self._chained:
+            self._send(self._chained.pop(0))
+        while self._queue and len(self.running) < self._width and not self._failing():
+            self._send(self._queue.popleft())
+        if self._failing():
+            # Settle the queue's refusals now, so none reads as retryable in a checkpoint
+            # and a resume loop ends.
+            for request in list(self._queue):
+                if (reason := self._refused_as(request)) is not None:
+                    self._queue.remove(request)
+                    self._refuse(request, reason)
+
+    def receive(self) -> Page | None:
+        """Record the request that finished first and return its page with the checkpoint.
+
+        A failed request returns ``None`` and is retried first on a resume.
+        """
+        task = self.arrived.popleft()
+        request = self.running.pop(task)
+        try:
+            page = task.result()
+        except ServiceError as err:
+            self.failures.append(err)
+            self._failed.append(request)
+            return None
+        # The identity is the URL as sent, so a next link back to this page repeats it.
+        self._held.add(request.identity())
+        if page.body is not None and malformed_counts(page.body):
+            self._malformed = True
+        following, failure = self._following(page, request, self._held)
+        if failure is not None and following is not None:
+            self.failures.append(failure)
+            self._refused.append(following)
+        elif following is not None:
+            self._chained.append(following)
+        return dataclasses.replace(page, checkpoint=self.checkpoint())
+
+    async def cancel(self) -> None:
+        """Cancel the requests in flight and wait for them to end."""
+        for task in self.running:
+            task.cancel()
+        if self.running:
+            await asyncio.wait(self.running)
 
 
 class OGCService:
@@ -374,11 +508,24 @@ class OGCService:
         """Drop every cached metadata document, so the next call fetches it again."""
         self._cache.clear()
 
-    def _pieces(self, request: Request) -> Sequence[Request]:
-        """Split an items request into independent pieces, traversed in order (D-44).
+    def _pieces(
+        self,
+        request: Request,
+        split_datetime: Literal["year", "month"] | None,
+        sites_per_piece: int | None,
+    ) -> Sequence[Request]:
+        """Split an items request into independent pieces, run concurrently (D-44, D-56).
 
-        The base service keeps it whole; a service that fans out overrides this (D-35).
+        The base service keeps it whole and refuses a split; NWIS overrides this (D-35).
+
+        Raises
+        ------
+        ValidationError
+            If ``split_datetime`` or ``sites_per_piece`` is given.
         """
+        if split_datetime is not None or sites_per_piece is not None:
+            msg = f"{type(self).__name__} does not split queries; only NWIS does"
+            raise ValidationError(msg)
         return (request,)
 
     def _resumable(
@@ -408,7 +555,7 @@ class OGCService:
             return f"refused a URL outside {self.base_url}"
         if request.identity() in held:
             # A caller collecting every page never stops, so a loop spends the quota.
-            return "a next link repeats one already followed"
+            return REPEAT
         return None
 
     def _next_request(
@@ -437,65 +584,54 @@ class OGCService:
         err = ServiceError(refusal, href, attempts=0, method=page.method, request_body=request.body)
         return following, err
 
-    async def _run(self, start: Checkpoint) -> AsyncIterator[Page]:
+    async def _page(self, request: Request) -> Page:
+        """Send ``request`` and parse its response as one page of items."""
+        resp = await self._send(
+            request.method,
+            request.url,
+            params=request.params,
+            headers=request.headers,
+            content=request.body,
+        )
+        return parse_page(resp, request.params, request.method, request.body)
+
+    async def _run(self, start: Checkpoint) -> AsyncGenerator[Page]:
         """Yield each page of the pending requests, following ``next`` links (D-34, D-52).
 
-        Pending requests run in order, each to the end of its ``next`` links. Every
-        request, the ``next`` links included, sends the method, body, and headers of the
-        request that began its chain: a ``GET`` to the ``next`` link of a CQL2 ``POST``
-        drops the filter (D-38). No request in ``start.held`` is sent. Each yielded page
-        carries the checkpoint after it, and a failure carries the checkpoint with the
-        failed request first. A refused request goes last instead, so a resume runs the
-        other pieces and then refuses it again; alone, it leaves no checkpoint.
+        Pending requests start in order, up to the transport's ``max_concurrent`` at
+        once, and each follows its ``next`` links to the end; pages come in the order
+        their responses arrive (D-56). A ``next`` link starts once the caller asks for
+        the page after the one that carried it, so an unsplit query sends nothing
+        between steps (D-46). Every request, the ``next`` links included, sends the
+        method, body, and headers of the request that began its chain: a ``GET`` to the
+        ``next`` link of a CQL2 ``POST`` drops the filter (D-38). No request in
+        ``start.held``, or one already in flight, is sent. After a failure no pending
+        request starts, the chains in flight run to their ends, and then
+        `PaginationError` names every failure. Each yielded page carries the checkpoint
+        after it: the failed requests, those in flight or not yet yielded, the ``next``
+        links not yet started, the requests never started, then the refused ones, which
+        a resume refuses again; refused requests alone leave no checkpoint. Closing the
+        iterator cancels the requests in flight.
         """
-        pending = list(start.pending)
-        held = Held.start(start.held)
-        malformed = start.malformed
-
-        def checkpoint(queue: Sequence[Request]) -> Checkpoint | None:
-            if not queue:
-                return None
-            return Checkpoint(
-                base_url=start.base_url,
-                collection=start.collection,
-                pending=tuple(queue),
-                held=held.snapshot(),
-                malformed=malformed,
-            )
-
-        def refused(request: Request | None, rest: list[Request]) -> Checkpoint | None:
-            return checkpoint([*rest, request]) if rest and request is not None else None
-
-        while pending:
-            request, rest = pending[0], pending[1:]
-            if (refusal := self._refusal(request, held)) is not None:
-                url = request.identity()[1]
-                err = ServiceError(
-                    refusal, url, attempts=0, method=request.method, request_body=request.body
-                )
-                raise PaginationError([err], refused(request, rest))
-            try:
-                resp = await self._send(
-                    request.method,
-                    request.url,
-                    params=request.params,
-                    headers=request.headers,
-                    content=request.body,
-                )
-                page = parse_page(resp, request.params, request.method, request.body)
-            except ServiceError as err:
-                raise PaginationError([err], checkpoint(pending)) from err
-            # The identity is the URL as sent, so a next link back to this page repeats it.
-            held.add(request.identity())
-            if page.body is not None and malformed_counts(page.body):
-                malformed = True
-            following, failure = self._next_request(page, request, held)
-            if failure is not None:
-                after = refused(following, rest)
-                yield dataclasses.replace(page, checkpoint=after)
-                raise PaginationError([failure], after)
-            pending = rest if following is None else [following, *rest]
-            yield dataclasses.replace(page, checkpoint=checkpoint(pending))
+        run = _Run(
+            start,
+            fetch=self._page,
+            refusal=self._refusal,
+            following=self._next_request,
+            width=self._transport.max_concurrent,
+        )
+        try:
+            run.launch()
+            while run.running:
+                while not run.arrived:
+                    await asyncio.wait(run.running, return_when=asyncio.FIRST_COMPLETED)
+                if (page := run.receive()) is not None:
+                    yield page
+                run.launch()
+            if run.failures:
+                raise PaginationError(run.failures, run.checkpoint())
+        finally:
+            await run.cancel()
 
     async def iter_pages(
         self,
@@ -507,13 +643,16 @@ class OGCService:
         filter: str | Mapping[str, Any] | None = None,  # noqa: A002
         ids: Sequence[str | int] | None = None,
         id_property: str | None = None,
+        split_datetime: Literal["year", "month"] | None = None,
+        sites_per_piece: int | None = None,
         validate: bool = True,
         resume: Checkpoint | None = None,
     ) -> AsyncIterator[Page]:
         """Yield each page of a collection's items, following ``next`` links (D-34).
 
         Only a page without a ``next`` link ends the traversal. A page shorter than
-        requested, or one without ``numberMatched``, ends nothing.
+        requested, or one without ``numberMatched``, ends nothing. A split query runs
+        its pieces concurrently and yields pages as they arrive (D-56).
 
         Parameters
         ----------
@@ -546,6 +685,18 @@ class OGCService:
         id_property : str, optional
             The property ``ids`` matches, such as ``id`` for feature ids or
             ``monitoring_location_id`` for the sites of an NWIS time series.
+        split_datetime : {'year', 'month'}, optional
+            NWIS only (D-35, D-56): split the ``datetime`` interval in ``params`` at
+            calendar boundaries in UTC into pieces that run concurrently, up to the
+            transport's ``max_concurrent`` at once, each following its own ``next``
+            links. The interval needs both ends, as dates or timestamps with an
+            offset, and each piece ends one microsecond before the next begins. Every
+            piece costs at least one request, so size pieces near one page.
+        sites_per_piece : int, optional
+            NWIS only (D-35, D-56): split the site list, ``ids`` or a comma-separated
+            ``monitoring_location_id`` in ``params``, into lists of this many sites
+            that run concurrently as ``split_datetime`` pieces do. A site listed twice
+            is sent once. Not with ``split_datetime``.
         validate : bool, optional
             Before the first page request, check ``collection`` against the collection
             index, and each name in ``params`` outside ``QUERY_PARAMS``, and
@@ -575,9 +726,12 @@ class OGCService:
             ``geometry`` is malformed, a CQL2-JSON filter holds a NaN or infinite
             number, a filter is empty, ``params`` also holds a parameter a keyword sets
             (``bbox``, ``filter``, ``filter-lang``) or a credential such as ``api_key``,
-            or ``limit`` is not an integer from 1 to the profile's ``max_limit``. With
-            ``validate``, before the first page request, when the collection, a name in
-            ``params``, or ``id_property`` is unknown; the message lists the valid ones.
+            or ``limit`` is not an integer from 1 to the profile's ``max_limit``, or
+            a split is given to a service other than NWIS, both splits are given, or
+            the query has no closed ``datetime`` interval or site list to split.
+            With ``validate``, before the first page request, when the collection, a
+            name in ``params``, or ``id_property`` is unknown; the message lists the
+            valid ones.
             With ``resume``, when a query keyword comes with it or it is a checkpoint
             of another service or collection.
         TypeError
@@ -589,9 +743,9 @@ class OGCService:
             When a request fails, a body is not a FeatureCollection with well-formed
             links, or a ``next`` link repeats a request already answered, leaves the
             scheme, host, and port of ``base_url``, or a page has a link that carries a
-            credential (D-53). Its one
-            failure names that request or link by URL, and its ``checkpoint`` is where
-            the query stands.
+            credential (D-53). It is raised once every page that arrived has been
+            yielded; its failures name each such request or link by URL, and its
+            ``checkpoint`` is where the query stands.
         """
         if resume is not None:
             given = {
@@ -601,6 +755,8 @@ class OGCService:
                 "filter": filter,
                 "ids": ids,
                 "id_property": id_property,
+                "split_datetime": split_datetime,
+                "sites_per_piece": sites_per_piece,
             }
             self._resumable(collection, resume, given)
             start = resume
@@ -615,12 +771,14 @@ class OGCService:
                 ids=ids,
                 id_property=id_property,
             )
+            pieces = tuple(self._pieces(request, split_datetime, sites_per_piece))
             if validate:
                 await self._validate(collection, params, id_property)
-            pieces = tuple(self._pieces(request))
             start = Checkpoint(base_url=self.base_url, collection=collection, pending=pieces)
-        async for page in self._run(start):
-            yield page
+        # Closed with this iterator, so the pieces in flight are cancelled at once.
+        async with contextlib.aclosing(self._run(start)) as pages:
+            async for page in pages:
+                yield page
 
     async def collect(
         self,
@@ -632,6 +790,8 @@ class OGCService:
         filter: str | Mapping[str, Any] | None = None,  # noqa: A002
         ids: Sequence[str | int] | None = None,
         id_property: str | None = None,
+        split_datetime: Literal["year", "month"] | None = None,
+        sites_per_piece: int | None = None,
         validate: bool = True,
         keep_pages: bool = False,
         resume: QueryResult | Checkpoint | None = None,
@@ -642,8 +802,10 @@ class OGCService:
         ----------
         collection : str
             The collection id.
-        params, bbox, geometry, filter, ids, id_property, validate
-            The query and its check, as for `iter_pages`.
+        params, bbox, geometry, filter, ids, id_property, split_datetime, sites_per_piece
+            The query and its pieces, as for `iter_pages`.
+        validate : bool, optional
+            Check the query against cached metadata first, as for `iter_pages`.
         keep_pages : bool, optional
             Keep each page's response bytes in ``Page.content`` (D-23). Page bodies
             are always dropped. With ``resume``, it applies to the new pages; held
@@ -658,8 +820,8 @@ class OGCService:
         Returns
         -------
         QueryResult
-            ``geojson`` holds the features of all pages, in order, those of ``resume``
-            first.
+            ``geojson`` holds the features of all pages in the order they arrived,
+            those of ``resume`` first.
 
         Raises
         ------
@@ -678,7 +840,7 @@ class OGCService:
             When a page fails after at least one succeeded, ``resume``'s included. Its
             ``result`` holds the pages that succeeded and the checkpoint to resume.
         PaginationError
-            When the first page fails.
+            When no page arrives, as when the first page of an unsplit query fails.
         """
         pages: list[Page] = []
         features: list[Any] = []
@@ -696,6 +858,8 @@ class OGCService:
                 "filter": filter,
                 "ids": ids,
                 "id_property": id_property,
+                "split_datetime": split_datetime,
+                "sites_per_piece": sites_per_piece,
             }
             self._resumable(collection, checkpoint, given)
             if isinstance(resume, Checkpoint) and resume.held:
@@ -715,6 +879,8 @@ class OGCService:
                 filter=filter,
                 ids=ids,
                 id_property=id_property,
+                split_datetime=split_datetime,
+                sites_per_piece=sites_per_piece,
                 validate=validate,
                 resume=checkpoint,
             ):

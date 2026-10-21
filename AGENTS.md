@@ -31,8 +31,9 @@ One-line summaries of the decisions any code change can break. The IDs point int
 
 - `src/water_ogcapi/_transport.py` is the only module that imports `httpx2` (D-01).
 - `iter_pages()` is the primitive and `collect()` builds on it (D-02).
-- Every service pages through `next` links, and only NWIS fans out, by splitting a query
-    into independent pieces (D-35).
+- Every service pages through `next` links, and only NWIS fans out, on request, by
+    splitting a query by calendar period or site list into pieces run concurrently
+    (D-35, D-56).
 - Every `OGCService` request goes through `_send()`, which adds the service's headers
     and refuses a URL outside the scheme, host, and port of `base_url` (D-34, D-40).
 - A request is identified by its method, URL as sent, and body, and every `next` link

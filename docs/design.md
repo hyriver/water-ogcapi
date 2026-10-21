@@ -517,7 +517,7 @@ Layering rule for anything new:
 
 ### D-24: A failed page is reported by the request that failed
 
-- **Status:** accepted; amended by D-38 and D-52.
+- **Status:** accepted; amended by D-38, D-52, and D-56.
 
 - **Date:** 2026-10-07.
 
@@ -882,7 +882,7 @@ Layering rule for anything new:
 
 ### D-35: Only NWIS fans out, by splitting a query into pieces
 
-- **Status:** accepted.
+- **Status:** accepted; D-56 adds the split keywords and the concurrency.
 - **Date:** 2026-10-12.
 - **Decision:** Every service pages through `next` links (D-05), and `sorted-offset` is
     dropped. Concurrency exists only as partitioned fan-out on NWIS (#14): the NWIS
@@ -1103,8 +1103,9 @@ Layering rule for anything new:
 
 ### D-44: `_query.py` builds the request, and `_pieces()` is the fan-out seam
 
-- **Status:** accepted; amended by D-52, which replaces `_traverse()` with `_run()`.
-    Amends D-38 and D-39. D-50 moved page parsing out of `_client.py` after all.
+- **Status:** accepted; amended by D-52, which replaces `_traverse()` with `_run()`, and
+    D-56, which runs the pieces concurrently. Amends D-38 and D-39. D-50 moved page
+    parsing out of `_client.py` after all.
 - **Date:** 2026-10-15.
 - **Decision:** `_query.py` builds the first request of an items query with no I/O:
     `items_request()` validates the query forms (D-39) and returns a `Request` holding
@@ -1146,7 +1147,7 @@ Layering rule for anything new:
 ### D-46: The sync API is a `water_ogcapi.sync` module of blocking twins
 
 - **Status:** accepted. Amends D-08. D-48 moves the blocking classes to the package root
-    and the async ones to `water_ogcapi.aio`.
+    and the async ones to `water_ogcapi.aio`. D-56 settles the concurrent pieces of #14.
 - **Date:** 2026-10-16.
 - **Decision:** `water_ogcapi.sync` holds `OGCService`, `NWIS`, `FabricData`, and
     `GeoConnex` with the names and constructors of the async classes. Each builds its
@@ -1359,7 +1360,7 @@ Layering rule for anything new:
 
 ### D-52: A query resumes from a `Checkpoint` of pending and held requests
 
-- **Status:** accepted. Amends D-24, D-38, and D-44.
+- **Status:** accepted; amended by D-56. Amends D-24, D-38, and D-44.
 - **Date:** 2026-10-21.
 - **Decision:** A `Checkpoint` holds the `base_url` and collection of a query, its
     `pending` requests (the `next` link of the chain in progress or the request that
@@ -1465,6 +1466,82 @@ Layering rule for anything new:
 - **Limits:** Dependabot bumps the action's SHA and leaves `pixi-version` alone, so a
     later pixi security release needs a manual bump. Local environments follow whatever
     pixi each contributor installs.
+
+### D-56: NWIS splits a query by calendar period or site list, and pieces run concurrently
+
+- **Status:** accepted. Amends D-24, D-35, D-44, D-46, and D-52.
+
+- **Date:** 2026-10-21.
+
+- **Decision:** `iter_pages()` and `collect()` take `split_datetime` (`"year"` or
+    `"month"`) and `sites_per_piece` (a positive int), one at a time. The base
+    `_pieces()` refuses both, and `NWIS._pieces()` splits:
+
+    - `split_datetime` splits the closed `datetime` interval in `params` at calendar
+        boundaries in UTC. Each piece ends one microsecond before the next begins
+        (`.../2024-12-31T23:59:59.999999Z`, then `2025-01-01T00:00:00Z/...`), every bound
+        is written as a UTC timestamp, and a date reads as its midnight. An interval
+        inside one period goes whole.
+    - `sites_per_piece` splits a comma-separated `monitoring_location_id` parameter, or a
+        CQL2-JSON `in` filter such as `ids` sends, into lists of that size. A value listed
+        twice goes in one piece.
+
+    Pieces are built before the query check (D-47), so a malformed split sends nothing.
+    `_run()` starts pending requests in order, up to the transport's `max_concurrent` at
+    once, each following its own `next` links, and yields pages in the order their
+    requests finished, which a done callback records. A chain's `next` link starts once
+    the caller asks for the page after the one that carried it. A request stays pending
+    until its page is yielded, so every checkpoint lists the failed requests, those in
+    flight or fetched and not yet yielded, the waiting `next` links, the requests never
+    started, and then the refused ones. A request held or already in flight is refused
+    as a repeat. After a failure, including one that finished while the caller held a
+    page, no new piece starts and every refused request left in the queue is settled
+    unsent, so refused requests alone still leave no checkpoint (D-52); the chains in
+    flight run to their ends, and one `PaginationError` then names every failure.
+    `iter_pages()` closes `_run()` with itself (`contextlib.aclosing`), and closing
+    cancels the requests in flight and waits for them.
+
+- **Why:** USGS's efficiency guidance recommends queries near one page, split by year or
+    by site and run in parallel (D-35). Splitting is opt-in, since NWIS reports no
+    `numberMatched` and a query's size is unknown until it runs: a 20-year `daily` query
+    for one site is one page whole and 20 requests split by year. Live probes on
+    2026-10-21 showed a date-only bound read as the midnight instant: on `continuous`,
+    `2026-09-01/2026-09-01` returned 1 of the day's 288 five-minute values, and a
+    `daily` date compares as its midnight. Date-only pieces would drop all but midnight
+    of each period's last day, and pieces sharing a bound both return the value at it.
+    Feature ids cannot remove that duplicate: the `daily` queryables say an `id` changes
+    whenever a record is refreshed. Bounds compare to the microsecond: an end of
+    `00:04:59.999999Z` left out 00:05, and a start of `00:00:00.000001Z` left out 00:00,
+    so a microsecond gap loses nothing. The first version's one-second gap lost a value
+    with fractional seconds in a probe of the 2026-10-21 review (Codex). Two keywords
+    name their units; `split=100` reads as a piece count. Stopping new pieces after a
+    failure caps what an outage or a bad key costs at `max_concurrent` chains, and the
+    checkpoint keeps the rest. Starting a `next` link only when the caller asks keeps an
+    unsplit query at one request per step (D-46). The keywords and the failure rule were
+    chosen by the maintainer after advice from Codex. The whole-project review of
+    2026-10-21 (Codex, Fable) also found a piece starting after a failure that finished
+    between steps, pages leaving their arrival order, and a checkpoint with two refused
+    requests that resumed forever; each fix has a test that fails without it.
+
+- **Rejected:** Splitting every query with an interval or a site list, which multiplies
+    the requests of small queries. One `split` keyword taking a period or an int.
+    Caller-supplied pieces. Shared inclusive bounds with de-duplication by feature id,
+    which ids that change on refresh defeat and which leaves page counts and bytes
+    disagreeing with the features. CQL2 half-open time predicates (Codex), unverified on
+    NWIS and composed with the caller's own filter. Fetching a chain's next page while
+    the caller holds the current one (D-46). Starting every piece after a failure. A
+    task group, which cannot span the blocking API's steps (D-46).
+
+- **Limits:** A time between a piece's end and the next start would need a precision
+    finer than the microsecond, which NWIS bounds cannot express. A piece need not be
+    near one page: a year of 5-minute `continuous` values is about 105,000 rows, so
+    `"month"` suits them. Feature order varies between runs. `summarize()` reads the
+    pieces as one traversal (D-44), and with no `numberMatched` on NWIS only
+    `end_of_links` applies. A long `monitoring_location_id` list can still exceed the
+    GET URL cap near 8 KB; `ids` sends it in a POST body. Pieces run against a
+    collection that may change between them (D-35). A blocking iterator dropped without
+    `close()` cancels its pieces only when the loop finalizes the async generator
+    (D-46).
 
 ## Lessons
 

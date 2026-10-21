@@ -35,6 +35,10 @@ both return.
 
 ::: water_ogcapi.CRS
 
+::: water_ogcapi.Checkpoint
+
+::: water_ogcapi.Request
+
 ## Collection metadata
 
 ::: water_ogcapi.Collections

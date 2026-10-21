@@ -176,7 +176,8 @@ class Checkpoint:
     Every yielded `Page` with more to fetch carries one, as do `PaginationError` and a
     `QueryResult` that stopped early. Pass it to ``iter_pages(resume=...)``, or a
     `QueryResult` to ``collect(resume=...)``. It pickles, holds no feature, and refuses
-    to resume on another service or collection.
+    to resume on another service or collection. Unpickle only a checkpoint you saved:
+    loading a pickle runs code, and it skips the checks a `Request` makes when built.
 
     Parameters
     ----------

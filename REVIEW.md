@@ -48,11 +48,11 @@ the `docs/design.md` entries the change touches.
 
 Match the depth to what a missed bug would cost:
 
-| Change touches                                                                                                                                                                      | Review                                                                                                                       |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Only docs, `pixi.lock`, pre-commit revisions, or tests                                                                                                                              | CI only                                                                                                                      |
-| Other code in `src/` or `scripts/`                                                                                                                                                  | A review of the diff                                                                                                         |
-| `_transport.py`, `_governor.py`, `_services.py`, `_redact.py`, `_sync.py`, `OGCService._send()` or `_traverse()`, the exports in `__init__.py` or `aio.py`, or `.github/workflows/` | A review of the whole project at the change, and `/security-review` when the change touches the key, redaction, or redirects |
+| Change touches                                                                                                                                                                 | Review                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Only docs, `pixi.lock`, pre-commit revisions, or tests                                                                                                                         | CI only                                                                                                                      |
+| Other code in `src/` or `scripts/`                                                                                                                                             | A review of the diff                                                                                                         |
+| `_transport.py`, `_governor.py`, `_services.py`, `_redact.py`, `_sync.py`, `OGCService._send()` or `_run()`, the exports in `__init__.py` or `aio.py`, or `.github/workflows/` | A review of the whole project at the change, and `/security-review` when the change touches the key, redaction, or redirects |
 
 After three review rounds on one change, stop and reconsider the approach before a
 fourth.

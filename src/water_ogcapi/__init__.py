@@ -20,6 +20,7 @@ from water_ogcapi._metadata import (
     SpatialExtent,
     TemporalExtent,
 )
+from water_ogcapi._query import Checkpoint, Request
 from water_ogcapi._results import (
     CRS,
     Check,
@@ -44,6 +45,7 @@ __all__ = [
     "NWIS",
     "CRSSource",
     "Check",
+    "Checkpoint",
     "Collection",
     "Collections",
     "Completeness",
@@ -57,6 +59,7 @@ __all__ = [
     "Pagination",
     "Property",
     "QueryResult",
+    "Request",
     "Schema",
     "ServiceProfile",
     "SpatialExtent",

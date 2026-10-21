@@ -112,6 +112,17 @@ def _merge_query(url: str, params: Mapping[str, str]) -> httpx2.URL:
     return parsed.copy_with(query="&".join([*kept, urlencode(params)]).encode("ascii"))
 
 
+def sent_url(url: str, params: Mapping[str, str]) -> str:
+    """Return the URL `Transport.request` sends for ``url`` and ``params``.
+
+    An unparsable URL is returned as given, since the request would fail before sending.
+    """
+    try:
+        return str(_merge_query(url, params) if params else httpx2.URL(url))
+    except httpx2.InvalidURL:
+        return url
+
+
 def _describe(exc: Exception) -> str:
     """Name a failed request without echoing request data.
 

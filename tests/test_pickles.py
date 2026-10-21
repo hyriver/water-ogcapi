@@ -10,11 +10,13 @@ from typing import Any
 
 from water_ogcapi import (
     CRS,
+    Checkpoint,
     Collections,
     Link,
     Page,
     Pagination,
     QueryResult,
+    Request,
     Schema,
     ServiceProfile,
 )
@@ -42,6 +44,8 @@ PICKLED_PATHS = {
     ("water_ogcapi._metadata", "Schema"),
     ("water_ogcapi._metadata", "SpatialExtent"),
     ("water_ogcapi._metadata", "TemporalExtent"),
+    ("water_ogcapi._query", "Checkpoint"),
+    ("water_ogcapi._query", "Request"),
     ("water_ogcapi._results", "CRS"),
     ("water_ogcapi._results", "Link"),
     ("water_ogcapi._results", "Page"),
@@ -90,6 +94,12 @@ def everything_pickled() -> list[object]:
         pages=(page,),
         pagination=Pagination(None, 0, 1, "complete"),
         crs=CRS(None, (), CRS84, "default"),
+        checkpoint=Checkpoint(
+            base_url=URL,
+            collection="c",
+            pending=(Request(url=URL, params={"f": "json"}),),
+            held=frozenset({("GET", URL, None)}),
+        ),
     )
     failure = RateLimitError("rate limit exceeded", URL, retry_after=7.0, remaining=0)
     return [

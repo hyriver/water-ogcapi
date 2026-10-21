@@ -22,7 +22,13 @@ from water_ogcapi._metadata import (
     parse_schema,
     property_names,
 )
-from water_ogcapi._paging import malformed_counts, next_href, parse_page, summarize
+from water_ogcapi._paging import (
+    credential_link,
+    malformed_counts,
+    next_href,
+    parse_page,
+    summarize,
+)
 from water_ogcapi._query import Checkpoint, Held, Request, items_request, path_segment
 from water_ogcapi._redact import REDACTED
 from water_ogcapi._results import Page, QueryResult, crs_of
@@ -76,6 +82,12 @@ def _origin(url: str) -> tuple[str, str | None, int | None] | None:
         return None
     scheme = parts.scheme.lower()
     return scheme, parts.hostname, DEFAULT_PORTS.get(scheme) if port is None else port
+
+
+def _merged(headers: Mapping[str, str] | None, own: Mapping[str, str]) -> dict[str, str]:
+    """Return ``headers`` with ``own`` added last, dropping any name ``own`` sets."""
+    names = {name.lower() for name in own}
+    return {k: v for k, v in (headers or {}).items() if k.lower() not in names} | dict(own)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -190,6 +202,9 @@ class OGCService:
     ) -> Response:
         """Send one request with this service's headers added to ``headers`` (D-40).
 
+        A header of the service, such as its key, replaces one of the same name in
+        ``headers`` whatever its case (D-53).
+
         Raises
         ------
         ServiceError
@@ -204,7 +219,7 @@ class OGCService:
             method,
             url,
             params=params,
-            headers={**self._headers(), **(headers or {})},
+            headers=_merged(headers, self._headers()),
             content=content,
             governor=self._governor,
         )
@@ -402,9 +417,9 @@ class OGCService:
         """Return the request for the ``next`` link of ``page``, and why it is refused.
 
         The request keeps the method, body, and headers of ``request`` (D-38). A link
-        that leaves the origin of ``base_url`` (D-34), carries a credential (L-11), or
-        repeats a request already answered is refused before it is sent; the request
-        comes back beside the refusal, except for a credential, which no `Request` holds.
+        that leaves the origin of ``base_url`` (D-34) or repeats a request already
+        answered is refused before it is sent, and the request comes back beside the
+        refusal. A link with a credential never gets here: its page fails (D-53).
         """
         href = next_href(page.links)
         if href is None:
@@ -413,18 +428,9 @@ class OGCService:
         # Link redacts an unparsable href to REDACTED, which must not resolve to a path.
         if href != REDACTED:
             href = urljoin(page.url, href)
-        try:
-            following = Request(
-                url=href, method=request.method, body=request.body, headers=request.headers
-            )
-        except ValidationError:
-            # A gateway can copy the key into a URL (L-11). The transport's
-            # refusal would escape collect() and drop the pages fetched so far.
-            refusal = "refused a next link that carries a credential"
-            err = ServiceError(
-                refusal, href, attempts=0, method=page.method, request_body=request.body
-            )
-            return None, err
+        following = Request(
+            url=href, method=request.method, body=request.body, headers=request.headers
+        )
         refusal = self._refusal(following, held)
         if refusal is None:
             return following, None
@@ -582,7 +588,8 @@ class OGCService:
         PaginationError
             When a request fails, a body is not a FeatureCollection with well-formed
             links, or a ``next`` link repeats a request already answered, leaves the
-            scheme, host, and port of ``base_url``, or carries a credential. Its one
+            scheme, host, and port of ``base_url``, or a page has a link that carries a
+            credential (D-53). Its one
             failure names that request or link by URL, and its ``checkpoint`` is where
             the query stands.
         """
@@ -785,14 +792,18 @@ class OGCService:
             f"/items/{path_segment(item_id, 'item_id')}"
         )
         query = {"f": "json", **(params or {})}
+        reject_credentials(url, query)
         if validate:
-            reject_credentials(url, query)
             await self._validate(collection, None, None)
         resp = await self._send("GET", url, params=query)
         body = json_object(resp)
         links = body.get("links", [])
         if body.get("type") != "Feature" or not isinstance(links, list):
             msg = "response is not a Feature with a links list"
+            raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+        if credential_link(links):
+            # body and content would keep it (D-29).
+            msg = "response has a link that carries a credential"
             raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
         return Page(
             url=resp.url,

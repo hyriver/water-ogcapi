@@ -1449,6 +1449,23 @@ Layering rule for anything new:
 - **Limits:** NWIS reports no `numberMatched` on any page, so its results keep only the
     `end_of_links` check.
 
+### D-55: CI pins the pixi version
+
+- **Status:** accepted.
+- **Date:** 2026-10-21.
+- **Decision:** Every `prefix-dev/setup-pixi` step passes `pixi-version`, now `v0.82.1`.
+    A pixi upgrade in CI is a one-line edit per step, made in its own PR.
+- **Why:** Without the input, setup-pixi installs the latest pixi on each run, so a
+    release changes CI with no commit to show it. pixi 0.82.1 (2026-10-20) is a security
+    release that patches `rustls-webpki` and `webpki-root-certs`, and its notes ask
+    every user to upgrade at once; a pin makes that upgrade visible and keeps it in
+    place. Chosen by the maintainer.
+- **Rejected:** Leaving the version unset, which tracks the latest release, including a
+    broken or compromised one.
+- **Limits:** Dependabot bumps the action's SHA and leaves `pixi-version` alone, so a
+    later pixi security release needs a manual bump. Local environments follow whatever
+    pixi each contributor installs.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

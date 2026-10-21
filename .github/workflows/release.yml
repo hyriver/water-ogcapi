@@ -32,7 +32,7 @@ jobs:
           echo "prerelease=true" >> "$GITHUB_OUTPUT"
           git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > release-notes.md
         fi
-    - uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4.8.0
+    - uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff  # v4.9.1
       if: steps.kind.outputs.prerelease == 'false'
       with:
         version: v2.14.2  # same as the dev environment's git-cliff
@@ -57,7 +57,7 @@ jobs:
       with:
         fetch-depth: 0  # hatch-vcs reads tags for the version
         persist-credentials: false
-    - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+    - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
       with:
         enable-cache: false  # no cache poisoning in a publishing pipeline
     - run: uv build
@@ -68,7 +68,7 @@ jobs:
             'import sys, water_ogcapi as w; assert w.__version__ == sys.argv[1], w.__version__' \
             "${GITHUB_REF_NAME#v}"
         done
-    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
       with:
         name: dist
         path: dist/
@@ -83,12 +83,12 @@ jobs:
     permissions:
       id-token: write  # trusted publishing and PEP 740 attestations
     steps:
-    - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+    - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
       with:
         enable-cache: false
     - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
       with:
         name: dist
         path: dist/
-    - uses: astral-sh/attest-action@f589a42a7efb6fe400b4f400de60b4bc90390027  # v0.0.6
+    - uses: astral-sh/attest-action@39b6ce43875c196a579e31635b11aa2a2036384a  # v0.0.7
     - run: uv publish

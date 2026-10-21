@@ -108,8 +108,9 @@ def _iterating[**P, T](
 ) -> Callable[Concatenate[OGCService, P], Iterator[T]]:
     """Return a method that steps through the async iterator ``method`` returns.
 
-    Each step fetches one item, so no request runs between steps. Closing or dropping
-    the iterator drops the async one, and the loop's async generator finalizer closes it.
+    Each step fetches one item, so an unsplit query sends no request between steps; the
+    other pieces of a split query stay in flight (D-56). Closing or dropping the iterator
+    drops the async one, and the loop's async generator finalizer closes it.
     """
 
     @functools.wraps(method)

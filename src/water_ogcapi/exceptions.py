@@ -148,9 +148,9 @@ class PaginationError(WaterOGCAPIError):
     failures : sequence of ServiceError
         One error per failed request, each naming the request by its URL as sent.
     checkpoint : Checkpoint, optional
-        Where the query stands, the failed request first, for ``resume`` (D-52).
-        ``None`` when a request was refused before sending, since a resume would
-        refuse it again.
+        Where the query stands, the failed requests first, for ``resume`` (D-52).
+        ``None`` when nothing but refused requests remains, since a resume would
+        refuse them again.
     """
 
     def __init__(

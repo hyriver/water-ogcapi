@@ -606,8 +606,8 @@ class Transport:
                 self.max_retries,
                 delay,
             )
-            # shortcut: no jitter, so concurrent retries stay in lockstep. Add it if NWIS
-            # fan-out (docs/design.md D-35) ever retries in bulk.
+            # shortcut: no jitter, so the retries of NWIS pieces (D-56) that fail together
+            # stay in lockstep, at most max_concurrent of them; add it if that load matters.
             await asyncio.sleep(delay)
         # Unreachable: the last attempt returns or raises. Keeps the return type total.
         raise AssertionError  # pragma: no cover

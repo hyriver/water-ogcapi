@@ -2,16 +2,30 @@
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import os
-from typing import TYPE_CHECKING
+from datetime import UTC, date, datetime, time, timedelta
+from itertools import batched
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from water_ogcapi._client import OGCService, ServiceProfile
 from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from water_ogcapi._query import Request
     from water_ogcapi._transport import Transport
 
 __all__ = ["NWIS", "FabricData", "GeoConnex"]
+
+PERIODS = frozenset({"year", "month"})
+SITES = "monitoring_location_id"
+# Pieces end a microsecond before the next begins: NWIS reads both ends of an interval as
+# inclusive and compares to the microsecond, so pieces sharing a bound would both return
+# a value at it (D-56).
+GAP = timedelta(microseconds=1)
 
 NWIS_PROFILE = ServiceProfile(
     # The landing page; without the slash it redirects to http:// with the key in its
@@ -37,6 +51,97 @@ GEOCONNEX_PROFILE = ServiceProfile(
     default_limit=500,
     max_limit=10_000,
 )
+
+
+def _instant(text: str) -> datetime:
+    """Return one bound of a ``datetime`` interval in UTC; NWIS reads a date as its midnight.
+
+    Raises
+    ------
+    ValidationError
+        If ``text`` is neither an ISO 8601 date nor a timestamp with an offset.
+    """
+    try:
+        return datetime.combine(date.fromisoformat(text), time(), UTC)
+    except ValueError:
+        pass
+    try:
+        value = datetime.fromisoformat(text)
+    except ValueError:
+        value = None
+    if value is None or value.tzinfo is None:
+        msg = f"split_datetime takes dates or timestamps with an offset, got {text!r}"
+        raise ValidationError(msg)
+    return value.astimezone(UTC)
+
+
+def _stamp(value: datetime) -> str:
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def _period_end(value: datetime, period: str) -> datetime | None:
+    """Return the start of the calendar year or month after ``value``'s, or ``None`` past 9999."""
+    try:
+        if period == "year":
+            return datetime(value.year + 1, 1, 1, tzinfo=UTC)
+        carry, month = divmod(value.month, 12)
+        return datetime(value.year + carry, month + 1, 1, tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _periods(interval: str, period: str) -> list[str]:
+    """Split a closed ``datetime`` interval into disjoint calendar periods, in UTC (D-56).
+
+    Raises
+    ------
+    ValidationError
+        If ``interval`` lacks either end or ends before it starts.
+    """
+    first, slash, last = interval.partition("/")
+    if not slash or ".." in {first, last} or not first or not last:
+        msg = f"split_datetime takes a datetime interval with both ends, got {interval!r}"
+        raise ValidationError(msg)
+    low, end = _instant(first), _instant(last)
+    if end < low:
+        msg = f"datetime interval {interval!r} ends before it starts"
+        raise ValidationError(msg)
+    bounds: list[str] = []
+    while (high := _period_end(low, period)) is not None and high <= end:
+        bounds.append(f"{_stamp(low)}/{_stamp(max(low, high - GAP))}")
+        low = high
+    return [*bounds, f"{_stamp(low)}/{_stamp(end)}"]
+
+
+def _site_pieces(request: Request, size: int) -> list[Request] | None:
+    """Split the site list of ``request`` into lists of ``size``, or ``None`` without one.
+
+    The list is a comma-separated ``monitoring_location_id`` parameter or a CQL2-JSON
+    ``in`` filter, as ``ids`` sends. A value listed twice goes in one piece only.
+    """
+    listed = request.params.get(SITES)
+    if listed is not None:
+        sites = list(dict.fromkeys(listed.split(",")))
+        return [
+            dataclasses.replace(request, params={**request.params, SITES: ",".join(chunk)})
+            for chunk in batched(sites, size)
+        ]
+    doc: Any = None if request.body is None else json.loads(request.body)
+    match doc:
+        case {"op": "in", "args": [{"property": str()} as prop, list() as values]} if len(doc) == 2:
+            # Keyed by JSON text, so 1 and true stay apart.
+            unique = list({json.dumps(v, sort_keys=True): v for v in values}.values())
+            return [
+                dataclasses.replace(
+                    request,
+                    body=json.dumps(
+                        {"op": "in", "args": [prop, list(chunk)]}, separators=(",", ":")
+                    ).encode(),
+                )
+                for chunk in batched(unique, size)
+            ]
+        case _:
+            return None
 
 
 class NWIS(OGCService):
@@ -74,6 +179,44 @@ class NWIS(OGCService):
 
     def _headers(self) -> dict[str, str]:
         return {"X-Api-Key": self._api_key} if self._api_key else {}
+
+    def _pieces(
+        self,
+        request: Request,
+        split_datetime: Literal["year", "month"] | None,
+        sites_per_piece: int | None,
+    ) -> Sequence[Request]:
+        """Split a query by calendar period or by site list (D-35, D-56)."""
+        if split_datetime is not None and sites_per_piece is not None:
+            msg = "pass split_datetime or sites_per_piece, not both"
+            raise ValidationError(msg)
+        if split_datetime is not None:
+            if split_datetime not in PERIODS:
+                msg = f"split_datetime takes 'year' or 'month', got {split_datetime!r}"
+                raise ValidationError(msg)
+            interval = request.params.get("datetime")
+            if interval is None:
+                msg = "split_datetime takes a datetime interval in params"
+                raise ValidationError(msg)
+            periods = _periods(interval, split_datetime)
+            if len(periods) == 1:
+                return (request,)
+            return [
+                dataclasses.replace(request, params={**request.params, "datetime": period})
+                for period in periods
+            ]
+        if sites_per_piece is None:
+            return (request,)
+        # Runtime check for untyped callers: True is an int, and 2.5 slips past the hint.
+        count = cast("object", sites_per_piece)
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            msg = f"sites_per_piece takes a positive integer, got {sites_per_piece!r}"
+            raise ValidationError(msg)
+        pieces = _site_pieces(request, sites_per_piece)
+        if pieces is None:
+            msg = f"sites_per_piece takes a site list: ids, or a comma-separated {SITES} in params"
+            raise ValidationError(msg)
+        return pieces
 
 
 class FabricData(OGCService):

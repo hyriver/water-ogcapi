@@ -186,8 +186,9 @@ class Checkpoint:
     collection : str
         The collection the query reads.
     pending : tuple of Request
-        The requests left to send, in order: the ``next`` link of the chain in progress
-        or the request that failed, then each piece not yet started.
+        The requests left to send, in order: the requests that failed, those in flight
+        or fetched and not yet yielded, the ``next`` links not yet started, the pieces
+        not yet started, then the refused ones (D-56).
     held : collection of tuple, optional
         The identity (method, URL as sent, body) of each request already answered, in
         the order answered. A resumed query refuses to send any of them again.

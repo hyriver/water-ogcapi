@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     # field's value or None when the member does not have the expected shape.
     type Members = Mapping[str, tuple[str, Callable[[Any], Any]]]
 
+    from water_ogcapi._query import Checkpoint
+
 __all__ = [
     "CRS",
     "CRSSource",
@@ -243,6 +245,12 @@ class Page:
     request_body : bytes, optional
         The request body as sent, ``None`` for a request without one. With ``method``
         and ``url`` it identifies the request (D-38).
+    checkpoint : Checkpoint, optional
+        Where the query stands once the caller holds this page, set on each page
+        `iter_pages` yields with more left to fetch (D-52). Saving it with the page
+        lets a stopped process resume. ``None`` on the last page, on a page whose
+        ``next`` link was refused, on `item` pages, and on the pages of a
+        `QueryResult`, which carries its own.
 
     Notes
     -----
@@ -264,6 +272,7 @@ class Page:
     content: bytes | None = field(default=None, repr=False)
     method: str = "GET"
     request_body: bytes | None = field(default=None, repr=False)
+    checkpoint: Checkpoint | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "url", redact_url(self.url))
@@ -402,17 +411,23 @@ class QueryResult:
         The aggregated FeatureCollection, nothing coerced. Left out of ``repr``.
     pages : tuple of Page
         Every page received, in order. Bodies are ``None``; ``content`` holds the
-        bytes only with ``keep_pages=True`` (D-23).
+        bytes only with ``keep_pages=True`` (D-23), as set by the call that fetched
+        each page, so a resumed result can mix the two.
     pagination : Pagination
         Counts and completeness of the traversal.
     crs : CRS
         The requested, per-page, and effective CRS, and how it was determined.
+    checkpoint : Checkpoint, optional
+        Where a query that stopped on a failure stands, for ``collect(resume=...)``
+        (D-52). ``None`` once nothing is left to send, and after a refused request,
+        which a resume would refuse again.
     """
 
     geojson: dict[str, Any] = field(repr=False)
     pages: tuple[Page, ...]
     pagination: Pagination
     crs: CRS
+    checkpoint: Checkpoint | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "pages", _all_of(tuple(self.pages), Page, "pages"))

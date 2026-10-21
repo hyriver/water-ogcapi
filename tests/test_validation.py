@@ -11,7 +11,7 @@ import httpx2
 import pytest
 
 import water_ogcapi
-from water_ogcapi import Transport
+from water_ogcapi import Checkpoint, Request, Transport
 from water_ogcapi.aio import OGCService
 from water_ogcapi.exceptions import ServiceError, ValidationError
 
@@ -215,3 +215,17 @@ def test_the_sync_api_raises_the_same_error() -> None:
     transport, _ = serve(nwis_routes())
     with pytest.raises(ValidationError, match="unknown collection"):
         water_ogcapi.OGCService(BASE, transport=transport).collect("dayly")
+
+
+def test_a_resume_sends_no_metadata_request() -> None:
+    """A checkpoint's requests passed the check when it was made (D-52)."""
+    request = Request(url=f"{BASE}/collections/daily/items", params={"f": "json"})
+    checkpoint = Checkpoint(base_url=BASE, collection="daily", pending=(request,))
+    transport, seen = serve({})
+
+    async def run() -> None:
+        async for _ in OGCService(BASE, transport=transport).iter_pages("daily", resume=checkpoint):
+            pass
+
+    asyncio.run(run())
+    assert seen == ["/collections/daily/items"]

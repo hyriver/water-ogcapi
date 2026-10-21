@@ -16,7 +16,7 @@ import pytest
 
 from water_ogcapi import Page, QueryResult, Schema, ServiceProfile
 from water_ogcapi._cache import TTL
-from water_ogcapi._query import Request
+from water_ogcapi._query import Checkpoint, Request
 from water_ogcapi._transport import Transport
 from water_ogcapi.aio import OGCService
 from water_ogcapi.exceptions import (
@@ -611,7 +611,8 @@ def post_traversal(service: OGCService) -> tuple[list[Page], PaginationError | N
     async def run() -> None:
         url = f"{GEOCONNEX}/collections/hu02/items"
         request = Request(url=url, method="POST", params={"f": "json"}, body=FILTER)
-        async for page in service._traverse(request):
+        start = Checkpoint(base_url=GEOCONNEX, collection="hu02", pending=(request,))
+        async for page in service._run(start):
             got.append(page)  # noqa: PERF401
 
     try:
@@ -963,7 +964,8 @@ def test_a_first_url_off_the_base_origin_sends_nothing(url: str) -> None:
     transport, seen = serve()
 
     async def run() -> None:
-        async for _ in Keyed(BASE, transport=transport)._traverse(Request(url=url)):
+        start = Checkpoint(base_url=BASE, collection="c", pending=(Request(url=url),))
+        async for _ in Keyed(BASE, transport=transport)._run(start):
             pass
 
     with pytest.raises(PaginationError, match="refused a URL outside"):
@@ -1057,3 +1059,299 @@ def test_a_split_query_traverses_each_piece_in_order() -> None:
         {"f": "json", "bbox": "-78.0,38.0,-77.0,39.0", "datetime": year}
         for year in ("2020", "2021")
     ]
+
+
+def next_of(doc: dict[str, Any]) -> str:
+    return next(link["href"] for link in doc["links"] if link["rel"] == "next")
+
+
+def partial(*replies: dict[str, Any] | httpx2.Response) -> PartialResultsError:
+    """Return the error of a collect() on hu02 that fails after the first reply."""
+    transport, _ = serve(*replies)
+    _, err = collected(OGCService(GEOCONNEX, transport=transport))
+    assert isinstance(err, PartialResultsError)
+    return err
+
+
+def test_a_resumed_collect_sends_no_request_for_a_held_page() -> None:
+    docs = hu02()
+    err = partial(docs[0], httpx2.Response(500))
+    assert err.checkpoint is err.result.checkpoint is not None
+    assert [r.url for r in err.checkpoint.pending] == [next_of(docs[0])]
+    transport, seen = serve(docs[1], without_next(docs[2]))
+    result, failure = collected(OGCService(GEOCONNEX, transport=transport), resume=err.result)
+    assert failure is None
+    assert [str(r.url) for r in seen] == [next_of(docs[0]), next_of(docs[1])]
+    assert result.geojson["features"] == [f for d in docs for f in d["features"]]
+    assert result.pagination.page_count == 3
+    assert result.pagination.completeness == "complete"
+    assert result.pagination.checks == ("end_of_links", "count")
+    assert result.checkpoint is None
+    assert result.geojson["features"][0] is not err.result.geojson["features"][0]
+    assert all(p.checkpoint is None for p in result.pages)
+
+
+def test_a_resumed_collect_that_fails_again_keeps_the_held_pages() -> None:
+    docs = hu02()
+    held = partial(docs[0], httpx2.Response(500)).result
+    transport, _ = serve(docs[1], httpx2.Response(500))
+    _, err = collected(OGCService(GEOCONNEX, transport=transport), resume=held)
+    assert isinstance(err, PartialResultsError)
+    assert len(err.result.pages) == 2
+    assert err.result.geojson["features"] == docs[0]["features"] + docs[1]["features"]
+    assert err.result.pagination.stop_reason == "failure"
+    assert err.failures[0].url == next_of(docs[1])
+    assert err.checkpoint is not None
+    assert len(err.checkpoint.held) > len(held.checkpoint.held)
+
+
+def test_a_first_page_failure_resumes_from_the_error_checkpoint() -> None:
+    docs = hu02()
+    transport, _ = serve(httpx2.Response(503))
+    _, err = collected(OGCService(GEOCONNEX, transport=transport))
+    assert type(err) is PaginationError
+    assert err.checkpoint is not None
+    transport, seen = serve(without_next(docs[0]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport), resume=err.checkpoint)
+    assert str(seen[0].url) == str(err.failures[0].url)
+    assert len(seen) == 1
+    assert result.pagination.page_count == 1
+
+
+def test_a_malformed_count_survives_a_resume() -> None:
+    docs = hu02()
+    docs[0] = {**docs[0], "numberReturned": "4"}
+    held = partial(docs[0], httpx2.Response(500)).result
+    assert held.checkpoint is not None
+    assert held.checkpoint.malformed
+    transport, _ = serve(docs[1], without_next(docs[2]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport), resume=held)
+    assert result.pagination.completeness == "unknown"
+
+
+def test_a_pickled_checkpoint_resumes() -> None:
+    docs = hu02()
+    held = pickle.loads(pickle.dumps(partial(docs[0], httpx2.Response(500)).result))
+    transport, seen = serve(docs[1], without_next(docs[2]))
+    result, err = collected(OGCService(GEOCONNEX, transport=transport), resume=held)
+    assert err is None
+    assert len(seen) == 2
+    assert result.pagination.completeness == "complete"
+
+
+@pytest.mark.parametrize("held", [0, 1])
+def test_a_resume_never_sends_a_held_request(held: int) -> None:
+    """The next link of the last held page, or a later one, points back to a held page."""
+    docs = hu02()
+    transport, _ = serve(docs[0], docs[1], httpx2.Response(500))
+    pages, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
+    assert err is not None
+    assert len(pages) == 2
+    back = {"rel": "next", "href": pages[0].url}
+    checkpoint = pages[1].checkpoint
+    assert checkpoint is not None
+    if held == 0:
+        # The held last page's next link points back at the first page.
+        stale = dataclasses.replace(checkpoint, pending=(Request(url=pages[0].url),))
+        transport, seen = serve()
+        _, failure = traverse(OGCService(GEOCONNEX, transport=transport), "hu02", resume=stale)
+        assert seen == []
+    else:
+        transport, seen = serve({**docs[2], "links": [back]})
+        _, failure = traverse(OGCService(GEOCONNEX, transport=transport), "hu02", resume=checkpoint)
+        assert len(seen) == 1
+    assert failure is not None
+    assert "repeats one already followed" in str(failure)
+    assert failure.checkpoint is None
+
+
+def test_each_page_carries_the_checkpoint_after_it() -> None:
+    docs = hu02()
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    pages, _ = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
+    assert [p.checkpoint is None for p in pages] == [False, False, True]
+    first, second = pages[0].checkpoint, pages[1].checkpoint
+    assert first is not None
+    assert second is not None
+    assert [r.url for r in first.pending] == [next_of(docs[0])]
+    assert set(first.held) < set(second.held)
+    assert (len(first.held), len(second.held)) == (1, 2)
+    restored = pickle.loads(pickle.dumps(first))
+    assert restored.held == first.held
+    assert (first.base_url, first.collection) == (GEOCONNEX, "hu02")
+
+
+def test_iter_pages_resumes_with_the_method_body_and_headers() -> None:
+    docs = hu02()
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    pages, _ = post_traversal(OGCService(GEOCONNEX, transport=transport))
+    checkpoint = pages[0].checkpoint
+    assert checkpoint is not None
+    transport, seen = serve(docs[1], without_next(docs[2]))
+    rest, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02", resume=checkpoint)
+    assert err is None
+    assert [str(r.url) for r in seen] == [next_of(docs[0]), next_of(docs[1])]
+    assert [(r.method, r.content) for r in seen] == [("POST", FILTER)] * 2
+    assert len(rest) == 2
+
+
+def test_a_cql2_resume_sends_the_content_type() -> None:
+    docs = hu02()
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    service = OGCService(GEOCONNEX, transport=transport)
+    pages, _ = traverse(service, "hu02", filter={"op": "=", "args": [{"property": "a"}, 1]})
+    checkpoint = pages[0].checkpoint
+    assert checkpoint is not None
+    transport, seen = serve(docs[1], without_next(docs[2]))
+    traverse(OGCService(GEOCONNEX, transport=transport), "hu02", resume=checkpoint)
+    assert {r.headers["content-type"] for r in seen} == {"application/query-cql-json"}
+
+
+def test_a_resume_refuses_what_it_cannot_continue() -> None:
+    docs = hu02()
+    err = partial(docs[0], httpx2.Response(500))
+    checkpoint = err.checkpoint
+    assert checkpoint is not None
+    transport, _ = serve(without_next(docs[0]))
+    ended = asyncio.run(OGCService(GEOCONNEX, transport=transport).collect("hu02"))
+    stream = [
+        ("hu02", {"resume": checkpoint, "bbox": (-78, 38, -77, 39)}, "drop bbox"),
+        (
+            "hu02",
+            {"resume": checkpoint, "params": {"limit": "1"}, "filter": "a = 1"},
+            "params, filter",
+        ),
+        ("hu01", {"resume": checkpoint}, "checkpoint of 'hu02'"),
+    ]
+    transport, seen = serve()
+    service = OGCService(GEOCONNEX, transport=transport)
+    for collection, kwargs, message in stream:
+        with pytest.raises(ValidationError, match=message):
+            traverse(service, collection, **kwargs)
+    with pytest.raises(ValidationError, match="checkpoint of 'hu02'"):
+        traverse(OGCService(f"{GEOCONNEX}/other", transport=transport), "hu02", resume=checkpoint)
+    with pytest.raises(ValidationError, match="nothing left"):
+        asyncio.run(service.collect("hu02", resume=ended))
+    with pytest.raises(ValidationError, match="holds pages"):
+        asyncio.run(service.collect("hu02", resume=checkpoint))
+    assert seen == []
+
+
+def test_a_fabricdata_resume_keeps_its_port_443_links() -> None:
+    records = recorded_pages("fabricdata/gagesii", 2)
+    docs = [r["response"]["body"] for r in records]
+    base = "https://api.water.usgs.gov/fabric/pygeoapi"
+    assert ":443" in next_of(docs[0])
+    transport, _ = serve(docs[0], httpx2.Response(500))
+    _, err = collected(OGCService(base, transport=transport), "gagesii")
+    assert isinstance(err, PartialResultsError)
+    transport, seen = serve(without_next(docs[1]))
+    result, _ = collected(OGCService(base, transport=transport), "gagesii", resume=err.result)
+    assert len(seen) == 1
+    assert result.pagination.page_count == 2
+
+
+def test_a_split_query_resumes_every_unsent_piece() -> None:
+    """A failure in the first piece leaves the second piece pending (D-52)."""
+    page = without_next(hu02()[0])
+    transport, _ = serve(hu02()[0], httpx2.Response(500))
+    _, err = collected(Split(GEOCONNEX, transport=transport))
+    assert isinstance(err, PartialResultsError)
+    assert err.checkpoint is not None
+    assert len(err.checkpoint.pending) == 2
+    transport, seen = serve(page, page)
+    result, _ = collected(Split(GEOCONNEX, transport=transport), resume=err.result)
+    assert len(seen) == 2
+    assert dict(seen[1].url.params)["datetime"] == "2021"
+    assert result.pagination.page_count == 3
+
+
+def test_a_request_refuses_a_credential_and_freezes_its_mappings() -> None:
+    url = f"{GEOCONNEX}/collections/hu02/items"
+    for kwargs in (
+        {"url": f"{url}?api_key=SECRET"},
+        {"url": url, "params": {"api_key": "SECRET"}},
+        {"url": "https://user:pass@reference.geoconnex.us/collections/hu02/items"},
+        {"url": url, "headers": {"X-Api-Key": "SECRET"}},
+        {"url": url, "method": "DELETE"},
+    ):
+        with pytest.raises(ValidationError) as excinfo:
+            Request(**kwargs)
+        assert "SECRET" not in str(excinfo.value)
+    params = {"f": "json"}
+    request = Request(url=url, params=params)
+    params["api_key"] = "SECRET"
+    assert dict(request.params) == {"f": "json"}
+    with pytest.raises(TypeError):
+        request.params["api_key"] = "SECRET"  # type: ignore[index]
+
+
+def test_a_refused_piece_keeps_the_other_pieces_pending() -> None:
+    """The refused link goes last, so a resume runs the second piece and then refuses."""
+    doc = hu02()[0]
+    away = {**doc, "links": [{"rel": "next", "href": "https://elsewhere.test/items"}]}
+    transport, _ = serve(away)
+    _, err = collected(Split(GEOCONNEX, transport=transport))
+    assert isinstance(err, PartialResultsError)
+    assert err.checkpoint is not None
+    assert [dict(r.params).get("datetime") for r in err.checkpoint.pending] == ["2021", None]
+    transport, seen = serve(without_next(doc))
+    _, again = collected(Split(GEOCONNEX, transport=transport), resume=err.result)
+    assert len(seen) == 1
+    assert isinstance(again, PartialResultsError)
+    assert "refused a URL outside" in str(again)
+    assert again.checkpoint is None
+
+
+def test_a_request_that_fails_before_sending_keeps_its_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transport closed while a request waited fails with attempts 0; a resume can retry."""
+    docs = hu02()
+    transport, _ = serve(docs[0])
+    service = OGCService(GEOCONNEX, transport=transport)
+    send = service._send
+    calls = 0
+
+    async def closing(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            msg = "transport closed while the request waited"
+            raise ServiceError(msg, args[1], attempts=0)
+        return await send(*args, **kwargs)
+
+    monkeypatch.setattr(service, "_send", closing)
+    _, err = collected(service)
+    assert isinstance(err, PartialResultsError)
+    assert err.checkpoint is not None
+    assert [r.url for r in err.checkpoint.pending] == [next_of(docs[0])]
+
+
+def test_a_resumed_collect_keeps_what_the_earlier_one_kept() -> None:
+    docs = hu02()
+    transport, _ = serve(docs[0], httpx2.Response(500))
+    _, err = collected(OGCService(GEOCONNEX, transport=transport), keep_pages=True)
+    assert isinstance(err, PartialResultsError)
+    transport, _ = serve(without_next(docs[1]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport), resume=err.result)
+    assert [p.content is not None for p in result.pages] == [True, False]
+
+
+def test_checkpoints_of_one_run_share_their_held_record() -> None:
+    """Keeping every page costs one held record, so memory grows linearly (D-52)."""
+    url = f"{GEOCONNEX}/collections/hu02/items"
+    docs = [
+        {
+            "type": "FeatureCollection",
+            "features": [],
+            "links": [{"rel": "next", "href": f"{url}?offset={n + 1}"}],
+        }
+        for n in range(49)
+    ]
+    transport, _ = serve(*docs, {"type": "FeatureCollection", "features": [], "links": []})
+    pages, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
+    assert err is None
+    records = {id(p.checkpoint.held._ids) for p in pages if p.checkpoint is not None}
+    assert len(records) == 1
+    assert [len(p.checkpoint.held) for p in pages[:3] if p.checkpoint] == [1, 2, 3]

@@ -23,7 +23,7 @@ from water_ogcapi._metadata import (
     property_names,
 )
 from water_ogcapi._paging import malformed_counts, next_href, parse_page, summarize
-from water_ogcapi._query import Request, items_request, path_segment
+from water_ogcapi._query import Checkpoint, Held, Request, items_request, path_segment
 from water_ogcapi._redact import REDACTED
 from water_ogcapi._results import Page, QueryResult, crs_of
 from water_ogcapi._transport import Transport, parse_count, reject_credentials
@@ -37,7 +37,7 @@ from water_ogcapi.exceptions import (
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Collection, Sequence
 
-    from water_ogcapi._query import GeoInterface
+    from water_ogcapi._query import GeoInterface, RequestId
     from water_ogcapi._transport import Response
 
 __all__ = ["OGCService", "ServiceProfile"]
@@ -366,50 +366,130 @@ class OGCService:
         """
         return (request,)
 
-    async def _traverse(self, request: Request) -> AsyncIterator[Page]:
-        """Yield each page from ``request`` on, following ``next`` links (D-34, D-38).
+    def _resumable(
+        self, collection: str, checkpoint: Checkpoint, given: Mapping[str, object]
+    ) -> None:
+        """Check that ``checkpoint`` belongs to this service and ``collection`` (D-52).
 
-        Every request, the ``next`` links included, sends the method, body, and headers
-        of ``request``: a ``GET`` to the ``next`` link of a CQL2 ``POST`` drops the
-        filter. Its ``params`` apply to the first request only.
+        Raises
+        ------
+        ValidationError
+            If a query keyword in ``given`` is set, or the checkpoint names another
+            ``base_url`` or collection.
         """
-        url, query, method = request.url, request.params, request.method
-        content, headers = request.body, request.headers
-        followed: set[str] = set()
-        while True:
-            try:
-                resp = await self._send(method, url, params=query, headers=headers, content=content)
-                page = parse_page(resp, query, method.upper(), content)
-            except ServiceError as err:
-                raise PaginationError([err]) from err
-            yield page
-            # Holds the first request as sent too, so a next link back to it is a repeat.
-            followed.add(page.url)
-            href = next_href(page.links)
-            if href is None:
-                return
-            # RFC 8288 allows a relative reference; the origin check needs it absolute.
-            # Link redacts an unparsable href to REDACTED, which must not resolve to a path.
-            if href != REDACTED:
-                href = urljoin(page.url, href)
-            refusal = None
-            if href in followed:
-                # A caller collecting every page never stops, so a loop spends the quota.
-                refusal = "a next link repeats one already followed"
-            else:
-                try:
-                    reject_credentials(href, None)
-                except ValueError:
-                    # A gateway can copy the key into a URL (L-11). The transport's
-                    # ValueError would escape collect() and drop the pages fetched so far.
-                    refusal = "refused a next link that carries a credential in its query"
-            if refusal is not None:
+        if used := [name for name, value in given.items() if value is not None]:
+            msg = f"resume carries its own query; drop {', '.join(used)}"
+            raise ValidationError(msg)
+        if (checkpoint.base_url, checkpoint.collection) != (self.base_url, collection):
+            msg = (
+                f"resume is a checkpoint of {checkpoint.collection!r} on "
+                f"{checkpoint.base_url}, not of {collection!r} on {self.base_url}"
+            )
+            raise ValidationError(msg)
+
+    def _refusal(self, request: Request, held: Collection[RequestId]) -> str | None:
+        """Return why ``request`` must not be sent, or ``None`` (D-34, D-52)."""
+        if _origin(request.url) != _origin(self.base_url):
+            return f"refused a URL outside {self.base_url}"
+        if request.identity() in held:
+            # A caller collecting every page never stops, so a loop spends the quota.
+            return "a next link repeats one already followed"
+        return None
+
+    def _next_request(
+        self, page: Page, request: Request, held: Collection[RequestId]
+    ) -> tuple[Request | None, ServiceError | None]:
+        """Return the request for the ``next`` link of ``page``, and why it is refused.
+
+        The request keeps the method, body, and headers of ``request`` (D-38). A link
+        that leaves the origin of ``base_url`` (D-34), carries a credential (L-11), or
+        repeats a request already answered is refused before it is sent; the request
+        comes back beside the refusal, except for a credential, which no `Request` holds.
+        """
+        href = next_href(page.links)
+        if href is None:
+            return None, None
+        # RFC 8288 allows a relative reference; the origin check needs it absolute.
+        # Link redacts an unparsable href to REDACTED, which must not resolve to a path.
+        if href != REDACTED:
+            href = urljoin(page.url, href)
+        try:
+            following = Request(
+                url=href, method=request.method, body=request.body, headers=request.headers
+            )
+        except ValidationError:
+            # A gateway can copy the key into a URL (L-11). The transport's
+            # refusal would escape collect() and drop the pages fetched so far.
+            refusal = "refused a next link that carries a credential"
+            err = ServiceError(
+                refusal, href, attempts=0, method=page.method, request_body=request.body
+            )
+            return None, err
+        refusal = self._refusal(following, held)
+        if refusal is None:
+            return following, None
+        err = ServiceError(refusal, href, attempts=0, method=page.method, request_body=request.body)
+        return following, err
+
+    async def _run(self, start: Checkpoint) -> AsyncIterator[Page]:
+        """Yield each page of the pending requests, following ``next`` links (D-34, D-52).
+
+        Pending requests run in order, each to the end of its ``next`` links. Every
+        request, the ``next`` links included, sends the method, body, and headers of the
+        request that began its chain: a ``GET`` to the ``next`` link of a CQL2 ``POST``
+        drops the filter (D-38). No request in ``start.held`` is sent. Each yielded page
+        carries the checkpoint after it, and a failure carries the checkpoint with the
+        failed request first. A refused request goes last instead, so a resume runs the
+        other pieces and then refuses it again; alone, it leaves no checkpoint.
+        """
+        pending = list(start.pending)
+        held = Held.start(start.held)
+        malformed = start.malformed
+
+        def checkpoint(queue: Sequence[Request]) -> Checkpoint | None:
+            if not queue:
+                return None
+            return Checkpoint(
+                base_url=start.base_url,
+                collection=start.collection,
+                pending=tuple(queue),
+                held=held.snapshot(),
+                malformed=malformed,
+            )
+
+        def refused(request: Request | None, rest: list[Request]) -> Checkpoint | None:
+            return checkpoint([*rest, request]) if rest and request is not None else None
+
+        while pending:
+            request, rest = pending[0], pending[1:]
+            if (refusal := self._refusal(request, held)) is not None:
+                url = request.identity()[1]
                 err = ServiceError(
-                    refusal, href, attempts=0, method=page.method, request_body=content
+                    refusal, url, attempts=0, method=request.method, request_body=request.body
                 )
-                raise PaginationError([err])
-            followed.add(href)
-            url, query = href, {}
+                raise PaginationError([err], refused(request, rest))
+            try:
+                resp = await self._send(
+                    request.method,
+                    request.url,
+                    params=request.params,
+                    headers=request.headers,
+                    content=request.body,
+                )
+                page = parse_page(resp, request.params, request.method, request.body)
+            except ServiceError as err:
+                raise PaginationError([err], checkpoint(pending)) from err
+            # The identity is the URL as sent, so a next link back to this page repeats it.
+            held.add(request.identity())
+            if page.body is not None and malformed_counts(page.body):
+                malformed = True
+            following, failure = self._next_request(page, request, held)
+            if failure is not None:
+                after = refused(following, rest)
+                yield dataclasses.replace(page, checkpoint=after)
+                raise PaginationError([failure], after)
+            pending = rest if following is None else [following, *rest]
+            yield dataclasses.replace(page, checkpoint=checkpoint(pending))
 
     async def iter_pages(
         self,
@@ -422,6 +502,7 @@ class OGCService:
         ids: Sequence[str | int] | None = None,
         id_property: str | None = None,
         validate: bool = True,
+        resume: Checkpoint | None = None,
     ) -> AsyncIterator[Page]:
         """Yield each page of a collection's items, following ``next`` links (D-34).
 
@@ -466,12 +547,18 @@ class OGCService:
             for an hour (D-07). pygeoapi drops a name it does not know, so an unchecked
             typo returns the whole collection. Defaults to ``True``; ``False`` skips the
             check, for a server that accepts a name its queryables leave out.
+        resume : Checkpoint, optional
+            Continue a query from a `Checkpoint`: a page's ``checkpoint`` or a
+            `PaginationError`'s (D-52). Its pending requests are sent as stored, so no
+            query keyword may come with it, ``validate`` is ignored, and no request it
+            holds is sent again.
 
         Yields
         ------
         Page
             One per response, the decoded document in ``body`` and its bytes in
-            ``content``. The ``next`` link of each page is the resume point after it.
+            ``content``. Its ``checkpoint`` is where the query stands once the caller
+            holds it.
 
         Raises
         ------
@@ -485,6 +572,8 @@ class OGCService:
             or ``limit`` is not an integer from 1 to the profile's ``max_limit``. With
             ``validate``, before the first page request, when the collection, a name in
             ``params``, or ``id_property`` is unknown; the message lists the valid ones.
+            With ``resume``, when a query keyword comes with it or it is a checkpoint
+            of another service or collection.
         TypeError
             Before any request, when a CQL2-JSON filter holds a value JSON cannot
             encode, such as a set.
@@ -492,27 +581,39 @@ class OGCService:
             With ``validate``, when a metadata request fails.
         PaginationError
             When a request fails, a body is not a FeatureCollection with well-formed
-            links, or a ``next`` link repeats one already followed, leaves the scheme,
-            host, and port of ``base_url``, or carries a credential in its query. Its one
-            failure names that request or link by URL.
+            links, or a ``next`` link repeats a request already answered, leaves the
+            scheme, host, and port of ``base_url``, or carries a credential. Its one
+            failure names that request or link by URL, and its ``checkpoint`` is where
+            the query stands.
         """
-        request = items_request(
-            self.base_url,
-            collection,
-            params=self._limited(params),
-            bbox=bbox,
-            geometry=geometry,
-            cql2=filter,
-            ids=ids,
-            id_property=id_property,
-        )
-        if validate:
-            # The transport refuses a credential in params too, but only after validation sends.
-            reject_credentials(request.url, request.params)
-            await self._validate(collection, params, id_property)
-        for piece in self._pieces(request):
-            async for page in self._traverse(piece):
-                yield page
+        if resume is not None:
+            given = {
+                "params": params,
+                "bbox": bbox,
+                "geometry": geometry,
+                "filter": filter,
+                "ids": ids,
+                "id_property": id_property,
+            }
+            self._resumable(collection, resume, given)
+            start = resume
+        else:
+            request = items_request(
+                self.base_url,
+                collection,
+                params=self._limited(params),
+                bbox=bbox,
+                geometry=geometry,
+                cql2=filter,
+                ids=ids,
+                id_property=id_property,
+            )
+            if validate:
+                await self._validate(collection, params, id_property)
+            pieces = tuple(self._pieces(request))
+            start = Checkpoint(base_url=self.base_url, collection=collection, pending=pieces)
+        async for page in self._run(start):
+            yield page
 
     async def collect(
         self,
@@ -526,6 +627,7 @@ class OGCService:
         id_property: str | None = None,
         validate: bool = True,
         keep_pages: bool = False,
+        resume: QueryResult | Checkpoint | None = None,
     ) -> QueryResult:
         """Fetch every page of a collection's items into one `QueryResult` (D-22).
 
@@ -537,33 +639,66 @@ class OGCService:
             The query and its check, as for `iter_pages`.
         keep_pages : bool, optional
             Keep each page's response bytes in ``Page.content`` (D-23). Page bodies
-            are always dropped.
+            are always dropped. With ``resume``, it applies to the new pages; held
+            pages keep what the earlier call kept.
+        resume : QueryResult or Checkpoint, optional
+            Continue a query that stopped on a failure (D-52): the ``result`` of a
+            `PartialResultsError`, or the ``checkpoint`` of a `PaginationError` raised
+            before any page arrived. The result's pages and features come first in the
+            new result, and no request for them is sent. No query keyword may come
+            with it.
 
         Returns
         -------
         QueryResult
-            ``geojson`` holds the features of all pages, in order.
+            ``geojson`` holds the features of all pages, in order, those of ``resume``
+            first.
 
         Raises
         ------
         ValidationError
             On a malformed query or, with ``validate``, an unknown name, as for
-            `iter_pages`.
+            `iter_pages`. With ``resume``, before any request, when a query keyword
+            comes with it, it is from another service or collection, a `QueryResult`
+            has no ``checkpoint``, or a `Checkpoint` holds pages, which only the
+            `QueryResult` that holds them can carry.
         TypeError
             Before any request, when a CQL2-JSON filter holds a value JSON cannot
             encode, as for `iter_pages`.
         ServiceError
             With ``validate``, when a metadata request fails.
         PartialResultsError
-            When a page fails after at least one succeeded. Its ``result`` holds the
-            pages that succeeded.
+            When a page fails after at least one succeeded, ``resume``'s included. Its
+            ``result`` holds the pages that succeeded and the checkpoint to resume.
         PaginationError
             When the first page fails.
         """
         pages: list[Page] = []
         features: list[Any] = []
         failure: PaginationError | None = None
+        checkpoint = resume.checkpoint if isinstance(resume, QueryResult) else resume
         malformed = False
+        if resume is not None:
+            if checkpoint is None:
+                msg = "resume has nothing left to send: the query ended or a request was refused"
+                raise ValidationError(msg)
+            given = {
+                "params": params,
+                "bbox": bbox,
+                "geometry": geometry,
+                "filter": filter,
+                "ids": ids,
+                "id_property": id_property,
+            }
+            self._resumable(collection, checkpoint, given)
+            if isinstance(resume, Checkpoint) and resume.held:
+                msg = "this checkpoint holds pages; resume the QueryResult that holds them"
+                raise ValidationError(msg)
+            if isinstance(resume, QueryResult):
+                # Copied, so the two results share no feature object (D-23).
+                pages = list(resume.pages)
+                features = copy.deepcopy(resume.geojson["features"])
+            malformed = checkpoint.malformed
         try:
             async for page in self.iter_pages(
                 collection,
@@ -574,6 +709,7 @@ class OGCService:
                 ids=ids,
                 id_property=id_property,
                 validate=validate,
+                resume=checkpoint,
             ):
                 if page.body is None:
                     # Unreachable: parse_page always sets the body. Keeps the type narrow.
@@ -582,7 +718,10 @@ class OGCService:
                 malformed = malformed or malformed_counts(page.body)
                 pages.append(
                     dataclasses.replace(
-                        page, body=None, content=page.content if keep_pages else None
+                        page,
+                        body=None,
+                        content=page.content if keep_pages else None,
+                        checkpoint=None,
                     )
                 )
         except PaginationError as err:
@@ -592,6 +731,7 @@ class OGCService:
             pages=tuple(pages),
             pagination=summarize(pages, failed=failure is not None, malformed=malformed),
             crs=crs_of(pages),
+            checkpoint=None if failure is None else failure.checkpoint,
         )
         if failure is None:
             return result

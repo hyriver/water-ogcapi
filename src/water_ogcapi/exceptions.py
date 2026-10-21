@@ -9,6 +9,7 @@ from water_ogcapi._redact import redact_url
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from water_ogcapi._query import Checkpoint
     from water_ogcapi._results import QueryResult
 
 __all__ = [
@@ -146,11 +147,20 @@ class PaginationError(WaterOGCAPIError):
     ----------
     failures : sequence of ServiceError
         One error per failed request, each naming the request by its URL as sent.
+    checkpoint : Checkpoint, optional
+        Where the query stands, the failed request first, for ``resume`` (D-52).
+        ``None`` when a request was refused before sending, since a resume would
+        refuse it again.
     """
 
-    def __init__(self, failures: Sequence[ServiceError]) -> None:
+    def __init__(
+        self, failures: Sequence[ServiceError], checkpoint: Checkpoint | None = None
+    ) -> None:
         self.failures = tuple(failures)
+        self.checkpoint = checkpoint
         super().__init__(self.failures)
+        # copy and pickle rebuild the instance as cls(*args).
+        self.args = (self.failures, checkpoint)
 
     def __str__(self) -> str:
         count = len(self.failures)
@@ -167,11 +177,12 @@ class PartialResultsError(PaginationError):
         One error per failed request, each naming the request by its URL as sent.
     result : QueryResult
         Every page that succeeded, with ``completeness`` ``limited`` and stop reason
-        ``failure`` (docs/design.md D-24).
+        ``failure`` (docs/design.md D-24). Its ``checkpoint``, also this error's, lets
+        ``collect(resume=result)`` continue it (D-52).
     """
 
     def __init__(self, failures: Sequence[ServiceError], result: QueryResult) -> None:
-        super().__init__(failures)
+        super().__init__(failures, result.checkpoint)
         self.result = result
         # copy and pickle rebuild the instance as cls(*args).
         self.args = (self.failures, result)

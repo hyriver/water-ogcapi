@@ -517,7 +517,7 @@ Layering rule for anything new:
 
 ### D-24: A failed page is reported by the request that failed
 
-- **Status:** accepted; amended by D-38.
+- **Status:** accepted; amended by D-38 and D-52.
 
 - **Date:** 2026-10-07.
 
@@ -953,7 +953,8 @@ Layering rule for anything new:
 
 ### D-38: A request is identified by its method, URL as sent, and body
 
-- **Status:** accepted; amended by D-39 and D-44. Amends D-22 and D-24.
+- **Status:** accepted; amended by D-39, D-44, and D-52, which replaces `_traverse()`
+    with `_run()`. Amends D-22 and D-24.
 - **Date:** 2026-10-13.
 - **Decision:** `Transport.request(method, url, params=, headers=, content=)` sends
     every request, and `get()` calls it. Every `ServiceError` and every `Page` carries
@@ -1009,7 +1010,8 @@ Layering rule for anything new:
 
 ### D-40: Every service request goes through `OGCService._send()`
 
-- **Status:** accepted. Amends D-34.
+- **Status:** accepted; amended by D-52, which replaces `_traverse()` with `_run()`.
+    Amends D-34.
 - **Date:** 2026-10-14.
 - **Decision:** `collections()`, `item()`, and `_traverse()` send through one private
     method, `_send()`, which adds the headers `_headers()` returns and refuses, before
@@ -1099,8 +1101,8 @@ Layering rule for anything new:
 
 ### D-44: `_query.py` builds the request, and `_pieces()` is the fan-out seam
 
-- **Status:** accepted. Amends D-38 and D-39. D-50 moved page parsing out of
-    `_client.py` after all.
+- **Status:** accepted; amended by D-52, which replaces `_traverse()` with `_run()`.
+    Amends D-38 and D-39. D-50 moved page parsing out of `_client.py` after all.
 - **Date:** 2026-10-15.
 - **Decision:** `_query.py` builds the first request of an items query with no I/O:
     `items_request()` validates the query forms (D-39) and returns a `Request` holding
@@ -1352,6 +1354,59 @@ Layering rule for anything new:
 - **Limits:** The promise covers paths only. A frozen slots dataclass pickles its fields
     as a list in field order, so adding, removing, or reordering a field still breaks an
     old pickle of that type. Only the types the test pickles are pinned.
+
+### D-52: A query resumes from a `Checkpoint` of pending and held requests
+
+- **Status:** accepted. Amends D-24, D-38, and D-44.
+- **Date:** 2026-10-21.
+- **Decision:** A `Checkpoint` holds the `base_url` and collection of a query, its
+    `pending` requests (the `next` link of the chain in progress or the request that
+    failed, then each piece not yet started), the identity of every request already
+    answered (`held`: method, URL as sent with credentials masked, and body, D-38), and
+    `malformed` (a held page had a malformed count). Each page `iter_pages()` yields
+    with more to fetch carries the checkpoint after it in `Page.checkpoint`; a
+    `PaginationError` carries the one with the failed request first, as does the
+    `QueryResult` of a `PartialResultsError`. `iter_pages(resume=checkpoint)` and
+    `collect(resume=result_or_checkpoint)` send the pending requests as stored, refuse
+    any held request before sending it, and refuse a query keyword or a checkpoint of
+    another service or collection. `collect()` takes the `QueryResult` when pages were
+    held, so the earlier pages and features always come with their checkpoint, and a
+    `Checkpoint` only when none were. `Request` and `Checkpoint` are public and pickle;
+    there is no JSON form. A `Request` refuses a credential in its URL, userinfo, or
+    params, and any header but `Accept` and `Content-Type`, and freezes its mappings. A
+    refused request (a repeat or an off-origin URL) goes last in the checkpoint, so a
+    resume runs the other pieces and then refuses it again; with no other piece left, it
+    leaves no checkpoint. A credential `next` link leaves none either, since no
+    `Request` can hold it. Any other failure, one with attempts 0 such as a transport
+    closed while the request waited included, keeps the failed request first. The
+    checkpoints of one run share one append-only record of held identities (`Held`),
+    each seeing the first `count`, so a checkpoint per page costs no copy; it pickles as
+    a `frozenset` of its own identities. One private runner,
+    `OGCService._run(checkpoint)`, serves a fresh query and a resume; it replaces
+    `_traverse()`.
+- **Why:** D-24 made the resume point exist after every page, since a process can stop
+    without an exception, and #14's fan-out leaves several unfinished requests, which
+    one `Page` cannot name. Codex and Gemini both reviewed a first version that resumed
+    from a held `Page` or `QueryResult` (`91fb915`) and found that its first request was
+    sent before the repeat check, that a resume from one page forgot the earlier ones,
+    and that a split query lost its unsent pieces. A checkpoint stores the request
+    headers exactly, holds no feature, and names every unfinished request. The identity
+    includes the body because two CQL2 `POST` pieces can share a URL. Chosen by the
+    maintainer after the 2026-10-21 review (`.agents/reviews/2026-10-21/summary.md`).
+- **Rejected:** Resuming from a `Page` or `QueryResult` with no checkpoint type (the
+    first version), which rebuilt the headers from the body and carried every feature.
+    `collect(resume=checkpoint, previous=result)` (Codex), which allows a mismatched
+    pair. A `service.resume(result)` method, which adds a method to every service and
+    twin without changing the model. A JSON form, which needs a byte encoding for bodies
+    and a format contract.
+- **Limits:** The server may have changed the collection or expired the cursor in a
+    `next` link (D-24), and nothing detects either; an expired cursor fails as a page
+    failure with the held pages kept. Pieces run one after another; #14 adds the
+    concurrency, and its checkpoints must list every chain in flight. `held` grows by
+    one identity a page and is never trimmed. The whole-project review of 2026-10-21
+    (Codex, Fable) found that the first refusal rule, no checkpoint after any request
+    with attempts 0, dropped the unsent pieces and a retryable closed-transport failure,
+    and that a copied `held` per page used 330 MiB for 4,000 kept pages.
 
 ## Lessons
 

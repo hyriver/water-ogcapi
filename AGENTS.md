@@ -37,6 +37,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
     and refuses a URL outside the scheme, host, and port of `base_url` (D-34, D-40).
 - A request is identified by its method, URL as sent, and body, and every `next` link
     gets the first request's method and body (D-38).
+- A resumed query sends the pending requests of its `Checkpoint` and never a request the
+    checkpoint holds (D-52).
 - Query methods return payload plus evidence (`Page`, `QueryResult`), never a bare
     GeoJSON dict (D-03).
 - Query forms (`bbox`, `geometry`, `filter`, `ids`) are keyword arguments of

@@ -301,8 +301,9 @@ class Pagination:
     Parameters
     ----------
     number_matched : int or None
-        The ``numberMatched`` every reporting page agreed on, ``None`` when none
-        reported it or pages disagreed.
+        The ``numberMatched`` every page reported and agreed on, ``None`` when a
+        page left it out or pages disagreed. Pages that report it beside pages that
+        do not leave the result ``unknown``.
     number_returned : int
         Features received across all pages.
     page_count : int

@@ -676,7 +676,7 @@ Layering rule for anything new:
 
 ### D-29: What a `Page` keeps of a request and response
 
-- **Status:** accepted. D-51 keeps the paths these types pickle under.
+- **Status:** accepted; amended by D-53. D-51 keeps the paths these types pickle under.
 - **Date:** 2026-10-08.
 - **Decision:** `Page` redacts in its constructor. Its `url` and each `Link.href` mask
     the value of a credential query parameter (`api_key`, read percent-decoded, in any
@@ -848,7 +848,8 @@ Layering rule for anything new:
 
 ### D-34: `iter_pages()` follows `next` links within the base URL's origin
 
-- **Status:** accepted; amended by D-40.
+- **Status:** accepted; amended by D-40, and by D-53, under which a page whose link
+    carries a credential fails before it is yielded.
 - **Date:** 2026-10-12.
 - **Decision:** `OGCService.iter_pages()` requests `{base_url}/collections/{id}/items`
     with the caller's params plus `f=json`, then follows each page's `next` link until a
@@ -906,7 +907,7 @@ Layering rule for anything new:
 
 ### D-36: `complete` means the traversal ended and the checks that ran passed
 
-- **Status:** accepted. Amends D-22.
+- **Status:** accepted; amended by D-54. Amends D-22.
 - **Date:** 2026-10-13.
 - **Decision:** `collect()` reads `complete` when the last page had no `next` link
     (D-05) and every check that could run passed. `Pagination.checks` lists the checks
@@ -1010,8 +1011,9 @@ Layering rule for anything new:
 
 ### D-40: Every service request goes through `OGCService._send()`
 
-- **Status:** accepted; amended by D-52, which replaces `_traverse()` with `_run()`.
-    Amends D-34.
+- **Status:** accepted; amended by D-52, which replaces `_traverse()` with `_run()`, and
+    by D-53, under which the service's headers replace a request header of the same
+    name. Amends D-34.
 - **Date:** 2026-10-14.
 - **Decision:** `collections()`, `item()`, and `_traverse()` send through one private
     method, `_send()`, which adds the headers `_headers()` returns and refuses, before
@@ -1407,6 +1409,45 @@ Layering rule for anything new:
     (Codex, Fable) found that the first refusal rule, no checkpoint after any request
     with attempts 0, dropped the unsent pieces and a retryable closed-transport failure,
     and that a copied `held` per page used 330 MiB for 4,000 kept pages.
+
+### D-53: A response whose link carries a credential fails before it is kept
+
+- **Status:** accepted. Amends D-29, D-34, and D-40.
+- **Date:** 2026-10-21.
+- **Decision:** `parse_page()` and `item()` raise `ServiceError` when any link object in
+    the document or in one of its features carries a credential in its raw `href`
+    (query, fragment, or userinfo), checked before `Link` masks it. `_send()` adds the
+    service's headers last and drops a request header of the same name in any case, so a
+    `Request` that skipped its own checks, such as one unpickled from a tampered file,
+    cannot replace the key. The page is never yielded, so its `body` and `content` never
+    reach the caller, a `QueryResult`, or a pickle.
+- **Why:** D-29 kept `body` and `content` unredacted on the ground that the key never
+    travels in a query (D-18), so no server can echo it. L-11 showed a gateway can copy
+    the key into a URL, and the 2026-10-21 review (Codex) found that a stamped `next`
+    link was refused while the page holding it was yielded and kept. Checking the raw
+    `href` also covers a fragment, which `redact_url()` drops before the traversal's own
+    check sees it (Gemini).
+- **Rejected:** Scrubbing the key out of `body` and `content`, which changes the bytes
+    D-23 promises as received and still misses a key elsewhere in the document.
+- **Limits:** Only link objects are checked, those of the document and of each feature,
+    query, fragment, and userinfo. The whole-project review of 2026-10-21 (Codex) found
+    the first version missed feature links and userinfo. A key echoed into a feature
+    property, or inside another parameter's value after a stray `?`, still reaches the
+    body.
+
+### D-54: Pages that report `numberMatched` beside pages that do not read `unknown`
+
+- **Status:** accepted. Amends D-36.
+- **Date:** 2026-10-21.
+- **Decision:** `summarize()` sets `number_matched` only when every page reported the
+    same value. When some pages report it and others do not, `number_matched` is `None`,
+    the `count` check does not run, and `completeness` is `unknown`.
+- **Why:** The first rule took the reporting pages as agreeing, so a resume whose held
+    pages reported 10 and whose new pages reported nothing could read `complete` on a
+    count no page after the gap confirmed (Gemini, 2026-10-21 review).
+- **Rejected:** Running the count check on the reporting pages alone.
+- **Limits:** NWIS reports no `numberMatched` on any page, so its results keep only the
+    `end_of_links` check.
 
 ## Lessons
 

@@ -555,20 +555,55 @@ def test_a_next_link_back_to_the_first_request_is_a_repeat() -> None:
     assert err.result.geojson["features"] == doc["features"]
 
 
-def test_a_next_link_with_a_credential_is_a_page_failure() -> None:
-    doc = hu02()[0]
+def stamped(doc: dict[str, Any], rel: str, suffix: str) -> dict[str, Any]:
+    """Copy ``doc`` with ``suffix`` appended to the href of its ``rel`` link."""
     links = [
-        {**link, "href": f"{link['href']}&api_key=SECRET"} if link["rel"] == "next" else link
+        {**link, "href": f"{link['href']}{suffix}"} if link["rel"] == rel else link
         for link in doc["links"]
     ]
-    transport, seen = serve({**doc, "links": links})
+    return {**doc, "links": links}
+
+
+@pytest.mark.parametrize(
+    ("rel", "suffix"),
+    [("next", "&api_key=SECRET"), ("self", "&api_key=SECRET"), ("next", "#?api_key=SECRET")],
+)
+def test_a_page_whose_link_carries_a_credential_fails(rel: str, suffix: str) -> None:
+    """Its body and bytes would keep the key, so the page is never yielded (D-29, L-11)."""
+    doc = hu02()[0]
+    transport, seen = serve(stamped(doc, rel, suffix))
     _, err = collected(OGCService(GEOCONNEX, transport=transport))
-    assert isinstance(err, PartialResultsError)
+    assert type(err) is PaginationError
     assert len(seen) == 1
-    assert err.result.geojson["features"] == doc["features"]
-    assert err.failures[0].url is not None
-    assert "SECRET" not in err.failures[0].url
-    assert "api_key=REDACTED" in err.failures[0].url
+    assert "carries a credential" in str(err)
+    assert b"SECRET" not in pickle.dumps(err)
+
+
+def test_a_page_whose_feature_link_or_userinfo_carries_a_credential_fails() -> None:
+    doc = hu02()[0]
+    feature = {
+        **doc["features"][0],
+        "links": [{"rel": "self", "href": f"{GEOCONNEX}/a?api_key=SECRET"}],
+    }
+    userinfo = {
+        **doc,
+        "links": [*doc["links"], {"rel": "alternate", "href": "https://u:SECRET@x.test/a"}],
+    }
+    for reply in ({**doc, "features": [feature]}, userinfo):
+        transport, _ = serve(reply)
+        _, err = collected(OGCService(GEOCONNEX, transport=transport))
+        assert type(err) is PaginationError
+        assert b"SECRET" not in pickle.dumps(err)
+
+
+def test_collect_reads_unknown_when_only_some_pages_report_number_matched() -> None:
+    docs = hu02()
+    docs[1] = {key: value for key, value in docs[1].items() if key != "numberMatched"}
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.completeness == "unknown"
+    assert result.pagination.number_matched is None
+    assert result.pagination.checks == ("end_of_links",)
 
 
 @pytest.mark.parametrize("clone", [copy.copy, lambda e: pickle.loads(pickle.dumps(e))])
@@ -913,6 +948,16 @@ def test_an_item_id_is_percent_encoded() -> None:
     assert seen[0].url.raw_path == b"/ogcapi/v1/collections/a%20b/items/x%2Fy%3Fz?f=json"
 
 
+def test_an_item_whose_link_carries_a_credential_fails() -> None:
+    doc = record("nwis/monitoring-locations/item-USGS-01646500.json")["response"]["body"]
+    link = doc["links"][0]
+    suffix = "&api_key=SECRET" if "?" in link["href"] else "?api_key=SECRET"
+    transport, _ = serve(stamped(doc, link["rel"], suffix))
+    with pytest.raises(ServiceError, match="carries a credential") as excinfo:
+        asyncio.run(OGCService(BASE, transport=transport).item("monitoring-locations", "x"))
+    assert b"SECRET" not in pickle.dumps(excinfo.value)
+
+
 @pytest.mark.parametrize(
     ("reply", "status"),
     [
@@ -933,6 +978,21 @@ class Keyed(OGCService):
 
     def _headers(self) -> dict[str, str]:
         return {"X-Api-Key": "k"}
+
+
+def test_a_request_header_cannot_replace_the_service_key() -> None:
+    """An unpickled Request skips its header check, so _send() must not trust it (D-53)."""
+    request = Request(url=f"{BASE}/collections/c/items", params={"f": "json"})
+    object.__setattr__(request, "headers", {"x-api-key": "other", "X-API-KEY": "other"})
+    start = Checkpoint(base_url=BASE, collection="c", pending=(request,))
+    transport, seen = serve(without_next(hu02()[0]))
+
+    async def run() -> None:
+        async for _ in Keyed(BASE, transport=transport)._run(start):
+            pass
+
+    asyncio.run(run())
+    assert seen[0].headers.get_list("x-api-key") == ["k"]
 
 
 def test_service_headers_reach_every_request() -> None:

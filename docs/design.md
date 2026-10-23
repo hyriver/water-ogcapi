@@ -1600,8 +1600,7 @@ Layering rule for anything new:
     a conda user installs pyarrow and shapely alongside. A query that asks for another
     CRS does not convert; convert the CRS84 result and reproject the frame. shapely 2.0
     (GEOS 3.11) rejects a third coordinate in GeoJSON, so the extra needs shapely 2.1.
-    The development lock assumes macOS 14 on Apple silicon, the oldest that pyproj,
-    under geopandas in the test environments, ships wheels for (D-59).
+    D-59 sets the development lock's macOS floor.
 
 ### D-59: Python 3.13 is the floor, and the lock covers three platforms
 
@@ -1612,12 +1611,15 @@ Layering rule for anything new:
     and `docs` environments run 3.15 and `lint` runs 3.13, so no environment uses 3.14.
     `pixi r audit` resolves for the `lint` Python, and 3.13 installs backports that 3.15
     skips, such as `typing-extensions` under anyio. Python 3.15 comes from the main
-    conda-forge channel. The pixi platforms are `linux-64`, `osx-arm64` (macOS 14 or
+    conda-forge channel. The pixi platforms are `linux-64`, `osx-arm64` (macOS 15 or
     later), and `win-64`.
 - **Why:** Chosen by the maintainer once Python 3.15.0 was final, which also retires the
     `python_rc` channel and the typing-extensions pin it needed. Intel Macs are out of
     the development lock by the maintainer's call, and pyproj's Intel wheel needs macOS
-    15 anyway.
+    15 anyway. The macOS floor is the oldest that every wheel in the lock supports:
+    rasterio, under contextily in `dev` for the example maps' basemaps, ships Apple
+    silicon wheels for macOS 15 and later, and pyproj for 14; below that pixi builds
+    their sdists, which need GDAL and PROJ.
 - **Limits:** The package is pure Python, so `pip` installs it on an Intel Mac; only the
     pixi environments skip it. CI runs on Ubuntu alone, so the `osx-arm64` and `win-64`
     lock entries are solved and never installed there. `_transport.py` still catches

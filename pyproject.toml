@@ -35,6 +35,10 @@ dependencies = [
   "h2>=4.4.1,<5",
   "httpx2>=2.12",
 ]
+optional-dependencies.arrow = [
+  "pyarrow>=17",
+  "shapely>=2.1",
+]
 urls.Changelog = "https://github.com/hyriver/water-ogcapi/releases"
 urls.CI = "https://github.com/hyriver/water-ogcapi/actions"
 urls.Homepage = "https://github.com/hyriver/water-ogcapi"
@@ -52,6 +56,9 @@ dev = [
 ]
 test = [
   "coverage[toml]",
+  # Read the to_arrow() table back (D-58).
+  "geopandas",
+  "polars",
   "pytest",
   "pytest-cov",
   "pytest-sugar",
@@ -81,10 +88,17 @@ build.targets.wheel.packages = [
 
 [tool.pixi.workspace]
 channels = [ "conda-forge" ]
-platforms = [ "linux-64", "osx-64", "osx-arm64", "win-64" ]
+# pyproj, under geopandas, ships macOS wheels for 14.0 (arm64) and 15.0 (x86_64) only, and
+# pixi builds its sdist, which needs PROJ, below them.
+platforms = [
+  "linux-64",
+  { platform = "osx-64", macos = "15.0" },
+  { platform = "osx-arm64", macos = "14.0" },
+  "win-64",
+]
 
 [tool.pixi.pypi-dependencies]
-water-ogcapi = { path = ".", editable = true }
+water-ogcapi = { path = ".", editable = true, extras = [ "arrow" ] }
 
 [tool.pixi.tasks]
 # Tags only a commit already on origin/main. An optional notes file becomes the tag message.

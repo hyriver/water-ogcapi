@@ -36,6 +36,7 @@ dependencies = [
 ]
 optional-dependencies.arrow = [
   "pyarrow>=17",
+  "pyproj>=3.7",
   "shapely>=2.1",
 ]
 urls.Changelog = "https://github.com/hyriver/water-ogcapi/releases"

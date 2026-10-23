@@ -31,6 +31,11 @@ DC = (-77.12, 38.80, -76.91, 38.99)
 fabric = FabricData()
 
 # %% [markdown]
+# A service keeps its HTTP connections open until it is closed. In a script, use it in
+# a `with` block, `with FabricData() as fabric:`, which closes it on exit. A notebook keeps one
+# service across cells, so it calls `fabric.close()` explicitly in its last cell.
+
+# %% [markdown]
 # ## Look at the collection
 #
 # `collections()` returns the index and `queryables()` the properties of one collection

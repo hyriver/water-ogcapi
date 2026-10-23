@@ -30,6 +30,11 @@ from water_ogcapi import GeoConnex
 gc = GeoConnex()
 
 # %% [markdown]
+# A service keeps its HTTP connections open until it is closed. In a script, use it in
+# a `with` block, `with GeoConnex() as gc:`, which closes it on exit. A notebook keeps one
+# service across cells, so it calls `gc.close()` explicitly in its last cell.
+
+# %% [markdown]
 # ## List the regions
 #
 # Geometry is most of a response. `skipGeometry` asks the server to leave it out, and

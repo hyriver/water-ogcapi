@@ -31,6 +31,11 @@ DC = (-77.12, 38.80, -76.91, 38.99)
 nwis = NWIS()
 
 # %% [markdown]
+# A service keeps its HTTP connections open until it is closed. In a script, use it in
+# a `with` block, `with NWIS() as nwis:`, which closes it on exit. A notebook keeps one
+# service across cells, so it calls `nwis.close()` explicitly in its last cell.
+
+# %% [markdown]
 # ## Stream pages
 #
 # `iter_pages()` yields one `Page` per response and follows each page's `next` link. A

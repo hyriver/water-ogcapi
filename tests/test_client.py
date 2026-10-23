@@ -463,7 +463,7 @@ def test_collect_aggregates_every_feature_and_checks_the_count() -> None:
     assert result.geojson["features"] == [f for d in docs for f in d["features"]]
     pagination = result.pagination
     assert pagination.completeness == "complete"
-    assert pagination.checks == ("end_of_links", "count")
+    assert pagination.checks == ("end_of_links", "count", "unique_ids")
     assert (
         pagination.number_matched == pagination.number_returned == len(result.geojson["features"])
     )
@@ -477,12 +477,12 @@ def test_collect_keeps_page_bytes_on_request() -> None:
     assert all(p.body is None and p.json()["features"] for p in result.pages)
 
 
-def test_collect_without_number_matched_checks_only_the_end_of_links() -> None:
+def test_collect_without_number_matched_skips_the_count_check() -> None:
     docs = [{k: v for k, v in d.items() if k != "numberMatched"} for d in hu02()]
     transport, _ = serve(*docs[:-1], without_next(docs[-1]))
     result, _ = collected(OGCService(GEOCONNEX, transport=transport))
     assert result.pagination.completeness == "complete"
-    assert result.pagination.checks == ("end_of_links",)
+    assert result.pagination.checks == ("end_of_links", "unique_ids")
     assert result.pagination.number_matched is None
 
 
@@ -492,7 +492,7 @@ def test_collect_reads_unknown_when_the_count_disagrees() -> None:
     transport, _ = serve(*docs[:-1], without_next(docs[-1]))
     result, _ = collected(OGCService(GEOCONNEX, transport=transport))
     assert result.pagination.completeness == "unknown"
-    assert result.pagination.checks == ("end_of_links",)
+    assert result.pagination.checks == ("end_of_links", "unique_ids")
 
 
 def test_collect_reads_unknown_when_pages_disagree_on_number_matched() -> None:
@@ -546,7 +546,7 @@ def test_a_passing_count_check_is_listed_when_another_check_fails() -> None:
     transport, _ = serve(*docs)
     result, _ = collected(OGCService(GEOCONNEX, transport=transport))
     assert result.pagination.completeness == "unknown"
-    assert result.pagination.checks == ("end_of_links", "count")
+    assert result.pagination.checks == ("end_of_links", "count", "unique_ids")
 
 
 def test_a_next_link_back_to_the_first_request_is_a_repeat() -> None:
@@ -608,7 +608,77 @@ def test_collect_reads_unknown_when_only_some_pages_report_number_matched() -> N
     result, _ = collected(OGCService(GEOCONNEX, transport=transport))
     assert result.pagination.completeness == "unknown"
     assert result.pagination.number_matched is None
+    assert result.pagination.checks == ("end_of_links", "unique_ids")
+
+
+HU02_IDS = [f"{n:02}" for n in range(1, 23)]
+
+
+def changed(after: list[str]) -> list[dict[str, Any]]:
+    """hu02's pages when the collection holds the ``after`` ids once page 1 is served.
+
+    The server cuts pages 2 and 3 from the changed collection by offset (L-01).
+    """
+    docs = hu02()
+    by_id = {f["id"]: f for d in docs for f in d["features"]}
+    rows = [by_id.get(fid, {**by_id["01"], "id": fid}) for fid in after]
+    pages = [docs[0]]
+    for n, doc in enumerate(docs[1:], start=1):
+        cut = rows[n * 10 : n * 10 + 10]
+        pages.append(
+            {**doc, "features": cut, "numberMatched": len(rows), "numberReturned": len(cut)}
+        )
+    return [*pages[:-1], without_next(pages[-1])]
+
+
+@pytest.mark.parametrize(
+    ("after", "checks"),
+    [
+        # An insert shifts page 1's last feature onto page 2.
+        (["00", *HU02_IDS], ("end_of_links",)),
+        # A delete shifts page 2's first feature onto page 1, so no page holds it.
+        (HU02_IDS[1:], ("end_of_links", "unique_ids")),
+        # An insert and a delete leave numberMatched and the count as they were.
+        (["00", *HU02_IDS[:-1]], ("end_of_links", "count")),
+    ],
+)
+def test_a_collection_that_changes_mid_pagination_reads_unknown(
+    after: list[str], checks: tuple[str, ...]
+) -> None:
+    transport, _ = serve(*changed(after))
+    result, err = collected(OGCService(GEOCONNEX, transport=transport))
+    assert err is None
+    assert result.pagination.completeness == "unknown"
+    assert result.pagination.checks == checks
+
+
+def test_a_repeated_id_on_a_cursor_service_reads_unknown() -> None:
+    """NWIS reports no numberMatched, so the repeat is the only witness."""
+    docs = [record(f"nwis/daily/items-{n}.json")["response"]["body"] for n in (1, 2, 3)]
+    docs[1]["features"][0] = docs[0]["features"][-1]
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, _ = collected(OGCService(BASE, transport=transport), "daily")
+    assert result.pagination.completeness == "unknown"
     assert result.pagination.checks == ("end_of_links",)
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "listed"),
+    [("1", 1, True), ("01", None, False), ("01", True, False), ("01", 21.0, False)],
+)
+def test_the_id_check_runs_when_every_feature_has_a_string_or_integer_id(
+    first: object, last: object, *, listed: bool
+) -> None:
+    docs = hu02()
+    docs[0]["features"][0] = {**docs[0]["features"][0], "id": first}
+    tail = docs[2]["features"][-1]
+    docs[2]["features"][-1] = {k: v for k, v in tail.items() if k != "id"}
+    if last is not None:
+        docs[2]["features"][-1]["id"] = last
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.completeness == "complete"
+    assert ("unique_ids" in result.pagination.checks) is listed
 
 
 @pytest.mark.parametrize("clone", [copy.copy, lambda e: pickle.loads(pickle.dumps(e))])
@@ -1151,7 +1221,7 @@ def test_a_resumed_collect_sends_no_request_for_a_held_page() -> None:
     assert result.geojson["features"] == [f for d in docs for f in d["features"]]
     assert result.pagination.page_count == 3
     assert result.pagination.completeness == "complete"
-    assert result.pagination.checks == ("end_of_links", "count")
+    assert result.pagination.checks == ("end_of_links", "count", "unique_ids")
     assert result.checkpoint is None
     assert result.geojson["features"][0] is not err.result.geojson["features"][0]
     assert all(p.checkpoint is None for p in result.pages)

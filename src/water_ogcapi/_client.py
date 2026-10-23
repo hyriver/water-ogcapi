@@ -902,7 +902,7 @@ class OGCService:
         result = QueryResult(
             geojson={"type": "FeatureCollection", "features": features},
             pages=tuple(pages),
-            pagination=summarize(pages, failed=failure is not None, malformed=malformed),
+            pagination=summarize(pages, features, failed=failure is not None, malformed=malformed),
             crs=crs_of(pages),
             checkpoint=None if failure is None else failure.checkpoint,
         )

@@ -154,8 +154,22 @@ def next_href(links: tuple[Link, ...]) -> str | None:
     return nexts[0].href if nexts else None
 
 
-def summarize(pages: list[Page], *, failed: bool, malformed: bool) -> Pagination:
-    """Summarize a traversal: counts, the checks that passed, and completeness (D-36)."""
+def _repeats_an_id(features: list[Any]) -> bool | None:
+    """Whether a feature id repeats, ``None`` when a feature has no string or integer id."""
+    ids: list[tuple[type, object]] = []
+    for feature in features:
+        fid = cast("dict[str, Any]", feature).get("id") if isinstance(feature, dict) else None
+        if type(fid) not in (str, int):
+            return None
+        # Keyed by type too, so the id "1" and the id 1 stay apart.
+        ids.append((type(fid), fid))
+    return len(set(ids)) != len(ids)
+
+
+def summarize(
+    pages: list[Page], features: list[Any], *, failed: bool, malformed: bool
+) -> Pagination:
+    """Summarize a traversal: counts, the checks that passed, and completeness (D-36, D-57)."""
     reported = {p.number_matched for p in pages if p.number_matched is not None}
     # A page that left numberMatched out cannot be said to agree with the others.
     every = all(p.number_matched is not None for p in pages)
@@ -166,15 +180,24 @@ def summarize(pages: list[Page], *, failed: bool, malformed: bool) -> Pagination
         return Pagination(matched, returned, len(pages), "limited", "failure", sort_by)
     # The traversal ended on a page without a next link. A malformed count, a count that
     # disagrees with numberMatched, a page whose numberReturned differs from its features,
-    # or pages that disagree with each other, leave the result unknown.
+    # pages that disagree with each other, or a repeated feature id leave the result
+    # unknown.
     checks: tuple[Check, ...] = ("end_of_links",)
     if matched is not None and matched == returned:
         checks += ("count",)
+    repeated = _repeats_an_id(features)
+    if repeated is False:
+        checks = (*checks, "unique_ids")
     short = any(p.number_returned not in (None, p.feature_count) for p in pages)
     mismatch = matched is not None and matched != returned
     completeness: Completeness = (
         "unknown"
-        if malformed or short or len(reported) > 1 or mismatch or (reported and not every)
+        if malformed
+        or short
+        or len(reported) > 1
+        or mismatch
+        or (reported and not every)
+        or repeated
         else "complete"
     )
     return Pagination(matched, returned, len(pages), completeness, sort_by=sort_by, checks=checks)

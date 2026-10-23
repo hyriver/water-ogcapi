@@ -907,18 +907,18 @@ Layering rule for anything new:
 
 ### D-36: `complete` means the traversal ended and the checks that ran passed
 
-- **Status:** accepted; amended by D-54. Amends D-22.
+- **Status:** accepted; amended by D-54 and D-57. Amends D-22.
 - **Date:** 2026-10-13.
 - **Decision:** `collect()` reads `complete` when the last page had no `next` link
     (D-05) and every check that could run passed. `Pagination.checks` lists the checks
     that passed: `end_of_links` always, and `count` when the pages agree on
     `numberMatched` and the features received equal it. NWIS reports no `numberMatched`,
-    so its `complete` rests on `end_of_links` alone. A count that differs from
-    `numberMatched`, a page whose `numberReturned` differs from its features, a count
-    member that is present but not a non-negative integer (a null reads as absent), or
-    pages that disagree, read `unknown` with `end_of_links` still listed. A failed page
-    reads `limited` with stop reason `failure` and no checks. The `limit` stop reason is
-    reserved for a caller cap, which no method offers yet.
+    so its `complete` rests on `end_of_links` alone (D-57 adds `unique_ids`). A count
+    that differs from `numberMatched`, a page whose `numberReturned` differs from its
+    features, a count member that is present but not a non-negative integer (a null
+    reads as absent), or pages that disagree, read `unknown` with `end_of_links` still
+    listed. A failed page reads `limited` with stop reason `failure` and no checks. The
+    `limit` stop reason is reserved for a caller cap, which no method offers yet.
 - **Why:** Chosen by the maintainer. A server that omits `numberMatched` gives no second
     witness, and reading its end-of-links as `unknown` would make NWIS never complete.
     Listing the checks tells the caller how strong a `complete` is.
@@ -1438,7 +1438,7 @@ Layering rule for anything new:
 
 ### D-54: Pages that report `numberMatched` beside pages that do not read `unknown`
 
-- **Status:** accepted. Amends D-36.
+- **Status:** accepted; amended by D-57. Amends D-36.
 - **Date:** 2026-10-21.
 - **Decision:** `summarize()` sets `number_matched` only when every page reported the
     same value. When some pages report it and others do not, `number_matched` is `None`,
@@ -1448,7 +1448,7 @@ Layering rule for anything new:
     count no page after the gap confirmed (Gemini, 2026-10-21 review).
 - **Rejected:** Running the count check on the reporting pages alone.
 - **Limits:** NWIS reports no `numberMatched` on any page, so its results keep only the
-    `end_of_links` check.
+    `end_of_links` check and, when every feature has an id, D-57's `unique_ids`.
 
 ### D-55: CI pins the pixi version
 
@@ -1469,7 +1469,7 @@ Layering rule for anything new:
 
 ### D-56: NWIS splits a query by calendar period or site list, and pieces run concurrently
 
-- **Status:** accepted. Amends D-24, D-35, D-44, D-46, and D-52.
+- **Status:** accepted; amended by D-57. Amends D-24, D-35, D-44, D-46, and D-52.
 
 - **Date:** 2026-10-21.
 
@@ -1537,11 +1537,32 @@ Layering rule for anything new:
     near one page: a year of 5-minute `continuous` values is about 105,000 rows, so
     `"month"` suits them. Feature order varies between runs. `summarize()` reads the
     pieces as one traversal (D-44), and with no `numberMatched` on NWIS only
-    `end_of_links` applies. A long `monitoring_location_id` list can still exceed the
-    GET URL cap near 8 KB; `ids` sends it in a POST body. Pieces run against a
-    collection that may change between them (D-35). A blocking iterator dropped without
-    `close()` cancels its pieces only when the loop finalizes the async generator
-    (D-46).
+    `end_of_links` and D-57's `unique_ids` apply. A long `monitoring_location_id` list
+    can still exceed the GET URL cap near 8 KB; `ids` sends it in a POST body. Pieces
+    run against a collection that may change between them (D-35). A blocking iterator
+    dropped without `close()` cancels its pieces only when the loop finalizes the async
+    generator (D-46).
+
+### D-57: A repeated feature id reads `unknown`
+
+- **Status:** accepted. Amends D-36, D-54, and D-56.
+- **Date:** 2026-10-23.
+- **Decision:** `summarize()` reads the `id` of every feature `collect()` received. When
+    every feature has a string or integer `id` and none repeats, `Pagination.checks`
+    lists `unique_ids`. A repeated `id` makes `completeness` `unknown`. A feature with
+    no `id`, or with a float, boolean, or other `id`, skips the check. Ids compare with
+    their type, so `"1"` and `1` differ.
+- **Why:** Chosen by the maintainer. On an offset service, a feature inserted before the
+    current offset shifts the last feature of one page onto the next. An insert plus a
+    delete leaves `numberMatched` and the count as they were, so the count check passes
+    on a result that holds a duplicate (D-03). On NWIS, which reports no
+    `numberMatched`, the repeat is the only witness. NWIS `daily` ids change when a
+    record is refreshed (D-56), which can hide a repeat but never invents one.
+- **Rejected:** Dropping the repeated feature, which D-56 rejects for ids that change on
+    refresh and which leaves page counts disagreeing with the features.
+- **Limits:** A deleted feature that no page holds leaves no id to repeat, so only a
+    `numberMatched` change reveals it. `iter_pages()` yields pages without the check.
+    The check holds every id of the result in memory, beside the features themselves.
 
 ## Lessons
 

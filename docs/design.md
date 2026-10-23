@@ -1566,7 +1566,7 @@ Layering rule for anything new:
 
 ### D-58: Frame conversion returns an Arrow table
 
-- **Status:** accepted. Supersedes D-25.
+- **Status:** accepted; amended by D-59. Supersedes D-25.
 - **Date:** 2026-10-23.
 - **Decision:** `QueryResult.to_arrow()` returns a `pyarrow.Table`. pyarrow and shapely
     come with the `arrow` extra, and only the method imports them (D-09). Each property
@@ -1598,8 +1598,30 @@ Layering rule for anything new:
     a conda user installs pyarrow and shapely alongside. A query that asks for another
     CRS does not convert; convert the CRS84 result and reproject the frame. shapely 2.0
     (GEOS 3.11) rejects a third coordinate in GeoJSON, so the extra needs shapely 2.1.
-    The development lock assumes macOS 14 (arm64) and 15 (x86_64), the oldest that
-    pyproj, under geopandas in the test environments, ships wheels for.
+    The development lock assumes macOS 14 on Apple silicon, the oldest that pyproj,
+    under geopandas in the test environments, ships wheels for (D-59).
+
+### D-59: Python 3.13 is the floor, and the lock covers three platforms
+
+- **Status:** accepted. Amends D-58.
+- **Date:** 2026-10-23.
+- **Decision:** `requires-python` is `>=3.13`. The offline tests run in `test313` and
+    `test315`, ruff targets `py313`, and pyright checks as 3.13. The `dev`, `typecheck`,
+    and `docs` environments run 3.15 and `lint` runs 3.13, so no environment uses 3.14.
+    `pixi r audit` resolves for the `lint` Python, and 3.13 installs backports that 3.15
+    skips, such as `typing-extensions` under anyio. Python 3.15 comes from the main
+    conda-forge channel. The pixi platforms are `linux-64`, `osx-arm64` (macOS 14 or
+    later), and `win-64`.
+- **Why:** Chosen by the maintainer once Python 3.15.0 was final, which also retires the
+    `python_rc` channel and the typing-extensions pin it needed. Intel Macs are out of
+    the development lock by the maintainer's call, and pyproj's Intel wheel needs macOS
+    15 anyway.
+- **Limits:** The package is pure Python, so `pip` installs it on an Intel Mac; only the
+    pixi environments skip it. CI runs on Ubuntu alone, so the `osx-arm64` and `win-64`
+    lock entries are solved and never installed there. `_transport.py` still catches
+    `OverflowError`: probes on 2026-10-23 found `parsedate_to_datetime` raising it for
+    an HTTP-date with a huge year on 3.13.0 through 3.13.13 and on 3.14.0, and
+    `ValueError` on 3.13.17 and 3.15.
 
 ## Lessons
 

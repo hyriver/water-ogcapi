@@ -14,4 +14,10 @@ its saved outputs.
 - [![Cache, quota, and resume](images/cache_quota_resume.png){ loading=lazy }](cache_quota_resume.md "Cache, quota, and resume")
     **Cache, quota, and resume**
 
+- [![Querying FabricData](images/fabricdata.png){ loading=lazy }](fabricdata.md "Querying FabricData")
+    **Querying FabricData**
+
+- [![Querying GeoConnex](images/geoconnex.png){ loading=lazy }](geoconnex.md "Querying GeoConnex")
+    **Querying GeoConnex**
+
 </div>

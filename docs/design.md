@@ -338,7 +338,9 @@ Layering rule for anything new:
     converts them to Markdown pages beside them before each build without running them.
     `zensical.toml` has no `nav` key, so the nav mirrors `docs/`. The Examples page
     shows one card per notebook, in a Material `grid cards` block, with a thumbnail
-    committed in `docs/examples/images/`.
+    committed in `docs/examples/images/`. The `navigation.indexes` feature makes it the
+    Examples section's own page, so the section header opens the cards and the nav lists
+    only the notebooks (2026-10-23).
 - **Why:** Each text has one source, so the published site matches the repository.
     Zensical renders no notebooks and runs no MkDocs hooks, so conversion is a pixi task
     that `docs` and `docs-serve` depend on. Running notebooks in the build would call

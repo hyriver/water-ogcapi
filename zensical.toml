@@ -11,6 +11,8 @@ repo_name = "hyriver/water-ogcapi"
 features = [
   "content.code.copy",
   "navigation.footer",
+  # docs/examples/index.md is the Examples section page, not a child of it.
+  "navigation.indexes",
   "navigation.instant",
   "navigation.top",
   "search.highlight",

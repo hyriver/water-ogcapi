@@ -25,6 +25,8 @@ install from this repository until the first final release.
     typo raises an error listing the valid names before it can return the whole
     collection.
 - Two direct runtime dependencies, `httpx2` and `h2`. No pandas.
+- With the `arrow` extra, `QueryResult.to_arrow()` returns a pyarrow Table with a
+    GeoArrow geometry column that geopandas, polars, and pandas read.
 
 ## Services
 
@@ -45,6 +47,12 @@ or later):
 
 ```bash
 pip install git+https://github.com/hyriver/water-ogcapi
+```
+
+The `arrow` extra adds pyarrow and shapely for `QueryResult.to_arrow()`:
+
+```bash
+pip install "water-ogcapi[arrow] @ git+https://github.com/hyriver/water-ogcapi"
 ```
 
 ## Quick start

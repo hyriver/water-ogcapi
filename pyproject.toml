@@ -182,12 +182,14 @@ lint.ignore = [
 ]
 lint.per-file-ignores.".agents/skills/*/*.py" = [ "INP001" ]
 lint.per-file-ignores."docs/examples/*.{ipynb,py}" = [
-  "B018",   # a bare expression displays a value in a notebook
-  "E402",   # imports sit in the cell that first needs them
-  "ERA001", # jupytext headers look like commented-out code
-  "I002",   # no __future__ import in example notebooks
-  "INP001", # docs/examples is not a package
-  "T201",   # printing is how notebooks show results
+  "B018",    # a bare expression displays a value in a notebook
+  "E402",    # imports sit in the cell that first needs them
+  "ERA001",  # jupytext headers look like commented-out code
+  "F704",    # a notebook cell can await at the top level
+  "I002",    # no __future__ import in example notebooks
+  "INP001",  # docs/examples is not a package
+  "PLE1142", # a notebook cell can await at the top level
+  "T201",    # printing is how notebooks show results
 ]
 lint.per-file-ignores."scripts/*.py" = [ "INP001" ]
 lint.per-file-ignores."tests/*.py" = [

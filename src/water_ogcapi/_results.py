@@ -438,15 +438,18 @@ class QueryResult:
         object.__setattr__(self, "pages", _all_of(tuple(self.pages), Page, "pages"))
 
     def to_arrow(self) -> pa.Table:
-        """Return the features as a pyarrow Table (D-58); needs the ``arrow`` extra.
+        """Return the features as a pyarrow Table (D-58, D-60); needs the ``arrow`` extra.
 
         Each property becomes a column, typed by pyarrow across all features, with a
         missing property read as null. When any feature has an ``id``, the ``id``
         column holds it. When any feature has a geometry, a ``geometry`` column holds
-        each one as WKB, null for a feature without one, tagged as a GeoArrow
-        ``geoarrow.wkb`` extension whose metadata names CRS84.
-        ``geopandas.GeoDataFrame.from_arrow`` reads it with its CRS, and
-        ``polars.from_arrow`` and ``Table.to_pandas`` read it too.
+        each one as ISO WKB, null for a feature without one, tagged as a GeoArrow
+        ``geoarrow.wkb`` extension whose metadata gives ``crs.effective`` as PROJJSON.
+        GeoArrow reads coordinates as x/y, so they are swapped when the CRS's first
+        axis is latitude or northing, as EPSG:4326's is: an OGC API server sends them
+        in that order. ``geopandas.GeoDataFrame.from_arrow`` reads a table with a
+        geometry column, with its CRS, and ``polars.from_arrow`` and
+        ``Table.to_pandas`` read it too.
 
         Returns
         -------
@@ -457,20 +460,20 @@ class QueryResult:
         Raises
         ------
         ValueError
-            If a feature's ``properties`` hold an ``id`` other than its own. When a
-            feature has a geometry, also if ``crs.effective`` is not CRS84, since
-            GeoArrow reads coordinates as x/y and a latitude-first CRS such as
-            EPSG:4326 arrives latitude first, or if a property named ``geometry``
-            would collide with the geometry column.
+            If any feature has an ``id`` and a feature's ``properties`` hold another
+            ``id``. When a
+            feature has a geometry, also if ``crs.effective`` is ``None`` or pyproj
+            cannot read it, or if a property named ``geometry`` would collide with the
+            geometry column.
         pyarrow.ArrowException
             If one column holds values of types pyarrow cannot combine.
         ModuleNotFoundError
-            Without pyarrow or shapely, naming the extra that installs them.
+            Without pyarrow, shapely, or pyproj, naming the extra that installs them.
         """
         try:
             from water_ogcapi._arrow import to_table
         except ModuleNotFoundError as err:
-            if err.name not in {"pyarrow", "shapely"}:
+            if err.name not in {"pyarrow", "shapely", "pyproj"}:
                 raise
             msg = f'to_arrow() needs {err.name}: pip install "water-ogcapi[arrow]"'
             raise ModuleNotFoundError(msg, name=err.name) from err

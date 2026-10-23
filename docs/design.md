@@ -1568,7 +1568,7 @@ Layering rule for anything new:
 
 ### D-58: Frame conversion returns an Arrow table
 
-- **Status:** accepted; amended by D-59. Supersedes D-25.
+- **Status:** accepted; amended by D-59 and D-60. Supersedes D-25.
 - **Date:** 2026-10-23.
 - **Decision:** `QueryResult.to_arrow()` returns a `pyarrow.Table`. pyarrow and shapely
     come with the `arrow` extra, and only the method imports them (D-09). Each property
@@ -1626,6 +1626,35 @@ Layering rule for anything new:
     `OverflowError`: probes on 2026-10-23 found `parsedate_to_datetime` raising it for
     an HTTP-date with a huge year on 3.13.0 through 3.13.13 and on 3.14.0, and
     `ValueError` on 3.13.17 and 3.15.
+
+### D-60: `to_arrow()` takes any CRS pyproj reads and writes it as GeoArrow expects
+
+- **Status:** accepted. Amends D-58.
+- **Date:** 2026-10-23.
+- **Decision:** The `arrow` extra adds pyproj. When features have geometry, `to_arrow()`
+    reads `crs.effective` with `pyproj.CRS.from_user_input` and raises when it is `None`
+    or pyproj cannot read it. The `geometry` column's metadata gives the CRS as PROJJSON
+    (`CRS.to_json_dict()`), with no `crs_type`. When the CRS's first axis is named
+    latitude, northing, or southing, as EPSG:4326's is, the first two coordinates of
+    every vertex are swapped (`shapely.transform(..., include_z=None)`, which keeps a
+    third). The WKB is ISO-flavored.
+- **Why:** Chosen by the maintainer after reading geopandas 1.2's `to_arrow` and
+    `from_arrow` and the GeoArrow 0.2 spec. The spec asks producers for PROJJSON ("for
+    maximum compatibility") and ISO WKB, and reads coordinates as (longitude, latitude)
+    or (easting, northing) whatever the CRS declares, while OGC API Features Part 2
+    sends them in the CRS's axis order. geopandas writes the same PROJJSON and ISO WKB,
+    so a CRS84 table's metadata now matches its own export. Live on 2026-10-23: a `crs`
+    request for OGC CRS83 on NWIS and EPSG:3857 on GeoConnex `gages` came back with
+    those CRSs in `Content-Crs`, longitude or easting first, and pyproj reads both URLs
+    with an east-pointing first axis, so neither is swapped.
+- **Rejected:** Keeping CRS84 only with a fixed PROJJSON constant, which needs no pyproj
+    but refuses every other CRS a service offers. Swapping on the first axis's
+    direction, which also swaps polar stereographic eastings that point north or south
+    (EPSG:3031, EPSG:3413; Codex review of 2026-10-23).
+- **Limits:** The swap trusts a server to follow Part 2's axis order. None of the three
+    services advertises a latitude-first CRS: their collections list CRS84, CRS83,
+    CRS27, and, on GeoConnex `gages`, EPSG:3857, so the swap is pinned by offline tests
+    only. pyproj adds about 5 to 10 MB to the extra.
 
 ## Lessons
 

@@ -49,7 +49,7 @@ or later):
 pip install git+https://github.com/hyriver/water-ogcapi
 ```
 
-The `arrow` extra adds pyarrow and shapely for `QueryResult.to_arrow()`:
+The `arrow` extra adds pyarrow, shapely, and pyproj for `QueryResult.to_arrow()`:
 
 ```bash
 pip install "water-ogcapi[arrow] @ git+https://github.com/hyriver/water-ogcapi"

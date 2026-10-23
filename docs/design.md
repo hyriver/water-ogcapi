@@ -560,7 +560,7 @@ Layering rule for anything new:
 
 ### D-25: Frame conversion ships as an optional extra
 
-- **Status:** accepted.
+- **Status:** superseded by D-58.
 - **Date:** 2026-10-07.
 - **Decision:** A `water-ogcapi[pandas]` extra adds a helper that returns a GeoDataFrame
     when any feature has a non-null geometry and a DataFrame otherwise. The core never
@@ -1564,6 +1564,43 @@ Layering rule for anything new:
     `numberMatched` change reveals it. `iter_pages()` yields pages without the check.
     The check holds every id of the result in memory, beside the features themselves.
 
+### D-58: Frame conversion returns an Arrow table
+
+- **Status:** accepted. Supersedes D-25.
+- **Date:** 2026-10-23.
+- **Decision:** `QueryResult.to_arrow()` returns a `pyarrow.Table`. pyarrow and shapely
+    come with the `arrow` extra, and only the method imports them (D-09). Each property
+    becomes a column, typed by pyarrow across all features. When any feature has an
+    `id`, an `id` column comes first and holds it; a property `id` that is null or equal
+    to it is dropped, and any other raises. When any feature has a geometry, a
+    `geometry` column holds each as WKB, tagged as a GeoArrow `geoarrow.wkb` extension
+    whose metadata names CRS84, and a `crs.effective` other than CRS84 raises, as does a
+    property named `geometry`. Without any geometry, no `geometry` column is added and
+    neither check runs.
+- **Why:** Chosen by the maintainer, who weighs polars and DuckDB as successors to
+    pandas. Arrow is the interchange they all read: `geopandas.GeoDataFrame.from_arrow`
+    takes the GeoArrow column with its CRS, `polars.from_arrow` keeps it as an extension
+    type, and `Table.to_pandas()` gives pandas, so the package leaves the frame library
+    to the caller. GeoArrow reads coordinates as x/y, and an OGC server answering a
+    request for a latitude-first CRS such as EPSG:4326 sends latitude first (OGC API
+    Features Part 2); telling the two apart takes pyproj, so only CRS84, which all three
+    services send by default, converts. Raising for any other CRS extends the
+    maintainer's call to raise on an unsettled one. Research of 2026-10-23: polars
+    geometry lives in `polars-st` (one maintainer, LGPL) or an unreleased GeoPolars
+    rewrite, and reaching geopandas from polars needs pyarrow anyway. FabricData sends a
+    property `id` of null beside each feature id, so the feature id fills the column.
+- **Rejected:** D-25's helper returning a GeoDataFrame or DataFrame, which ties callers
+    to pandas. A polars frame with `polars-st` geometry. `pa.Table.from_pylist`, which
+    infers the schema from the first row and drops a property only later features carry.
+- **Limits:** pyarrow is 28 to 54 MB per platform. A column whose values pyarrow cannot
+    combine, such as an `id` or property that is an integer in one feature and a string
+    in another, raises `pyarrow.ArrowException`. conda-forge packages have no extras, so
+    a conda user installs pyarrow and shapely alongside. A query that asks for another
+    CRS does not convert; convert the CRS84 result and reproject the frame. shapely 2.0
+    (GEOS 3.11) rejects a third coordinate in GeoJSON, so the extra needs shapely 2.1.
+    The development lock assumes macOS 14 (arm64) and 15 (x86_64), the oldest that
+    pyproj, under geopandas in the test environments, ships wheels for.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -1699,7 +1736,7 @@ Layering rule for anything new:
 
 ### Q-01: How frame conversion ships
 
-**Status:** answered by D-25.
+**Status:** answered by D-25, which D-58 supersedes.
 
 Core stays pandas-free (D-09). The proposal is a `water-ogcapi[pandas]` extra with a
 helper that returns a GeoDataFrame when any geometry is non-null and a DataFrame

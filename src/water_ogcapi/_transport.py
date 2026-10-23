@@ -203,7 +203,7 @@ def _http_date(value: str | None) -> datetime | None:
     try:
         when = parsedate_to_datetime(value)
     except (TypeError, ValueError, OverflowError):
-        # OverflowError: Python 3.12 lets an HTTP-date with a huge year reach datetime.
+        # OverflowError: older 3.13 and 3.14 releases let a huge-year date reach datetime (D-59).
         return None
     # RFC 7231 obliges us to accept zone-less asctime dates. Reading one as local
     # time puts the wait out by the UTC offset.

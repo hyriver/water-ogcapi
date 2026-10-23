@@ -73,7 +73,7 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Lint (pre-commit)          | `pixi r lint`                       |
 | Dependency audit           | `pixi r audit`                      |
 | Type check                 | `pixi r typecheck`                  |
-| Test, offline (3.12)       | `pixi r -e test312 test`            |
+| Test, offline (3.13)       | `pixi r -e test313 test`            |
 | Test, offline (3.15)       | `pixi r -e test315 test`            |
 | Test, network-marked only  | `pixi r -e test315 test-network`    |
 | Test, everything           | `pixi r -e test315 test-all`        |
@@ -86,16 +86,16 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Notebooks, sync and run    | `pixi r nb-run`                     |
 | Notebooks, pair a new one  | `pixi r nb-pair`                    |
 
-Environments: `dev`, `test312`, `test315`, `typecheck`, `lint`, `docs`.
+Environments: `dev`, `test313`, `test315`, `typecheck`, `lint`, `docs`.
 
-A change is done when lint, typecheck, and the offline tests on both test312 and test315
+A change is done when lint, typecheck, and the offline tests on both test313 and test315
 pass, plus `pixi r docs` when it touches `docs/`, `README.md`, or `zensical.toml`.
 `.github/workflows/ci.yml` runs the first three, and `.github/workflows/docs.yml` builds
 the site on every PR and deploys `main` to GitHub Pages.
 
 ## Code style
 
-- Python >= 3.12, with `from __future__ import annotations` in every file.
+- Python >= 3.13, with `from __future__ import annotations` in every file.
 - ruff with 100-character lines and `select = ["ALL"]`; pyright in strict mode. Both are
     configured in `pyproject.toml`.
 - NumPy-convention docstrings.
@@ -141,7 +141,7 @@ the site on every PR and deploys `main` to GitHub Pages.
     card links to a notebook that does not exist.
 - Skills live in `.agents/skills/`. `.claude/skills` is a symlink to it for Claude Code,
     which does not read `.agents/`.
-- The ruleset on `main` names its required checks by job: `Test (test312)`,
+- The ruleset on `main` names its required checks by job: `Test (test313)`,
     `Test (test315)`, `typecheck`, and `lint` from `ci.yml`, and `build` from
     `docs.yml`. Renaming a job or a matrix environment leaves the old name unreported,
     so the renaming PR and every PR after it wait forever. Swap the name under

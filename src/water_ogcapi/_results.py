@@ -35,7 +35,7 @@ __all__ = [
     "StopReason",
 ]
 
-Check = Literal["end_of_links", "count"]
+Check = Literal["end_of_links", "count", "unique_ids"]
 Completeness = Literal["complete", "limited", "unknown"]
 StopReason = Literal["limit", "failure"]
 CRSSource = Literal["content_crs", "default", "unconfirmed", "unknown"]
@@ -315,9 +315,11 @@ class Pagination:
         Why a ``limited`` traversal stopped: a caller limit or a failed page.
     sort_by : str, optional
         The sort key the pages were requested with.
-    checks : tuple of {"end_of_links", "count"}
+    checks : tuple of {"end_of_links", "count", "unique_ids"}
         The completeness checks that ran and passed: the last page had no ``next``
-        link, and the features received equal the agreed ``numberMatched``.
+        link, the features received equal the agreed ``numberMatched``, and every
+        feature has a string or integer ``id`` that no other feature repeats. A
+        repeated ``id`` makes the result ``unknown``.
 
     Raises
     ------

@@ -11,7 +11,7 @@ docs/design.md it touches. -->
 
 - [ ] `pixi r lint`
 - [ ] `pixi r typecheck`
-- [ ] `pixi r -e test312 test`
+- [ ] `pixi r -e test313 test`
 - [ ] `pixi r -e test315 test`
 - [ ] `pixi r docs` (needed when `docs/`, `README.md`, or `zensical.toml` changed)
 

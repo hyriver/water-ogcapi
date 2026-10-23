@@ -42,7 +42,7 @@ two services never receive it.
 ## Installation
 
 PyPI holds only a release candidate, which reserves the name and has no query API, and
-conda-forge has no package yet. Install the development version from GitHub (Python 3.12
+conda-forge has no package yet. Install the development version from GitHub (Python 3.13
 or later):
 
 ```bash

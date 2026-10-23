@@ -11,7 +11,7 @@ description = "A Python client for USGS water data services over OGC API Feature
 readme = "README.md"
 license = { text = "MIT" }
 authors = [ { name = "Taher Chegini", email = "cheginit@gmail.com" } ]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
@@ -19,7 +19,6 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: 3.15",
@@ -88,11 +87,10 @@ build.targets.wheel.packages = [
 
 [tool.pixi.workspace]
 channels = [ "conda-forge" ]
-# pyproj, under geopandas, ships macOS wheels for 14.0 (arm64) and 15.0 (x86_64) only, and
-# pixi builds its sdist, which needs PROJ, below them.
+# pyproj, under geopandas, ships osx-arm64 wheels for macOS 14.0 and later only, and pixi
+# builds its sdist, which needs PROJ, below that.
 platforms = [
   "linux-64",
-  { platform = "osx-64", macos = "15.0" },
   { platform = "osx-arm64", macos = "14.0" },
   "win-64",
 ]
@@ -133,20 +131,11 @@ audit = "pysentry-rs --exclude-extra --fail-on low ."
 pcupdate = "pre-commit autoupdate"
 spell = "codespell -w"
 
-[tool.pixi.feature.py312.dependencies]
-python = "~=3.12.0"
+[tool.pixi.feature.py313.dependencies]
+python = "~=3.13.0"
 
-[tool.pixi.feature.py314.dependencies]
-python = "~=3.14.0"
-
-[tool.pixi.feature.py315]
-# 3.15 is a release candidate: its builds need the python_rc label, and "3.15.*"
-# matches pre-releases where "~=3.15.0" does not.
-channels = [ "conda-forge", "conda-forge/label/python_rc" ]
-dependencies.python = "3.15.*"
-# shortcut: pixi's lock check reads 3.15.0rcN as < 3.15 and so wants anyio's
-# typing-extensions, which the resolver leaves out. Drop once 3.15.0 is final.
-pypi-dependencies.typing-extensions = ">=4.16.0"
+[tool.pixi.feature.py315.dependencies]
+python = "~=3.15.0"
 
 [tool.pixi.feature.test.tasks]
 test = "pytest -m 'not network'"
@@ -159,15 +148,16 @@ html = { cmd = [ "coverage", "html" ], depends-on = [ "report" ] }
 typecheck = "pyright"
 
 [tool.pixi.environments]
-dev = { features = [ "dev", "py314" ] }
-test312 = { features = [ "test", "py312" ] }
+dev = { features = [ "dev", "py315" ] }
+test313 = { features = [ "test", "py313" ] }
 test315 = { features = [ "test", "py315" ] }
-typecheck = { features = [ "typecheck", "py314" ] }
-lint = { features = [ "lint", "py314" ], no-default-feature = true }
-docs = { features = [ "docs", "py314" ], no-default-feature = true }
+typecheck = { features = [ "typecheck", "py315" ] }
+# The audit resolves for this Python, so lint stays on the floor, where backports install.
+lint = { features = [ "lint", "py313" ], no-default-feature = true }
+docs = { features = [ "docs", "py315" ], no-default-feature = true }
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 100
 exclude = [ ".pixi", "__pycache__" ]
 lint.select = [ "ALL" ]
@@ -258,7 +248,7 @@ min_confidence = 80
 expand_tables = [ "tool.git-cliff", "tool.pixi" ]
 
 [tool.pyright]
-pythonVersion = "3.12"
+pythonVersion = "3.13"
 typeCheckingMode = "strict"
 include = [ "src" ]
 ignore = [

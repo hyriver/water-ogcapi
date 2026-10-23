@@ -124,7 +124,7 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
         sites = list(dict.fromkeys(listed.split(",")))
         return [
             dataclasses.replace(request, params={**request.params, SITES: ",".join(chunk)})
-            for chunk in batched(sites, size)
+            for chunk in batched(sites, size, strict=False)
         ]
     doc: Any = None if request.body is None else json.loads(request.body)
     match doc:
@@ -138,7 +138,7 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
                         {"op": "in", "args": [prop, list(chunk)]}, separators=(",", ":")
                     ).encode(),
                 )
-                for chunk in batched(unique, size)
+                for chunk in batched(unique, size, strict=False)
             ]
         case _:
             return None

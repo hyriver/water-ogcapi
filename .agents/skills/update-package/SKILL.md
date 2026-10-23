@@ -51,7 +51,7 @@ Delete `.coverage` and any `.coverage.*` files first, since coverage accumulates
 runs (AGENTS.md, Gotchas). Then run, each to a clean exit:
 
 ```bash
-pixi r lint && pixi r typecheck && pixi r -e test312 test && pixi r -e test315 test &&
+pixi r lint && pixi r typecheck && pixi r -e test313 test && pixi r -e test315 test &&
   pixi r docs && pixi r audit
 ```
 
@@ -95,7 +95,7 @@ body's first line in place of `Closes #`.
 
 Wait for CI without a polling loop where your agent's environment forbids one; in a
 plain terminal, `gh pr checks <n> --watch --fail-fast` blocks until the checks finish.
-The ruleset on `main` requires `Test (test312)`, `Test (test315)`, `typecheck`, `lint`,
+The ruleset on `main` requires `Test (test313)`, `Test (test315)`, `typecheck`, `lint`,
 and `build`. A red check is fixed on the branch and pushed, back through steps 3 to 5.
 
 Merge only when every required check passes and the PR reads CLEAN, with a rebase merge:

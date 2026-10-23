@@ -45,6 +45,8 @@ urls.Issues = "https://github.com/hyriver/water-ogcapi/issues"
 
 [dependency-groups]
 dev = [
+  # Basemaps under the example notebooks' maps.
+  "contextily",
   "git-cliff",
   "ipykernel",
   "jupytext",
@@ -87,11 +89,11 @@ build.targets.wheel.packages = [
 
 [tool.pixi.workspace]
 channels = [ "conda-forge" ]
-# pyproj, under geopandas, ships osx-arm64 wheels for macOS 14.0 and later only, and pixi
-# builds its sdist, which needs PROJ, below that.
+# rasterio, under contextily, ships osx-arm64 wheels for macOS 15.0 and later only (pyproj for
+# 14.0), and pixi builds its sdist, which needs GDAL, below that.
 platforms = [
   "linux-64",
-  { platform = "osx-arm64", macos = "14.0" },
+  { platform = "osx-arm64", macos = "15.0" },
   "win-64",
 ]
 

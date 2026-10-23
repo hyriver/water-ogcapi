@@ -17,6 +17,8 @@ from water_ogcapi._redact import CREDENTIAL_PARAMS, REDACTED, redact_url
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    import pyarrow as pa
+
     # A JSON member name, the field that carries it, and the parser that returns the
     # field's value or None when the member does not have the expected shape.
     type Members = Mapping[str, tuple[str, Callable[[Any], Any]]]
@@ -434,3 +436,42 @@ class QueryResult:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "pages", _all_of(tuple(self.pages), Page, "pages"))
+
+    def to_arrow(self) -> pa.Table:
+        """Return the features as a pyarrow Table (D-58); needs the ``arrow`` extra.
+
+        Each property becomes a column, typed by pyarrow across all features, with a
+        missing property read as null. When any feature has an ``id``, the ``id``
+        column holds it. When any feature has a geometry, a ``geometry`` column holds
+        each one as WKB, null for a feature without one, tagged as a GeoArrow
+        ``geoarrow.wkb`` extension whose metadata names CRS84.
+        ``geopandas.GeoDataFrame.from_arrow`` reads it with its CRS, and
+        ``polars.from_arrow`` and ``Table.to_pandas`` read it too.
+
+        Returns
+        -------
+        pyarrow.Table
+            One row per feature, in the order of ``geojson``. Without features, a
+            table with no columns.
+
+        Raises
+        ------
+        ValueError
+            If a feature's ``properties`` hold an ``id`` other than its own. When a
+            feature has a geometry, also if ``crs.effective`` is not CRS84, since
+            GeoArrow reads coordinates as x/y and a latitude-first CRS such as
+            EPSG:4326 arrives latitude first, or if a property named ``geometry``
+            would collide with the geometry column.
+        pyarrow.ArrowException
+            If one column holds values of types pyarrow cannot combine.
+        ModuleNotFoundError
+            Without pyarrow or shapely, naming the extra that installs them.
+        """
+        try:
+            from water_ogcapi._arrow import to_table
+        except ModuleNotFoundError as err:
+            if err.name not in {"pyarrow", "shapely"}:
+                raise
+            msg = f'to_arrow() needs {err.name}: pip install "water-ogcapi[arrow]"'
+            raise ModuleNotFoundError(msg, name=err.name) from err
+        return to_table(self)

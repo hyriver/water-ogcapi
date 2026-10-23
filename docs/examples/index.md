@@ -11,4 +11,7 @@ its saved outputs.
 - [![Querying NWIS](images/nwis.png){ loading=lazy }](nwis.md "Querying NWIS")
     **Querying NWIS**
 
+- [![Cache, quota, and resume](images/cache_quota_resume.png){ loading=lazy }](cache_quota_resume.md "Cache, quota, and resume")
+    **Cache, quota, and resume**
+
 </div>

@@ -95,24 +95,37 @@ frame[["staid", "staname", "state", "drain_sqkm"]].sort_values("staid")
 # %% [markdown]
 # ## Map the gages
 #
-# The dashed rectangle is the query's bounding box.
+# The dashed rectangle is the query's bounding box. contextily draws a basemap under the
+# gages; its tiles are in Web Mercator (EPSG:3857), so every layer is reprojected to it.
 
 # %%
+import contextily as ctx
+import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+import shapely
 
-big = gpd.GeoDataFrame.from_arrow(large.to_arrow())
-ax = frame.plot(color="lightgray", markersize=40, figsize=(6, 6.5), label="All gages")
-big.plot(ax=ax, color="tab:blue", markersize=60, label="Drainage area over 100 km²")
-for row in frame.itertuples():
-    x, y = row.geometry.centroid.coords[0]
-    ax.annotate(row.staid, (x, y), xytext=(5, 4), textcoords="offset points", fontsize=7)
-west, south, east, north = DC
-ax.add_patch(
-    Rectangle((west, south), east - west, north - south, fill=False, ls="--", color="gray")
+points = frame.to_crs(3857)
+big = gpd.GeoDataFrame.from_arrow(large.to_arrow()).to_crs(3857)
+box = gpd.GeoSeries([shapely.box(*DC)], crs=frame.crs).to_crs(3857)
+ax = points.plot(color="dimgray", markersize=40, figsize=(6, 6.5), label="All gages")
+big.plot(
+    ax=ax,
+    color="tab:blue",
+    edgecolor="white",
+    markersize=70,
+    label="Drainage area over 100 km²",
 )
-ax.set_xlim(west - 0.01, east + 0.01)
-ax.set_ylim(south - 0.01, north + 0.01)
+halo = [pe.withStroke(linewidth=2.5, foreground="white")]
+for row in points.itertuples():
+    x, y = row.geometry.centroid.coords[0]
+    ax.annotate(
+        row.staid, (x, y), xytext=(5, 4), textcoords="offset points", fontsize=7, path_effects=halo
+    )
+box.boundary.plot(ax=ax, color="gray", linestyle="--")
+west, south, east, north = box.total_bounds
+ax.set_xlim(west - 1000, east + 1000)  # meters
+ax.set_ylim(south - 1000, north + 1000)
+ctx.add_basemap(ax, source=ctx.providers.Esri.WorldGrayCanvas)
 ax.legend(loc="upper center", bbox_to_anchor=(0.5, 0), ncols=2, frameon=False)
 ax.set(title="GAGES-II streamgages around Washington, DC")
 ax.set_axis_off()

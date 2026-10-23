@@ -81,12 +81,19 @@ frame = gpd.GeoDataFrame.from_arrow(sites.to_arrow())
 print(frame.crs)
 frame["site_type"].value_counts().head()
 
+# %% [markdown]
+# contextily draws a basemap under the points. Its tiles are in Web Mercator (EPSG:3857),
+# so both layers are reprojected to it first.
+
 # %%
-ax = frame.plot(color="lightgray", markersize=6, figsize=(6, 6), label="All sites")
-gpd.GeoDataFrame.from_arrow(streams.to_arrow()).plot(
-    ax=ax, color="tab:blue", markersize=10, label="Stream sites"
+import contextily as ctx
+
+ax = frame.to_crs(3857).plot(color="dimgray", markersize=8, figsize=(6, 6), label="All sites")
+gpd.GeoDataFrame.from_arrow(streams.to_arrow()).to_crs(3857).plot(
+    ax=ax, color="tab:blue", edgecolor="white", linewidth=0.5, markersize=28, label="Stream sites"
 )
-ax.legend(loc="lower left")
+ctx.add_basemap(ax, source=ctx.providers.Esri.WorldGrayCanvas)
+ax.legend(loc="upper center", bbox_to_anchor=(0.5, 0), ncols=2, frameon=False)
 ax.set(title="NWIS monitoring locations around Washington, DC")
 ax.set_axis_off()
 

@@ -1170,11 +1170,12 @@ Layering rule for anything new:
     decorator copies each async method's signature and docstring onto its blocking twin,
     and `iter_pages` returns an iterator that fetches one page per step. A call waits in
     0.1 s slices, and an exception raised while it waits, such as a notebook interrupt,
-    cancels the call's task and its request before propagating. `close()` closes the
-    service's transport, created or passed, and a sync service sharing it reconnects on
-    its next request. A blocking call made on the loop's thread, as from a logging
-    handler or custom transport the loop runs, raises `RuntimeError` before it sends
-    anything, and a call whose loop thread has stopped raises `RuntimeError` too.
+    requests cancellation of the call's task and its request before propagating; the
+    task finishes cancelling on the loop afterward. `close()` closes the service's
+    transport, created or passed, and a sync service sharing it reconnects on its next
+    request. A blocking call made on the loop's thread, as from a logging handler or
+    custom transport the loop runs, raises `RuntimeError` before it sends anything, and
+    a call whose loop thread has stopped raises `RuntimeError` too.
 - **Why:** A transport binds to the loop of its first request (D-10), so `*_sync`
     methods on `OGCService` would break the first async call after a sync one in the
     same notebook (2026-10-12 review). Matching names make switching an import change. A
@@ -1191,7 +1192,12 @@ Layering rule for anything new:
     binds that caller's transport to the background loop. Fetching the next page while
     the caller handles the current one, which leaves a request running when the caller
     abandons the iterator. Leaving a passed transport open, as `OGCService.aclose()`
-    does, and a blocking `Transport.close()`, which adds public API.
+    does, and a blocking `Transport.close()`, which adds public API. Closing the async
+    generator in the blocking iterator's `finally` and waiting for it, as synchronicity
+    does: the wait hung at interpreter exit on 3.13, on the loop's thread, in a fork
+    child closing an inherited split iterator, and under a lock the loop needed, and an
+    interrupt during a step surfaced as `RuntimeError` from `aclose()` (2026-10-26
+    probes).
 - **Limits:** A `Transport` passed to a sync service binds to the background loop, so it
     cannot also serve an async service on the caller's loop. The thread stops only when
     code it runs raises `SystemExit` or `KeyboardInterrupt`, and it does not restart, so
@@ -1201,8 +1207,9 @@ Layering rule for anything new:
     task, so an async iterator under the sync API must hold no task group or
     `asyncio.timeout` across a `yield`. An abandoned iterator's async generator closes
     through the loop's finalizer once nothing references it, which a held traceback
-    delays. #14's concurrent pieces put requests in flight between steps, so #14 cancels
-    them when its generator closes and revisits this entry.
+    delays. `close()` takes the same path and returns before that cleanup finishes.
+    #14's concurrent pieces put requests in flight between steps, so #14 cancels them
+    when its generator closes and revisits this entry.
 
 ### D-47: Queries are checked against cached metadata before the first page request
 
@@ -1564,9 +1571,10 @@ Layering rule for anything new:
     pieces as one traversal (D-44), and with no `numberMatched` on NWIS only
     `end_of_links` and D-57's `unique_ids` apply. A long `monitoring_location_id` list
     can still exceed the GET URL cap near 8 KB; `ids` sends it in a POST body. Pieces
-    run against a collection that may change between them (D-35). A blocking iterator
-    dropped without `close()` cancels its pieces only when the loop finalizes the async
-    generator (D-46).
+    run against a collection that may change between them (D-35). A blocking iterator's
+    `close()`, like dropping it, leaves its async generator to the loop's finalizer, so
+    its pieces are cancelled after `close()` returns, and later still when a held
+    traceback keeps a dropped iterator alive (D-46).
 
 ### D-57: A repeated feature id reads `unknown`
 

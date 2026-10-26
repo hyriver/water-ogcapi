@@ -342,6 +342,11 @@ def stop_the_loop() -> None:
     for _ in range(2):  # the second call finds the loop already stopped
         with pytest.raises(RuntimeError, match="event loop has stopped"):
             service.collect("c", validate=False)
+    coro = asyncio.sleep(0)
+    with pytest.raises(RuntimeError, match="event loop has stopped"):
+        _sync._run(coro)
+    # Closed unsent, so the dead loop's queue keeps no call's arguments.
+    assert inspect.getcoroutinestate(coro) == "CORO_CLOSED"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="no fork on Windows")

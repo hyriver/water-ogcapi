@@ -1657,6 +1657,35 @@ Layering rule for anything new:
     CRS27, and, on GeoConnex `gages`, EPSG:3857, so the swap is pinned by offline tests
     only. pyproj adds about 5 to 10 MB to the extra.
 
+### D-61: Pages decode with `json.loads`
+
+- **Status:** accepted. Answers Q-09.
+- **Date:** 2026-10-26.
+- **Decision:** Pages keep decoding with `json.loads`, and no extra adds orjson. orjson
+    is a dev dependency for `scripts/bench.py --decode` only.
+- **Why:** The bar, set before the run: adopt orjson only if `json.loads` takes at least
+    10% of a page's wall time and orjson cuts that wall time by at least 5%. Three live
+    NWIS `continuous` pages of 10,000 features (6.8 MiB each) decoded in 19 ms with
+    `json.loads` and 9 ms with orjson, and three FabricData `gagesii` pages of 1,000
+    (0.9 MiB) in 2 ms and 1 ms (medians of 20). `iter_pages` returned the NWIS pages in
+    1.5 to 3.6 s and the FabricData pages in 0.5 to 1.0 s, its own `json.loads`
+    included, so decoding was 0.5 to 1.3% of an NWIS page's time and 0.2 to 0.5% of a
+    FabricData page's, and orjson would save under 1%. orjson also grows peak RSS more:
+    31 MiB against 24 MiB per NWIS page, 3.6 against 2.6 to 2.7 MiB per FabricData page.
+    Both decoders returned equal documents for all six pages.
+    [Performance](performance.md#decoding) has the table. Predicted before the run:
+    orjson two to three times faster, lower peak memory, decoding 1 to 4% of a page's
+    time, and a verdict to keep `json.loads`. The speedup and the verdict held; the
+    share came in lower, and orjson's memory went the other way.
+- **Rejected:** An optional orjson extra, which makes a page carrying `NaN` parse or
+    fail by environment (Q-09) for under 1% of wall time.
+- **Limits:** One machine (Apple M2 Max) and one fetch per page. The saving is the
+    difference of the two decoders on the same bytes, with no end-to-end run decoding
+    through orjson: NWIS pages of one size came back in 1.5 to 3.6 s, a spread that
+    would hide a 10 ms difference. Page times varied sevenfold, and the fastest still
+    left decoding under 2%. A source that serves pages in milliseconds, such as a local
+    cache, would change the share; measure again before adopting then.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -1867,6 +1896,8 @@ an error reporter that captures frame locals needs its own scrubbing. Recorded f
 carry the same credential risk as `QueryResult`, so scrub auth at record time.
 
 ### Q-09: orjson for decoding large responses
+
+**Status:** answered by D-61.
 
 `Response.json()` decodes each page with `json.loads`, and a page can hold 10,000
 features (D-13). tiny-retriever already uses orjson behind an optional `json` extra,

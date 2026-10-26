@@ -1320,7 +1320,11 @@ Layering rule for anything new:
     about 41 left on a default NWIS key, the cap keeps the spacing short of what the
     rolling window needs. FabricData's 60 s window rests on one probe. A response whose
     headers arrive and whose body times out is not read. `request()` and `get()` take
-    the governor as a public keyword (D-43).
+    the governor as a public keyword (D-43). GeoConnex sends no rate-limit headers, so
+    its requests start 1 s apart: at its default `limit` of 500 (D-41), a first
+    validated query for 100,000 features sends 202 requests and takes at least 201 s
+    ([Performance](performance.md#requests-per-100000-features)), and a larger `limit`
+    cuts that.
 
 ### D-50: `_client.py` holds the service class, and response parsing lives beside its types
 

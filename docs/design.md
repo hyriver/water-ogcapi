@@ -1695,6 +1695,37 @@ Layering rule for anything new:
     left decoding under 2%. A source that serves pages in milliseconds, such as a local
     cache, would change the share; measure again before adopting then.
 
+### D-62: The release security gate
+
+- **Status:** accepted. Answers Q-08.
+- **Date:** 2026-10-26.
+- **Decision:** Three checks guard the USGS key before a release. CI runs
+    `pixi r audit`, which resolves the runtime dependencies and the `arrow` extra (D-58)
+    from PyPI and fails on any advisory rated low or above. The `key-shaped-string`
+    pre-commit hook fails lint on committed text holding a token shaped like a USGS key.
+    A security review of key handling, redaction, logging, and redirects runs before the
+    first release, and again on any change to the key, redaction, or redirects, as
+    `REVIEW.md` sets for its top tier.
+- **Why:** The review for #43 read all of `src/` against `REVIEW.md`'s first failure and
+    probed it offline. A redirect whose `Location` holds the key leaves no key in the
+    `str`, `repr`, formatted traceback, or pickle of the error; an `http://` `next` link
+    is refused with the key sent only to the HTTPS origin; and with the root, `httpx2`,
+    `httpcore2`, and `water_ogcapi` loggers at level 1 no record holds the key. It found
+    one leak: a pickled `NWIS` held the key, which a pickle now leaves out (D-42). The
+    same review found that `scripts/bench.py --fetch` sent the key to any `next` link
+    and could write a page echoing it; it now fetches through the services and checks
+    each page before writing.
+- **Rejected:** A key pattern that also matches a key glued to `/`, `-`, or `_`, which
+    matches base64 images in notebook outputs.
+- **Limits:** The hook misses an encoded key, a key of another shape, and a key glued to
+    `/`, `-`, or `_`. Every error raised in `Transport.get` keeps a traceback frame
+    whose `headers` local holds the caller's key, so an error reporter that captures
+    frame locals needs its own scrubbing. A caller who sets the `hpack` logger to DEBUG
+    logs the key (D-20), and offline probes skip the HTTP/2 encoder, so that layer rests
+    on reading. Redaction works by parameter name, and a key echoed in a URL path stays
+    (D-29, D-53). Recorded fixtures carry the same risk as `QueryResult`, so scrub auth
+    at record time.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -1889,6 +1920,8 @@ Do not state these as fact until a live response confirms them:
 - The page-size caps in D-13.
 
 ### Q-08: Release security gate
+
+**Status:** answered by D-62.
 
 Partly built. No log record carries request headers (D-20). CI runs `pixi r audit`,
 which resolves the runtime dependencies and the `arrow` extra (D-58) from PyPI with uv,

@@ -331,3 +331,20 @@ def block_on_the_loop() -> None:
 @pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
 def test_a_blocking_call_on_the_loop_raises() -> None:
     assert exitcode_in_fork(block_on_the_loop) == 0
+
+
+def stop_the_loop() -> None:
+    def handler(_: httpx2.Request) -> httpx2.Response:
+        raise SystemExit
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
+    service = water_ogcapi.OGCService(BASE, transport=transport)
+    for _ in range(2):  # the second call finds the loop already stopped
+        with pytest.raises(RuntimeError, match="event loop has stopped"):
+            service.collect("c", validate=False)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="no fork on Windows")
+@pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
+def test_a_call_raises_once_the_loop_has_stopped() -> None:
+    assert exitcode_in_fork(stop_the_loop) == 0

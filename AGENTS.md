@@ -78,6 +78,7 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Test, network-marked only  | `pixi r -e test315 test-network`    |
 | Test, everything           | `pixi r -e test315 test-all`        |
 | Coverage report / HTML     | `pixi r -e test315 report` / `html` |
+| Benchmarks, offline        | `pixi r -e dev bench`               |
 | Run Python                 | `pixi r -e dev python ...`          |
 | Spell check (writes fixes) | `pixi r spell`                      |
 | Changelog preview          | `pixi r changelog`                  |

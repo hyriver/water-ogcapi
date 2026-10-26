@@ -3,6 +3,9 @@
 Every items page repeats one NWIS daily-value feature from ``tests/fixtures/`` under
 distinct ids, and each page's bytes are built once and served from memory, so the
 numbers measure the client. ``docs/performance.md`` records a run.
+
+``--fetch DIR`` saves real NWIS and FabricData pages from the live services, and
+``--decode DIR`` compares ``json.loads`` with ``orjson.loads`` on them (Q-09).
 """
 
 from __future__ import annotations
@@ -10,21 +13,24 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import platform
 import statistics
 import subprocess
 import sys
 import time
 import tracemalloc
-from contextlib import contextmanager
+from contextlib import aclosing, contextmanager
 from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx2
+import orjson
 
 from water_ogcapi import NWIS as BlockingNWIS
 from water_ogcapi import Governor, Transport
+from water_ogcapi._transport import parse_count
 from water_ogcapi.aio import NWIS, FabricData, GeoConnex
 
 if TYPE_CHECKING:
@@ -38,6 +44,22 @@ QUERY = {"monitoring_location_id": "USGS-01646500", "parameter_code": "00060"}
 # A default key's counts with ample quota left, at which the governor never waits.
 QUOTA = {"x-ratelimit-limit": "1000", "x-ratelimit-remaining": "999"}
 MIB = 2**20
+# Real pages at each profile's default size: a year of 15-minute discharge at the
+# Potomac gage, and the GAGES-II collection.
+LIVE = {
+    "nwis": (
+        NWIS,
+        "continuous",
+        {
+            "monitoring_location_id": "USGS-01646500",
+            "parameter_code": "00060",
+            "datetime": "2025-01-01/2025-12-31",
+        },
+    ),
+    "fabricdata": (FabricData, "gagesii", {}),
+}
+LIVE_PAGES = 3
+MIN_REMAINING = 100
 
 
 def _body(name: str) -> Any:
@@ -294,30 +316,141 @@ def recovery(runs: int) -> list[str]:
     return rows
 
 
+def fetch(folder: Path) -> None:
+    """Save three real pages per service and the seconds the client took to return each.
+
+    Pages come through `iter_pages`, so the package's own checks keep the key on NWIS's
+    origin (D-34, D-40, D-53). Sends six requests with no retry, and writes no page that
+    holds the key (``.agents/skills/live-api/SKILL.md``).
+    """
+
+    async def run() -> dict[str, float]:
+        seconds = {}
+        key = os.environ.get("USGS_API_KEY", "").encode()
+        async with Transport(timeout=120, max_retries=0) as transport:
+            for name, (cls, collection, params) in LIVE.items():
+                pages = cls(transport=transport).iter_pages(
+                    collection, params=params, validate=False
+                )
+                async with aclosing(pages):
+                    for number in range(1, LIVE_PAGES + 1):
+                        start = time.perf_counter()
+                        page = await anext(pages, None)
+                        if page is None:
+                            break
+                        seconds[f"{name}-{number}"] = time.perf_counter() - start
+                        assert page.content is not None
+                        # A JSON escape can spell the key, so the decoded page is checked too.
+                        decoded = json.dumps(page.body).encode()
+                        if key and (key in page.content or key in decoded):
+                            msg = f"{name} page {number} holds the key; nothing written"
+                            raise RuntimeError(msg)
+                        (folder / f"{name}-{number}.json").write_bytes(page.content)
+                        remaining = parse_count(page.headers.get("x-ratelimit-remaining"))
+                        if remaining is not None and remaining < MIN_REMAINING:
+                            msg = f"{name} reports {remaining} requests left; stopping"
+                            raise RuntimeError(msg)
+        return seconds
+
+    folder.mkdir(parents=True, exist_ok=True)
+    # A stopped capture leaves no timings, so --decode cannot pair new pages with old ones.
+    (folder / "seconds.json").unlink(missing_ok=True)
+    (folder / "seconds.json").write_text(json.dumps(asyncio.run(run()), indent=1))
+
+
+def _rss_growth(module: str, page: Path) -> float:
+    """Bytes a fresh process's peak RSS grows by while ``module.loads`` decodes ``page``.
+
+    tracemalloc reported four times this growth for orjson on an NWIS page, so memory
+    here is resident memory.
+    """
+    child = (
+        f"import {module}, resource; content = open({str(page)!r}, 'rb').read(); "
+        "before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss; "
+        f"{module}.loads(content); "
+        "print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - before)"
+    )
+    out = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", child], capture_output=True, text=True, check=True
+    ).stdout
+    # ru_maxrss is in bytes on macOS and in KiB on Linux.
+    return int(out) * (1 if sys.platform == "darwin" else 1024)
+
+
+def decode(folder: Path, runs: int) -> list[str]:
+    """Time ``json.loads`` against ``orjson.loads`` on the pages `fetch` saved.
+
+    A page's seconds already include the client's own ``json.loads``, so the share and
+    saving are over that time.
+    """
+    rows = []
+    for name, wall in json.loads((folder / "seconds.json").read_text()).items():
+        content = (folder / f"{name}.json").read_bytes()
+        doc = json.loads(content)
+        # Both must read the page alike; orjson rejects the NaN json.loads accepts.
+        assert orjson.loads(content) == doc
+        median, peak = {}, {}
+        for loads in (json.loads, orjson.loads):
+            times = []
+            for _ in range(runs):
+                start = time.perf_counter()
+                decoded = loads(content)
+                times.append(time.perf_counter() - start)
+                # Freed after the timer stops, as the client keeps what it decodes.
+                del decoded
+            median[loads] = statistics.median(times)
+            peak[loads] = _rss_growth(loads.__module__, folder / f"{name}.json")
+        rows.append(
+            f"| {name} | {len(content) / MIB:.1f} | {len(doc['features']):,} | {wall:.2f} "
+            f"| {median[json.loads] * 1000:.0f} | {median[orjson.loads] * 1000:.0f} "
+            f"| {median[json.loads] / wall:.1%} "
+            f"| {(median[json.loads] - median[orjson.loads]) / wall:.1%} "
+            f"| {peak[json.loads] / MIB:.1f} | {peak[orjson.loads] / MIB:.1f} |"
+        )
+    return rows
+
+
 def main() -> None:
     """Print each benchmark as a Markdown table."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runs", type=int, default=20, help="repeats of each timed benchmark")
+    parser.add_argument("--fetch", type=Path, help="save live pages here, then stop")
+    parser.add_argument("--decode", type=Path, help="compare decoders on the pages saved here")
     args = parser.parse_args()
-    sections = [
-        ("Cold start", "| Step | Median (range) |", cold_start(args.runs)),
-        ("Round trips for a one-page result", "| Query | Requests |", round_trips()),
-        (
-            "Requests per 100,000 features",
-            "| Service | Page size | Pages | Requests |",
-            requests_per_100k(),
-        ),
-        (
-            "Peak memory",
-            "| Features | `keep_pages` | Peak MiB | Held MiB | Peak KiB per feature |",
-            peak_memory(),
-        ),
-        (
-            "Recovery from a 429",
-            "| Run | Requests | Median (range) | Result |",
-            recovery(max(3, args.runs // 4)),
-        ),
-    ]
+    if args.fetch:
+        fetch(args.fetch)
+        return
+    if args.decode:
+        sections = [
+            (
+                "Decoding",
+                (
+                    "| Page | MiB | Features | Page s | `json` ms | `orjson` ms | `json` share "
+                    "| `orjson` saves | `json` RSS MiB | `orjson` RSS MiB |"
+                ),
+                decode(args.decode, args.runs),
+            )
+        ]
+    else:
+        sections = [
+            ("Cold start", "| Step | Median (range) |", cold_start(args.runs)),
+            ("Round trips for a one-page result", "| Query | Requests |", round_trips()),
+            (
+                "Requests per 100,000 features",
+                "| Service | Page size | Pages | Requests |",
+                requests_per_100k(),
+            ),
+            (
+                "Peak memory",
+                "| Features | `keep_pages` | Peak MiB | Held MiB | Peak KiB per feature |",
+                peak_memory(),
+            ),
+            (
+                "Recovery from a 429",
+                "| Run | Requests | Median (range) | Result |",
+                recovery(max(3, args.runs // 4)),
+            ),
+        ]
     # An editable install keeps the version from install time, so name the commit.
     commit = subprocess.run(
         ["git", "describe", "--tags", "--always", "--dirty"],  # noqa: S607

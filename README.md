@@ -1,4 +1,4 @@
-# Water OGC API: Water Data Client for the USGS Services
+# Water OGC API: A Client for the USGS OGC web Services
 
 [![CI](https://github.com/hyriver/water-ogcapi/actions/workflows/ci.yml/badge.svg)](https://github.com/hyriver/water-ogcapi/actions/workflows/ci.yml)
 [![Docs](https://github.com/hyriver/water-ogcapi/actions/workflows/docs.yml/badge.svg)](https://docs.hyriver.io/water-ogcapi/)
@@ -24,9 +24,9 @@ install from this repository until the first final release.
 - Checks a query's collection and parameter names against the service's metadata, so a
     typo raises an error listing the valid names before it can return the whole
     collection.
-- Two direct runtime dependencies, `httpx2` and `h2`. No pandas.
-- With the `arrow` extra, `QueryResult.to_arrow()` returns a pyarrow Table with a
-    GeoArrow geometry column that geopandas, polars, and pandas read.
+- Only two direct runtime dependencies, `httpx2` and `h2`.
+- With the `arrow` extra, `QueryResult.to_arrow()` returns a `pyarrow.Table` with a
+    `GeoArrow` geometry column that `geopandas`, `polars`, and `pandas` read.
 
 ## Services
 
@@ -49,7 +49,7 @@ or later):
 pip install git+https://github.com/hyriver/water-ogcapi
 ```
 
-The `arrow` extra adds pyarrow, shapely, and pyproj for `QueryResult.to_arrow()`:
+The `arrow` extra adds `pyarrow`, `shapely`, and `pyproj` for `QueryResult.to_arrow()`:
 
 ```bash
 pip install "water-ogcapi[arrow] @ git+https://github.com/hyriver/water-ogcapi"

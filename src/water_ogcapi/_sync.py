@@ -78,7 +78,8 @@ def _run[T](coro: Coroutine[Any, Any, T]) -> T:
     ------
     RuntimeError
         If called on the background loop's thread, as from a logging handler or custom
-        transport the loop runs, since the call would wait on itself.
+        transport the loop runs, since the call would wait on itself. Also if the loop's
+        thread has stopped, which a ``SystemExit`` raised in code the loop runs does.
     """
     loop, thread = _loop()
     if threading.current_thread() is thread:
@@ -90,6 +91,9 @@ def _run[T](coro: Coroutine[Any, Any, T]) -> T:
         future = asyncio.run_coroutine_threadsafe(coro, loop)
         while not future.done():
             concurrent.futures.wait((future,), timeout=_POLL)
+            if not future.done() and not thread.is_alive():
+                msg = "the water-ogcapi event loop has stopped; restart the process"
+                raise RuntimeError(msg)
     except BaseException:
         if future is not None:
             future.cancel()

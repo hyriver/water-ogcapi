@@ -1160,7 +1160,8 @@ Layering rule for anything new:
 
 - **Status:** accepted. Amends D-08. D-48 moves the blocking classes to the package root
     and the async ones to `water_ogcapi.aio`. D-56 settles the concurrent pieces of #14.
-    Since 2026-10-26 a blocking call made on the loop's own thread raises.
+    Since 2026-10-26 a blocking call made on the loop's own thread raises, and so does
+    one whose loop thread has stopped.
 - **Date:** 2026-10-16.
 - **Decision:** `water_ogcapi.sync` holds `OGCService`, `NWIS`, `FabricData`, and
     `GeoConnex` with the names and constructors of the async classes. Each builds its
@@ -1173,7 +1174,7 @@ Layering rule for anything new:
     service's transport, created or passed, and a sync service sharing it reconnects on
     its next request. A blocking call made on the loop's thread, as from a logging
     handler or custom transport the loop runs, raises `RuntimeError` before it sends
-    anything.
+    anything, and a call whose loop thread has stopped raises `RuntimeError` too.
 - **Why:** A transport binds to the loop of its first request (D-10), so `*_sync`
     methods on `OGCService` would break the first async call after a sync one in the
     same notebook (2026-10-12 review). Matching names make switching an import change. A
@@ -1181,8 +1182,10 @@ Layering rule for anything new:
     `_thread.interrupt_main()` and ipykernel on Windows do. A passed transport is bound
     to the background loop, where the caller cannot close it. A call on the loop's
     thread waits for work only that thread can run, so it hung forever (2026-10-26
-    probe); synchronicity raises in the same case. Names and the `close()` rule chosen
-    by the maintainer.
+    probe); synchronicity raises in the same case. asyncio re-raises a `SystemExit` from
+    a task out of `run_forever()`, which ended the thread before the call's result was
+    set, so the caller polled forever (2026-10-26 probe). Names and the `close()` rule
+    chosen by the maintainer.
 - **Rejected:** `*_sync` methods on the async classes. Top-level names with a suffix or
     prefix (`NWISSync`, `SyncNWIS`). A wrapper around a caller's async service, which
     binds that caller's transport to the background loop. Fetching the next page while
@@ -1190,15 +1193,16 @@ Layering rule for anything new:
     abandons the iterator. Leaving a passed transport open, as `OGCService.aclose()`
     does, and a blocking `Transport.close()`, which adds public API.
 - **Limits:** A `Transport` passed to a sync service binds to the background loop, so it
-    cannot also serve an async service on the caller's loop. The thread never stops, and
-    a transport closes only through `close()` or `with`. A child made by `os.fork()`
-    starts its own loop, where a transport bound in the parent raises (D-10). Each
-    iterator step runs in its own task, so an async iterator under the sync API must
-    hold no task group or `asyncio.timeout` across a `yield`. An abandoned iterator's
-    async generator closes through the loop's finalizer once nothing references it,
-    which a held traceback delays. #14's concurrent pieces put requests in flight
-    between steps, so #14 cancels them when its generator closes and revisits this
-    entry.
+    cannot also serve an async service on the caller's loop. The thread stops only when
+    code it runs raises `SystemExit` or `KeyboardInterrupt`, and it does not restart, so
+    every later blocking call in the process raises. A transport closes only through
+    `close()` or `with`. A child made by `os.fork()` starts its own loop, where a
+    transport bound in the parent raises (D-10). Each iterator step runs in its own
+    task, so an async iterator under the sync API must hold no task group or
+    `asyncio.timeout` across a `yield`. An abandoned iterator's async generator closes
+    through the loop's finalizer once nothing references it, which a held traceback
+    delays. #14's concurrent pieces put requests in flight between steps, so #14 cancels
+    them when its generator closes and revisits this entry.
 
 ### D-47: Queries are checked against cached metadata before the first page request
 

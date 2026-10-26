@@ -1160,6 +1160,7 @@ Layering rule for anything new:
 
 - **Status:** accepted. Amends D-08. D-48 moves the blocking classes to the package root
     and the async ones to `water_ogcapi.aio`. D-56 settles the concurrent pieces of #14.
+    Since 2026-10-26 a blocking call made on the loop's own thread raises.
 - **Date:** 2026-10-16.
 - **Decision:** `water_ogcapi.sync` holds `OGCService`, `NWIS`, `FabricData`, and
     `GeoConnex` with the names and constructors of the async classes. Each builds its
@@ -1170,14 +1171,18 @@ Layering rule for anything new:
     0.1 s slices, and an exception raised while it waits, such as a notebook interrupt,
     cancels the call's task and its request before propagating. `close()` closes the
     service's transport, created or passed, and a sync service sharing it reconnects on
-    its next request.
+    its next request. A blocking call made on the loop's thread, as from a logging
+    handler or custom transport the loop runs, raises `RuntimeError` before it sends
+    anything.
 - **Why:** A transport binds to the loop of its first request (D-10), so `*_sync`
     methods on `OGCService` would break the first async call after a sync one in the
     same notebook (2026-10-12 review). Matching names make switching an import change. A
     blocked wait misses an interrupt that only sets the interrupt flag, as
     `_thread.interrupt_main()` and ipykernel on Windows do. A passed transport is bound
-    to the background loop, where the caller cannot close it. Names and the `close()`
-    rule chosen by the maintainer.
+    to the background loop, where the caller cannot close it. A call on the loop's
+    thread waits for work only that thread can run, so it hung forever (2026-10-26
+    probe); synchronicity raises in the same case. Names and the `close()` rule chosen
+    by the maintainer.
 - **Rejected:** `*_sync` methods on the async classes. Top-level names with a suffix or
     prefix (`NWISSync`, `SyncNWIS`). A wrapper around a caller's async service, which
     binds that caller's transport to the background loop. Fetching the next page while

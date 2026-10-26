@@ -21,7 +21,7 @@ from water_ogcapi.aio import NWIS, FabricData, GeoConnex, OGCService
 from water_ogcapi.exceptions import PaginationError, ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable
 
 BASE = "https://api.waterdata.usgs.gov/ogcapi/v1"
 FIRST = {
@@ -84,7 +84,7 @@ def test_calls_reuse_one_transport() -> None:
     service.collect("c")
     client = transport._client
     assert client is not None
-    assert transport._loop is _sync._loop()
+    assert transport._loop is _sync._loop()[0]
     service.collect("c")
     assert transport._client is client
     assert len(seen) == 4
@@ -279,6 +279,20 @@ def test_a_service_sharing_a_closed_transport_reconnects() -> None:
     assert len(seen) == 4
 
 
+def exitcode_in_fork(target: Callable[[], None]) -> int | None:
+    """Run ``target`` in a forked child, which starts its own loop, killed after 10 s.
+
+    A loop that hangs or stops ends with the child, so later tests keep theirs.
+    """
+    child = multiprocessing.get_context("fork").Process(target=target)
+    child.start()
+    child.join(10)
+    if child.is_alive():
+        child.kill()
+        child.join()
+    return child.exitcode
+
+
 def collect_in_child() -> None:
     transport, _ = serve()
     water_ogcapi.OGCService(BASE, transport=transport).collect("c")
@@ -297,9 +311,23 @@ def test_a_forked_child_starts_its_own_loop() -> None:
 
     threading.Thread(target=hold_the_lock, daemon=True).start()
     held.wait(5)
-    child = multiprocessing.get_context("fork").Process(target=collect_in_child)
-    child.start()
-    child.join(10)
-    if child.is_alive():
-        child.kill()
-    assert child.exitcode == 0
+    assert exitcode_in_fork(collect_in_child) == 0
+
+
+def block_on_the_loop() -> None:
+    transport, seen = serve()
+    service = water_ogcapi.OGCService(BASE, transport=transport)
+
+    async def on_the_loop() -> None:
+        # Stands in for a logging handler or custom transport, which the loop runs.
+        service.collect("c")
+
+    with pytest.raises(RuntimeError, match="would wait on itself"):
+        _sync._run(on_the_loop())
+    assert not seen
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="no fork on Windows")
+@pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
+def test_a_blocking_call_on_the_loop_raises() -> None:
+    assert exitcode_in_fork(block_on_the_loop) == 0

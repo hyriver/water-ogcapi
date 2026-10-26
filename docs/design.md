@@ -291,9 +291,10 @@ Layering rule for anything new:
     DC), a small bounding box around Washington, DC, and the 21 two-digit HUCs from
     GeoConnex. FabricData tests skip when the backend does not respond.
 
-- **Planned benchmarks:** cold start to first feature, round trips for a single-page
-    result, requests spent per 100,000 features, peak memory against result size, and
-    recovery after a 429 mid-pagination (mock only).
+- **Benchmarks:** cold start to first feature, round trips for a single-page result,
+    requests spent per 100,000 features, peak memory against result size, and recovery
+    after a 429 mid-pagination, all against mocks. `scripts/bench.py` measures them, and
+    [Performance](performance.md) records a run.
 
 - **Limits:** Fixtures stay green while upstream drifts, live tests stay out of CI, and
     FabricData failures turn into skips, so upstream drift is invisible by construction

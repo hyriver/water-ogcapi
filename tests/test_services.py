@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import pickle
+from collections.abc import Callable
 
 import httpx2
 import pytest
 
+import water_ogcapi
 from water_ogcapi import QueryResult, Transport
 from water_ogcapi.aio import NWIS, FabricData, GeoConnex, OGCService
 from water_ogcapi.exceptions import PaginationError, ServiceError
@@ -108,6 +112,30 @@ def test_nwis_refuses_a_key_that_is_not_printable_ascii(
     with pytest.raises(ValueError, match="printable ASCII") as excinfo:
         NWIS()
     assert "SECRET" not in repr(excinfo.value)
+
+
+def roundtrip(obj: object) -> object:
+    return pickle.loads(pickle.dumps(obj))
+
+
+@pytest.mark.parametrize("clone", [roundtrip, copy.deepcopy])
+@pytest.mark.parametrize("cls", [NWIS, water_ogcapi.NWIS])
+@pytest.mark.parametrize(("env", "sent"), [("env-key", {"X-Api-Key": "env-key"}), (None, {})])
+def test_a_pickled_nwis_leaves_its_key_out_and_reads_the_environment_on_load(
+    monkeypatch: pytest.MonkeyPatch,
+    clone: Callable[[object], object],
+    cls: type,
+    env: str | None,
+    sent: dict[str, str],
+) -> None:
+    service = cls(api_key="arg-key")
+    assert b"arg-key" not in pickle.dumps(service)
+    if env is None:
+        monkeypatch.delenv("USGS_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("USGS_API_KEY", env)
+    loaded = clone(service)
+    assert getattr(loaded, "_service", loaded)._headers() == sent
 
 
 def test_fabricdata_sends_no_key(monkeypatch: pytest.MonkeyPatch) -> None:

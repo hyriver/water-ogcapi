@@ -1062,7 +1062,7 @@ Layering rule for anything new:
 
 - **Status:** accepted. Since 2026-10-16 `Transport.request()` also refuses a key that
     is not printable ASCII (D-43); `NWIS` keeps its check so the error comes at
-    construction.
+    construction. Since 2026-10-26 a pickle leaves the key out.
 - **Date:** 2026-10-15.
 - **Decision:** `NWIS(api_key=None)` takes its key from the argument, else from
     `USGS_API_KEY`, read once at construction. An empty string sends no key, and a key
@@ -1070,16 +1070,25 @@ Layering rule for anything new:
     `UnicodeEncodeError` for it holds the whole key in its `repr`. `_headers()` adds the
     key to every request as `X-Api-Key` (D-18, D-40). Service classes take no `base_url`
     argument and send only to their profile's base URL. A caller who needs another host
-    uses `OGCService`, which sends no key.
+    uses `OGCService`, which sends no key. A pickle of the async or blocking `NWIS`
+    leaves the key out, and loading one reads `USGS_API_KEY` in the loading process.
 - **Why:** With no `base_url` argument, D-13's rule that a USGS key never reaches a
     non-USGS host holds by construction, and `_send()` keeps it to that origin (D-40).
     Reading the environment once fixes the key for the life of the instance, so every
-    page of a traversal carries the same key.
+    page of a traversal carries the same key. A pickled service held the key in
+    plaintext, which cloudpickle carries to Dask workers in any closure that captured it
+    (#43 review); the pickle rule was chosen by the maintainer.
 - **Rejected:** Reading the environment on each request. A `base_url` argument, which
-    sends the environment's key to whatever host it names.
+    sends the environment's key to whatever host it names. Refusing to pickle a service.
+    Writing a passed key into `os.environ` so every process reads it there, which hands
+    the key to every subprocess and lets a second instance replace the first's key.
 - **Limits:** The instance holds the key unredacted in a private attribute; the default
-    `repr` does not show it. Unkeyed NWIS responses carry no `X-RateLimit-*` headers
-    (D-30), so the governor (#18) uses its static default there.
+    `repr` does not show it. Only a service that has sent no request pickles: a used one
+    holds its event loop and HTTP client. A passed `api_key` does not survive a pickle,
+    `""` included, and a process without `USGS_API_KEY` loads a service that sends no
+    key. `copy.deepcopy` reads the environment the same way; `copy.copy` of the blocking
+    `NWIS` shares its async service and keeps the key. Unkeyed NWIS responses carry no
+    `X-RateLimit-*` headers (D-30), so the governor (#18) uses its static default there.
 
 ### D-43: `Transport` is public
 

@@ -144,6 +144,17 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
             return None
 
 
+def _key(api_key: str | None) -> str | None:
+    """Return the key NWIS sends: ``api_key``, else ``USGS_API_KEY``, ``None`` for none."""
+    if api_key is None and NWIS_PROFILE.key_env:
+        api_key = os.environ.get(NWIS_PROFILE.key_env)
+    # Transport.request() refuses such a key too, but only once a query runs (D-43).
+    if api_key and not (api_key.isascii() and api_key.isprintable()):
+        msg = "the USGS API key must be printable ASCII"
+        raise ValidationError(msg)
+    return api_key or None
+
+
 class NWIS(OGCService):
     """Async client for the USGS Water Data OGC API, which serves NWIS data (D-42).
 
@@ -155,7 +166,8 @@ class NWIS(OGCService):
     api_key : str, optional
         A USGS API key, sent in the ``X-Api-Key`` header of every request (D-18).
         Defaults to the ``USGS_API_KEY`` environment variable, read once here. An empty
-        string sends no key.
+        string sends no key. A pickle or deep copy leaves the key out, the empty string
+        included, and reads ``USGS_API_KEY`` again.
     transport : Transport, optional
         Sends every request, as for `OGCService`.
 
@@ -169,13 +181,7 @@ class NWIS(OGCService):
 
     def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
         super().__init__(transport=transport)
-        if api_key is None and NWIS_PROFILE.key_env:
-            api_key = os.environ.get(NWIS_PROFILE.key_env)
-        # Transport.request() refuses such a key too, but only once a query runs (D-43).
-        if api_key and not (api_key.isascii() and api_key.isprintable()):
-            msg = "the USGS API key must be printable ASCII"
-            raise ValidationError(msg)
-        self._api_key = api_key or None
+        self._api_key = _key(api_key)
 
     def _headers(self) -> dict[str, str]:
         return {"X-Api-Key": self._api_key} if self._api_key else {}
@@ -217,6 +223,13 @@ class NWIS(OGCService):
             msg = f"sites_per_piece takes a site list: ids, or a comma-separated {SITES} in params"
             raise ValidationError(msg)
         return pieces
+
+    def __getstate__(self) -> dict[str, Any]:
+        return {**self.__dict__, "_api_key": None}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._api_key = _key(None)
 
 
 class FabricData(OGCService):

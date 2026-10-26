@@ -119,6 +119,8 @@ nb-execute = "jupyter nbconvert --to notebook --execute --inplace docs/examples/
 nb-run = { depends-on = [ "nb-sync", "nb-execute" ] }
 # One-time pairing of a new .ipynb with a py:percent script.
 nb-pair = "jupytext --set-formats 'ipynb,py:percent' docs/examples/*.ipynb"
+# The D-14 benchmarks, offline; docs/performance.md records a run.
+bench = "python scripts/bench.py"
 
 [tool.pixi.feature.docs.tasks]
 notebooks = "python scripts/convert_notebooks.py"
@@ -195,6 +197,8 @@ lint.per-file-ignores."docs/examples/*.{ipynb,py}" = [
   "T201",    # printing is how notebooks show results
 ]
 lint.per-file-ignores."scripts/*.py" = [ "INP001" ]
+# Its asserts check that each run measured what its table claims.
+lint.per-file-ignores."scripts/bench.py" = [ "S101" ]
 lint.per-file-ignores."tests/*.py" = [
   "B015",
   "B017",

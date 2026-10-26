@@ -95,3 +95,36 @@ A 5,000-feature query in pages of 1,000, where the third page first gets a 429 w
 The transport waits the second the server asked for and retries once, and the governor
 holds later starts for the same second, so the 429 costs one request and the wait. Every
 run returned all 5,000 features with no id repeated.
+
+## Decoding
+
+[Q-09](design.md#q-09-orjson-for-decoding-large-responses) asked whether orjson should
+decode pages. `--fetch` saves three real pages per service at the profile's page size,
+NWIS `continuous` for a year at the Potomac gage and FabricData `gagesii`, and records
+how long `iter_pages` took to return each, its own `json.loads` included. It sends six
+requests through the services, whose checks keep the key on NWIS's origin, and refuses
+to write a page that holds the key. `--decode` times `json.loads` and `orjson.loads` on
+each page (median of 20) and measures how much each grows a fresh process's peak RSS.
+Save the pages outside the repository:
+
+```bash
+pixi r -e dev python scripts/bench.py --fetch /tmp/water-ogcapi-pages
+pixi r -e dev python scripts/bench.py --decode /tmp/water-ogcapi-pages
+```
+
+Share is the `json.loads` time over the page's seconds, and saves is the difference
+between the two decoders over the same seconds. A page's seconds include any wait the
+governor added, which can only lower the share.
+
+| Page         | MiB | Features | Page s | `json` ms | `orjson` ms | `json` share | `orjson` saves | `json` RSS MiB | `orjson` RSS MiB |
+| ------------ | --- | -------- | ------ | --------- | ----------- | ------------ | -------------- | -------------- | ---------------- |
+| nwis-1       | 6.8 | 10,000   | 3.64   | 19        | 9           | 0.5%         | 0.3%           | 23.9           | 31.0             |
+| nwis-2       | 6.8 | 10,000   | 2.30   | 19        | 9           | 0.8%         | 0.5%           | 23.8           | 30.9             |
+| nwis-3       | 6.8 | 10,000   | 1.54   | 19        | 9           | 1.3%         | 0.7%           | 23.6           | 31.0             |
+| fabricdata-1 | 0.9 | 1,000    | 0.68   | 2         | 1           | 0.4%         | 0.2%           | 2.7            | 3.6              |
+| fabricdata-2 | 0.9 | 1,000    | 0.50   | 2         | 1           | 0.5%         | 0.3%           | 2.6            | 3.6              |
+| fabricdata-3 | 0.9 | 1,000    | 1.00   | 2         | 1           | 0.2%         | 0.2%           | 2.7            | 3.6              |
+
+On these six pages orjson decoded twice as fast and grew peak RSS more, and every page
+took at least 70 times as long to come back as `json.loads` took to decode it, so pages
+keep `json.loads` ([D-61](design.md#d-61-pages-decode-with-jsonloads)).

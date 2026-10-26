@@ -107,6 +107,10 @@ Report bugs and ask questions in
 [contributing guide](https://docs.hyriver.io/water-ogcapi/contributing/) covers the
 development setup, the checks a change must pass, and the project conventions.
 
+## Acknowledgment
+
+This work was conducted under contract with the U.S. Geological Survey (USGS).
+
 ## License
 
 MIT. See [LICENSE](https://github.com/hyriver/water-ogcapi/blob/main/LICENSE).

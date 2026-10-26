@@ -39,6 +39,8 @@ _POLL = 0.1
 
 _LOCK = threading.Lock()
 
+_STOPPED = "the water-ogcapi event loop has stopped; restart the process"
+
 
 @functools.cache
 def _start_loop() -> tuple[asyncio.AbstractEventLoop, threading.Thread]:
@@ -87,14 +89,17 @@ def _run[T](coro: Coroutine[Any, Any, T]) -> T:
         coro.close()
         msg = "a blocking call on the water-ogcapi event loop would wait on itself"
         raise RuntimeError(msg)
+    # A dead loop never drains its queue, so a coroutine submitted to it is kept forever.
+    if not thread.is_alive():
+        coro.close()
+        raise RuntimeError(_STOPPED)
     future = None
     try:
         future = asyncio.run_coroutine_threadsafe(coro, loop)
         while not future.done():
             concurrent.futures.wait((future,), timeout=_POLL)
             if not future.done() and not thread.is_alive():
-                msg = "the water-ogcapi event loop has stopped; restart the process"
-                raise RuntimeError(msg)
+                raise RuntimeError(_STOPPED)
     except BaseException:
         if future is not None:
             future.cancel()

@@ -72,7 +72,8 @@ def _run[T](coro: Coroutine[Any, Any, T]) -> T:
     """Run ``coro`` on the background loop and return its result.
 
     An exception raised while waiting, such as the ``KeyboardInterrupt`` of a notebook
-    interrupt, cancels ``coro`` and its request before it propagates.
+    interrupt, requests cancellation of ``coro`` and its request before it propagates;
+    the cancellation finishes on the loop afterward.
 
     Raises
     ------

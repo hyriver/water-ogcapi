@@ -53,6 +53,8 @@ dev = [
   "jupytext",
   "matplotlib",
   "nbconvert",
+  # The orjson arm of scripts/bench.py's decode benchmark (Q-09).
+  "orjson",
   { include-group = "test" },
   { include-group = "typecheck" },
 ]

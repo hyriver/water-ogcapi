@@ -41,10 +41,11 @@ _LOCK = threading.Lock()
 
 
 @functools.cache
-def _start_loop() -> asyncio.AbstractEventLoop:
+def _start_loop() -> tuple[asyncio.AbstractEventLoop, threading.Thread]:
     loop = asyncio.new_event_loop()
-    threading.Thread(target=loop.run_forever, name="water-ogcapi", daemon=True).start()
-    return loop
+    thread = threading.Thread(target=loop.run_forever, name="water-ogcapi", daemon=True)
+    thread.start()
+    return loop, thread
 
 
 if sys.platform != "win32":
@@ -60,8 +61,8 @@ if sys.platform != "win32":
     )
 
 
-def _loop() -> asyncio.AbstractEventLoop:
-    """Return the background event loop, starting its daemon thread on the first call."""
+def _loop() -> tuple[asyncio.AbstractEventLoop, threading.Thread]:
+    """Return the background event loop and its thread, starting both on the first call."""
     # functools.cache alone can run _start_loop twice when two threads race.
     with _LOCK:
         return _start_loop()
@@ -72,10 +73,21 @@ def _run[T](coro: Coroutine[Any, Any, T]) -> T:
 
     An exception raised while waiting, such as the ``KeyboardInterrupt`` of a notebook
     interrupt, cancels ``coro`` and its request before it propagates.
+
+    Raises
+    ------
+    RuntimeError
+        If called on the background loop's thread, as from a logging handler or custom
+        transport the loop runs, since the call would wait on itself.
     """
+    loop, thread = _loop()
+    if threading.current_thread() is thread:
+        coro.close()
+        msg = "a blocking call on the water-ogcapi event loop would wait on itself"
+        raise RuntimeError(msg)
     future = None
     try:
-        future = asyncio.run_coroutine_threadsafe(coro, _loop())
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
         while not future.done():
             concurrent.futures.wait((future,), timeout=_POLL)
     except BaseException:

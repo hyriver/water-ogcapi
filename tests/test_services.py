@@ -252,3 +252,18 @@ def test_geoconnex_returns_the_22_two_digit_hucs() -> None:
     assert sorted(f["id"] for f in result.geojson["features"]) == [f"{n:02d}" for n in range(1, 23)]
     assert result.pagination.completeness == "complete"
     assert "count" in result.pagination.checks
+
+
+@pytest.mark.network
+def test_geoconnex_answers_an_ids_query_sent_as_cql2_json() -> None:
+    """The documents declare the POST body as application/json; the client sends CQL2-JSON."""
+
+    async def run() -> QueryResult:
+        async with Transport(max_retries=0) as transport, GeoConnex(transport=transport) as svc:
+            return await svc.collect(
+                "hu02", ids=["01", "02"], id_property="huc2", params={"skipGeometry": "true"}
+            )
+
+    result = asyncio.run(run())
+    assert sorted(f["id"] for f in result.geojson["features"]) == ["01", "02"]
+    assert result.pagination.completeness == "complete"

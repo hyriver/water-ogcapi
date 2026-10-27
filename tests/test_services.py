@@ -187,6 +187,23 @@ def test_nwis_fetches_the_potomac_gage() -> None:
     assert asyncio.run(run()) == "USGS-01646500"
 
 
+@pytest.mark.network
+def test_nwis_finds_every_site_in_the_dc_bbox() -> None:
+    bbox = (-77.12, 38.80, -76.91, 38.99)
+
+    async def run() -> QueryResult:
+        async with Transport(max_retries=0) as transport, NWIS(transport=transport) as svc:
+            return await svc.collect("monitoring-locations", bbox=bbox)
+
+    result = asyncio.run(run())
+    assert result.pagination.completeness == "complete"
+    assert "end_of_links" in result.pagination.checks
+    west, south, east, north = bbox
+    points = [f["geometry"]["coordinates"] for f in result.geojson["features"]]
+    assert points
+    assert all(west <= x <= east and south <= y <= north for x, y in points)
+
+
 def did_not_respond(err: PaginationError) -> bool:
     """Whether a sent request timed out, lost its connection, or got a 5xx (D-14)."""
     failure = err.failures[0]

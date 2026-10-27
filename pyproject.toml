@@ -149,6 +149,8 @@ python = "~=3.15.0"
 test = "pytest -m 'not network'"
 test-network = "pytest -m network"
 test-all = "pytest"
+# Live: compares the OpenAPI snapshots in tests/fixtures with the services (D-63).
+drift = "python scripts/openapi_drift.py"
 report = { cmd = [ "coverage", "report" ], depends-on = [ "test-all" ] }
 html = { cmd = [ "coverage", "html" ], depends-on = [ "report" ] }
 

@@ -1,0 +1,43 @@
+name: Drift
+
+# Weekly check that the live services still match the tests and the OpenAPI snapshots
+# (D-63). Never on pull_request, so no fork run sees the key.
+on:
+  schedule:
+  - cron: 0 7 * * 1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  network-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        fetch-depth: 0  # hatch-vcs reads tags for the version
+        persist-credentials: false
+    - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
+      with:
+        pixi-version: v0.82.1  # Dependabot does not bump this; see D-55
+        environments: test315
+    - run: pixi run -e test315 test-network
+      env:
+        USGS_API_KEY: ${{ secrets.USGS_API_KEY }}  # a key used only here
+
+  openapi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
+      with:
+        pixi-version: v0.82.1  # Dependabot does not bump this; see D-55
+        environments: test315
+    # Sends no key: the OpenAPI documents are public.
+    - run: pixi run -e test315 drift

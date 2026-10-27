@@ -46,3 +46,15 @@ writes. Then run the skill's key scan and commit the changed files with their ne
 ```bash
 pixi r -e dev python scripts/record_fixtures.py
 ```
+
+## OpenAPI snapshots
+
+`<service>/openapi.json` holds each service's OpenAPI document minus its prose
+(descriptions, summaries, titles, and examples), with `info` cut to the title and
+version. The weekly drift workflow (D-63) fetches the live documents and fails on any
+difference. After reviewing a reported drift, and after a change to the profiles in
+`_services.py`, refresh the snapshots and commit them with their new `recorded` date:
+
+```bash
+pixi r -e test315 drift --update
+```

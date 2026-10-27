@@ -62,6 +62,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
     `DeprecationWarning` (D-21).
 - Python packages come from PyPI. `[tool.pixi.dependencies]` holds only system libraries
     such as GDAL (D-27).
+- Only the weekly drift workflow reaches a live endpoint from CI, and only its
+    network-test job gets the `USGS_API_KEY` secret (D-63).
 
 ## Commands
 
@@ -77,6 +79,7 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Test, offline (3.15)       | `pixi r -e test315 test`            |
 | Test, network-marked only  | `pixi r -e test315 test-network`    |
 | Test, everything           | `pixi r -e test315 test-all`        |
+| Drift check, live          | `pixi r -e test315 drift`           |
 | Coverage report / HTML     | `pixi r -e test315 report` / `html` |
 | Benchmarks, offline        | `pixi r -e dev bench`               |
 | Run Python                 | `pixi r -e dev python ...`          |

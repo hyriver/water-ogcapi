@@ -297,8 +297,8 @@ Layering rule for anything new:
     [Performance](performance.md) records a run.
 
 - **Limits:** Fixtures stay green while upstream drifts, live tests stay out of CI, and
-    FabricData failures turn into skips, so upstream drift is invisible by construction
-    (Q-05).
+    FabricData failures turn into skips, so upstream drift is invisible to them; the
+    weekly drift run (D-63) sees it.
 
 ### D-15: Clean build, salvaging per file
 
@@ -751,8 +751,9 @@ Layering rule for anything new:
     maintainer's reading is 300 a minute. `Remaining` is approximate: it rose between
     consecutive NWIS requests on 2026-10-07. The 10,000 cap keeps GeoConnex requests at
     or below the declared maximum, so the untested behavior above it is never reached.
-    Every value here can change without notice, and only the drift check (Q-05) would
-    see it. On 2026-10-13 a key whose limit USGS had raised on request read
+    Every value here can change without notice. The weekly drift run (D-63) sees a
+    changed cap or OpenAPI declaration; the header facts stay unobserved until a probe
+    repeats them. On 2026-10-13 a key whose limit USGS had raised on request read
     `X-RateLimit-Limit: 3000` on `/items` and on metadata, and requests to both took
     numbers from one `Remaining` sequence: a raised key appears to replace the
     per-endpoint limits with one hourly budget (six requests). A response served from
@@ -1054,7 +1055,7 @@ Layering rule for anything new:
 - **Rejected:** A sort key and a fan-out flag in the profile (D-35); the NWIS class
     carries fan-out (#14). Clamping an oversized `limit`, which changes the request
     without saying so.
-- **Limits:** The caps are D-30's live values and can change without notice (Q-05). Only
+- **Limits:** The caps are D-30's live values and can change without notice (D-63). Only
     the first request's `limit` is checked; a `next` link's own query is sent as the
     server wrote it.
 
@@ -1747,6 +1748,51 @@ Layering rule for anything new:
     (D-29, D-53). Recorded fixtures carry the same risk as `QueryResult`, so scrub auth
     at record time.
 
+### D-63: Weekly drift run against the live services
+
+- **Status:** accepted. Answers Q-05.
+- **Date:** 2026-10-27.
+- **Decision:** `.github/workflows/drift.yml` runs every Monday at 07:00 UTC and on
+    request. Its `network-tests` job runs the network-marked tests with the
+    `USGS_API_KEY` repository secret, a key used nowhere else. Its `openapi` job runs
+    `scripts/openapi_drift.py` (`pixi r -e test315 drift`), which fetches each service's
+    OpenAPI document with no key, keeps the whole document minus its prose
+    (descriptions, summaries, titles, and examples) with `info` cut to the title and
+    version, and fails on any difference from `tests/fixtures/<service>/openapi.json` or
+    on a missing snapshot. `--update` rewrites the snapshots with the day's date;
+    `tests/fixtures/README.md` says when to run it. The workflow has `contents: read`
+    and no `pull_request` trigger, so no fork run sees the secret, and `ci.yml` stays
+    offline (D-14). A failed run reaches the maintainer through GitHub's notification
+    and files nothing. Release notes name the service version each snapshot carries, the
+    `info.version` field of each `tests/fixtures/<service>/openapi.json`. A service that
+    does not answer fails the run and keeps its snapshot.
+- **Why:** D-14 made drift invisible: fixtures stay green and live tests stay out of CI.
+    A weekly run turns an upstream change into a failed run within seven days and spends
+    a handful of requests. The snapshot keeps everything except prose, so a wording edit
+    does not fail the run, while a new or removed collection path, a changed `limit`
+    maximum (D-30's caps), a changed parameter or request body, or a version bump does.
+    Keeping everything else, in place of a list of fields, was chosen after two review
+    rounds each found a dropped field the client depends on. The documents are public,
+    so the fetch sends no key and cannot copy one into a snapshot (D-13). Fail-only was
+    chosen by the maintainer.
+- **Rejected:** Committing the full documents, about 3 MB that is mostly descriptions,
+    where every wording edit is drift. Running the network tests in `ci.yml`, which
+    hands the secret to every push and reaches USGS on each one. Filing an issue from
+    the workflow, which needs `issues: write` and a step that recognizes a drift already
+    filed.
+- **Limits:** GitHub disables a scheduled workflow after 60 days without a commit on the
+    default branch, and runs it late or not at all under load. CloudFront served the
+    NWIS document from cache (`x-cache: Hit`), so a change can take a cache lifetime to
+    reach the run. The snapshot misses a change in a description that changes meaning,
+    and it keeps a `$ref` as the reference, so a change inside a referenced document
+    (the OGC `sortby` parameter, the CQL2 schema) is invisible. The documents declare
+    the `POST` body as `application/json` while the client sends
+    `application/query-cql-json` (D-39), which the servers accept; the snapshot guards
+    the declaration, and the GeoConnex `ids` network test guards the acceptance. Each
+    job stops after 20 minutes. A FabricData outage skips its network test (D-14) and
+    fails its OpenAPI fetch. The planted-diff check ran offline against a mocked service
+    and once live against an edited snapshot, never through the scheduled run itself.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -1915,6 +1961,8 @@ a page URL or cursor. Either generalize the field to failed page URLs or documen
 error as fan-out-only.
 
 ### Q-05: Detecting upstream drift
+
+**Status:** answered by D-63.
 
 USGS's versioning page says v0 is still under development and its interface and data may
 change, while aiming not to break working queries. Proposal: a scheduled weekly CI run

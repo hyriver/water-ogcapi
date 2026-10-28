@@ -1448,15 +1448,16 @@ Layering rule for anything new:
 
 ### D-53: A response whose link carries a credential fails before it is kept
 
-- **Status:** accepted. Amends D-29, D-34, and D-40.
+- **Status:** accepted. Amends D-29, D-34, and D-40. Since 2026-10-28 a pickled
+    `Request` runs its checks on load (D-65).
 - **Date:** 2026-10-21.
 - **Decision:** `parse_page()` and `item()` raise `ServiceError` when any link object in
     the document or in one of its features carries a credential in its raw `href`
     (query, fragment, or userinfo), checked before `Link` masks it. `_send()` adds the
     service's headers last and drops a request header of the same name in any case, so a
-    `Request` that skipped its own checks, such as one unpickled from a tampered file,
-    cannot replace the key. The page is never yielded, so its `body` and `content` never
-    reach the caller, a `QueryResult`, or a pickle.
+    `Request` that skipped its own checks, such as one changed in memory, cannot replace
+    the key. The page is never yielded, so its `body` and `content` never reach the
+    caller, a `QueryResult`, or a pickle.
 - **Why:** D-29 kept `body` and `content` unredacted on the ground that the key never
     travels in a query (D-18), so no server can echo it. L-11 showed a gateway can copy
     the key into a URL, and the 2026-10-21 review (Codex) found that a stamped `next`
@@ -1830,6 +1831,44 @@ Layering rule for anything new:
     `RuntimeError` on its first request (checked by probe); pass the service where it is
     pickled, such as a `Pool.map` argument or a Dask task, or build it in the worker. A
     worker whose `USGS_API_KEY` is not printable ASCII raises `ValidationError` at load.
+
+### D-65: Every string a credential check reads is exactly `str`
+
+- **Status:** accepted.
+- **Date:** 2026-10-28.
+- **Decision:** `Transport.request()`, `Request`, and `Page` refuse a URL, a query
+    parameter name, or a header name whose type is not exactly `str`, and
+    `Transport.request()` and `NWIS` also refuse such a header value or key, with
+    `ValidationError` (D-45) naming the type and never the value. `reject_non_str()` in
+    `_transport.py` holds the check; `reject_credentials()`, the header value check, the
+    `Request` header allowlist, `Page`'s redaction, `_merged()`, and `NWIS`'s key check
+    call it, each on one copy of the mapping it then uses (L-13). `redact_url()` returns
+    `REDACTED` for a URL that is not exactly `str`, so an error message or request
+    identity that names such a URL holds no key. `OGCService` and `Checkpoint` refuse a
+    `base_url` that is not exactly `str` at construction, and `Checkpoint` a collection,
+    and a pickled `Request` or `Checkpoint` runs its construction checks again on load.
+    Chosen by the maintainer.
+- **Why:** Each credential guard reads a string through a method a `str` subclass can
+    override, while `urlencode`, httpx2, and the HTTP encoder send the characters. A
+    `bytes` name (`b"api_key"`), or a `str` subclass whose `lower()` reads `accept`,
+    passed `reject_credentials()` and went out as `api_key=`, so with `validate=False`
+    the key reached the URL, the log records, `Page.params`, and a pickled `QueryResult`
+    (D-18). A `bytes` header name in a tampered pickled `Request` escaped `_merged()`'s
+    key replacement, and the request carried a second `X-Api-Key` (D-53). A URL whose
+    `lstrip()` returns another URL fooled `urlsplit()`, so the credential and origin
+    checks read a clean URL while httpx2 sent the key in the query or to another host
+    (D-13, D-34), and a refused one kept the key in its error. A value whose `isascii()`
+    lies reached httpx2's `UnicodeEncodeError`, whose `repr` holds the key (D-43). A
+    tampered pickled `Request` loaded with none of its checks, so a refused one went
+    back into the failure's `checkpoint` key and all, and a `base_url` subclass reached
+    error messages as itself.
+- **Rejected:** Checking each string in the form its sender reads it, which tracks every
+    encoder and each overridable method. Converting a subclass to a plain `str`, which
+    leaves `bytes` and needs the converted copy at every send.
+- **Limits:** A `StrEnum` member is a `str` subclass, so it raises too; pass its
+    `.value`. A `Request` or `Checkpoint` changed in memory with `object.__setattr__`
+    skips the checks until a pickle of it loads: a refused one returns in the failure's
+    `checkpoint` as given, while `_send()` still keeps the key to its own header (D-53).
 
 ## Lessons
 

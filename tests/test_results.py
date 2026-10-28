@@ -6,6 +6,7 @@ import copy
 import dataclasses
 import json
 import pickle
+from collections.abc import Iterator, Mapping
 from typing import Any
 from urllib.parse import urlencode
 
@@ -13,6 +14,7 @@ import pytest
 
 from water_ogcapi import CRS, Link, Page, Pagination, QueryResult
 from water_ogcapi._results import CRS84, REDACTED, crs_of, redact_url
+from water_ogcapi.exceptions import ValidationError
 
 SECRET = "SECRET"
 URL = "https://example.com/collections/c/items"
@@ -93,6 +95,70 @@ def test_no_credential_in_repr_pickle_or_any_field() -> None:
         "x-ratelimit-remaining": "998",
     }
     assert page.links[0].href == f"{URL}?cursor=abc&api_key={REDACTED}"
+
+
+class LyingURL(str):
+    """A URL that ``urlsplit()`` reads without its query, userinfo, or fragment."""
+
+    __slots__ = ()
+
+    def lstrip(self, *_: object) -> str:
+        return URL
+
+
+def test_a_url_that_is_not_a_str_redacts_to_redacted() -> None:
+    assert (
+        redact_url(LyingURL(f"https://u:{SECRET}@example.com/items?api_key={SECRET}")) == REDACTED
+    )
+
+
+def test_a_page_refuses_a_url_that_is_not_a_str() -> None:
+    with pytest.raises(ValidationError, match=r"URL must be str, got LyingURL$") as excinfo:
+        make_page(url=LyingURL(f"{URL}?api_key={SECRET}"))
+    assert SECRET not in str(excinfo.value)
+
+
+class LooksLikeDate(str):
+    """A header name that a case-folded check reads as ``date``."""
+
+    __slots__ = ()
+
+    def lower(self) -> str:
+        return "date"
+
+
+class Shifting(Mapping[Any, str]):
+    """A mapping that names ``f`` on its first read and ``bad`` on every later one."""
+
+    def __init__(self, bad: object) -> None:
+        self.bad = bad
+        self.reads = 0
+
+    def __getitem__(self, key: object) -> str:
+        return "json" if key == "f" else SECRET
+
+    def __iter__(self) -> Iterator[Any]:
+        self.reads += 1
+        return iter(["f"] if self.reads == 1 else [self.bad])
+
+    def __len__(self) -> int:
+        return 1
+
+
+@pytest.mark.parametrize("field", ["params", "headers"])
+def test_a_page_refuses_a_name_that_is_not_a_str(field: str) -> None:
+    with pytest.raises(ValidationError, match=r"names must be str, got bytes$") as excinfo:
+        make_page(**{field: {b"api_key": SECRET}})
+    assert SECRET not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("field", "bad"), [("params", b"api_key"), ("headers", LooksLikeDate("X-Api-Key"))]
+)
+def test_a_page_stores_the_names_it_checked(field: str, bad: object) -> None:
+    page = make_page(**{field: Shifting(bad)})
+    assert SECRET.encode() not in pickle.dumps(page)
+    assert SECRET not in repr(getattr(page, field))
 
 
 @pytest.mark.parametrize(

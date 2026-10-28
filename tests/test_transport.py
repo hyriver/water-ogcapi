@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import enum
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -22,7 +23,7 @@ from water_ogcapi._transport import (
     parse_count,
     parse_retry_after,
 )
-from water_ogcapi.exceptions import RateLimitError, ServiceError
+from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationError
 
 URL = "https://example.com/collections"
 
@@ -478,6 +479,77 @@ def test_params_changed_during_a_retry_wait_are_sent_as_checked() -> None:
 
     asyncio.run(run())
     assert sent == [f"{URL}?q=safe"] * 2
+
+
+class Name(enum.StrEnum):
+    Q = "q"
+
+
+class LooksLikeAccept(str):
+    """A name that every case-folded check reads as ``accept`` and that is sent as itself."""
+
+    __slots__ = ()
+
+    def lower(self) -> str:
+        return "accept"
+
+
+@pytest.mark.parametrize("name", [b"api_key", LooksLikeAccept("api_key"), Name.Q])
+def test_a_param_name_that_is_not_a_str_is_rejected_before_sending(name: object) -> None:
+    mock, seen = responder(httpx2.Response(200, json={}))
+    with pytest.raises(
+        ValidationError, match=f"names must be str, got {type(name).__name__}$"
+    ) as excinfo:
+        asyncio.run(Transport(transport=mock).get(URL, params={name: "SECRET"}))  # type: ignore[dict-item]
+    assert seen == []
+    assert "SECRET" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("name", [b"X-Api-Key", LooksLikeAccept("X-Api-Key")])
+def test_a_header_name_that_is_not_a_str_is_rejected_before_sending(name: object) -> None:
+    mock, seen = responder(httpx2.Response(200, json={}))
+    with pytest.raises(
+        ValidationError, match=f"names must be str, got {type(name).__name__}$"
+    ) as excinfo:
+        asyncio.run(Transport(transport=mock).get(URL, headers={name: "SECRET"}))  # type: ignore[dict-item]
+    assert seen == []
+    assert "SECRET" not in str(excinfo.value)
+
+
+class LyingURL(str):
+    """A URL that ``urlsplit()`` reads without its query and httpx2 sends as itself."""
+
+    __slots__ = ()
+
+    def lstrip(self, *_: object) -> str:
+        return URL
+
+
+class LooksASCII(str):
+    """A header value that claims to be ASCII whatever it holds."""
+
+    __slots__ = ()
+
+    def isascii(self) -> bool:
+        return True
+
+
+def test_a_url_that_is_not_a_str_is_rejected_before_sending() -> None:
+    mock, seen = responder(httpx2.Response(200, json={}))
+    with pytest.raises(ValidationError, match=r"URL must be str, got LyingURL$"):
+        asyncio.run(Transport(transport=mock).get(LyingURL(f"{URL}?api_key=SECRET")))
+    assert seen == []
+
+
+def test_a_header_value_that_is_not_a_str_is_rejected_before_sending() -> None:
+    mock, seen = responder(httpx2.Response(200, json={}))
+    value = LooksASCII("SECRET\u00e9")
+    with pytest.raises(
+        ValidationError, match=r"header values must be str, got LooksASCII$"
+    ) as excinfo:
+        asyncio.run(Transport(transport=mock).get(URL, headers={"X-Api-Key": value}))
+    assert seen == []
+    assert "SECRET" not in repr(excinfo.value)
 
 
 @pytest.mark.parametrize("url", [f"{URL}?ap\ti_key=SECRET", f"{URL}?api\n_key=SECRET"])

@@ -16,7 +16,7 @@ from urllib.parse import quote, urlsplit
 
 from water_ogcapi._redact import redact_url
 from water_ogcapi._results import ReadOnlyDict
-from water_ogcapi._transport import reject_credentials, sent_url
+from water_ogcapi._transport import reject_credentials, reject_non_str, sent_url
 from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
@@ -47,7 +47,8 @@ class Request:
     """One items request: its identity (D-38) and the headers it needs.
 
     A `Checkpoint` holds the requests a query has still to send (D-52). Construction
-    refuses a credential, so a stored or pickled request never carries one.
+    refuses a credential, and loading a pickle checks again, so a stored or pickled
+    request never carries one (D-65).
 
     Parameters
     ----------
@@ -67,8 +68,9 @@ class Request:
     ------
     ValidationError
         If ``method`` is not ``GET`` or ``POST``, ``url`` holds userinfo, ``url`` or
-        ``params`` carry a credential such as ``api_key``, or ``headers`` holds another
-        header. A credential is refused, since masking it would change the request.
+        ``params`` carry a credential such as ``api_key``, ``headers`` holds another
+        header, or ``url`` or a name in ``params`` or ``headers`` is not exactly ``str``
+        (D-65). A credential is refused, since masking it would change the request.
 
     Notes
     -----
@@ -98,6 +100,7 @@ class Request:
             msg = "a request URL must not carry userinfo"
             raise ValidationError(msg)
         headers = dict(self.headers or {})
+        reject_non_str(headers, "header names")
         if extra := sorted(name for name in headers if name.lower() not in REQUEST_HEADERS):
             msg = f"a request carries only Accept and Content-Type headers, got {', '.join(extra)}"
             raise ValidationError(msg)
@@ -108,6 +111,12 @@ class Request:
     def identity(self) -> RequestId:
         """Return the method, URL as sent with credentials masked, and body (D-38)."""
         return self.method, redact_url(sent_url(self.url, self.params)), self.body
+
+    def __setstate__(self, state: list[object]) -> None:
+        for field, value in zip(dataclasses.fields(self), state, strict=True):
+            object.__setattr__(self, field.name, value)
+        # A pickle can hold what construction refuses, so a load checks again (D-65).
+        self.__post_init__()
 
 
 class Held(Collection[RequestId]):
@@ -179,7 +188,8 @@ class Checkpoint:
     `QueryResult` that stopped early. Pass it to ``iter_pages(resume=...)``, or a
     `QueryResult` to ``collect(resume=...)``. It pickles, holds no feature, and refuses
     to resume on another service or collection. Unpickle only a checkpoint you saved:
-    loading a pickle runs code, and it skips the checks a `Request` makes when built.
+    loading a pickle runs code. A load runs the checks construction runs, its requests'
+    included (D-65).
 
     Parameters
     ----------
@@ -200,6 +210,8 @@ class Checkpoint:
 
     Raises
     ------
+    ValidationError
+        If ``base_url`` or ``collection`` is not exactly ``str`` (D-65).
     TypeError
         If ``pending`` holds anything but `Request` objects.
     ValueError
@@ -215,6 +227,9 @@ class Checkpoint:
     malformed: bool = False
 
     def __post_init__(self) -> None:
+        # Error messages echo both (D-65).
+        reject_non_str([self.base_url], "base_url")
+        reject_non_str([self.collection], "collection")
         pending = tuple(self.pending)
         # Runtime check for untyped callers, as Page.links has.
         if not all(isinstance(item, Request) for item in cast("tuple[object, ...]", pending)):
@@ -226,6 +241,11 @@ class Checkpoint:
         object.__setattr__(self, "pending", pending)
         if not isinstance(self.held, Held | frozenset):
             object.__setattr__(self, "held", frozenset(self.held))
+
+    def __setstate__(self, state: list[object]) -> None:
+        for field, value in zip(dataclasses.fields(self), state, strict=True):
+            object.__setattr__(self, field.name, value)
+        self.__post_init__()
 
 
 @runtime_checkable

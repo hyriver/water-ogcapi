@@ -22,7 +22,7 @@ from water_ogcapi._redact import CREDENTIAL_PARAMS
 from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from water_ogcapi._governor import Governor
 
@@ -61,6 +61,17 @@ def _mentions_credential(text: str) -> bool:
     return any(name in decoded for name in CREDENTIAL_PARAMS)
 
 
+def reject_non_str(items: Iterable[object], what: str) -> None:
+    """Refuse an item that is not exactly ``str``, naming only its type (D-65).
+
+    A ``bytes`` name or a ``str`` subclass reads one way to a check and goes out
+    another, so a credential check would miss it.
+    """
+    if odd := sorted({type(item).__name__ for item in items if type(item) is not str}):
+        msg = f"{what} must be str, got {', '.join(odd)}"
+        raise ValidationError(msg)
+
+
 def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
     """Refuse a credential passed as a query parameter (docs/design.md D-18).
 
@@ -68,6 +79,8 @@ def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
     percent-encoding decoded. httpx2 keeps a fragment in logged and returned URLs even
     though it never sends it.
     """
+    reject_non_str([url], "a URL")
+    reject_non_str(params or {}, "query parameter names")
     names = {name.lower() for name in params or {}}
     try:
         parts = urlsplit(url)
@@ -92,6 +105,8 @@ def _reject_unsendable_headers(headers: Mapping[str, str]) -> None:
     httpx2 raises ``UnicodeEncodeError`` for a non-ASCII value, and its ``repr`` holds
     the whole value, API key included.
     """
+    reject_non_str(headers, "header names")
+    reject_non_str(headers.values(), "header values")
     for name, value in headers.items():
         if not (value.isascii() and value.isprintable()):
             msg = f"header {name!r} must be printable ASCII"
@@ -526,8 +541,10 @@ class Transport:
         RuntimeError
             If called from an event loop other than the one this transport bound to.
         ValidationError
-            If ``params`` carries a credential such as ``api_key``, or a header value is
-            not printable ASCII. The message names the header, never its value.
+            If ``params`` carries a credential such as ``api_key``, ``url`` or a
+            parameter or header name or header value is not exactly ``str`` (D-65), or
+            a header value is not printable ASCII. The message names the header,
+            never its value.
         """
         # Copies, so every attempt sends the params and headers that passed the checks.
         params = dict(params) if params else None

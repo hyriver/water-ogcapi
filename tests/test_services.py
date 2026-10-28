@@ -17,7 +17,7 @@ import pytest
 import water_ogcapi
 from water_ogcapi import QueryResult, Transport
 from water_ogcapi.aio import NWIS, FabricData, GeoConnex, OGCService
-from water_ogcapi.exceptions import PaginationError, ServiceError
+from water_ogcapi.exceptions import PaginationError, ServiceError, ValidationError
 
 FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}
 EMPTY_PAGE = {"type": "FeatureCollection", "features": [], "links": []}
@@ -119,6 +119,21 @@ def test_nwis_refuses_a_key_that_is_not_printable_ascii(
     assert "SECRET" not in repr(excinfo.value)
     with pytest.raises(ValueError, match="printable ASCII"):
         pickle.loads(pickled)
+
+
+class LooksASCII(str):
+    """A key that claims to be ASCII whatever it holds."""
+
+    __slots__ = ()
+
+    def isascii(self) -> bool:
+        return True
+
+
+def test_nwis_refuses_a_key_that_is_not_a_str() -> None:
+    with pytest.raises(ValidationError, match=r"key must be str, got LooksASCII$") as excinfo:
+        NWIS(api_key=LooksASCII("SECRET\u00e9"))
+    assert "SECRET" not in repr(excinfo.value)
 
 
 def roundtrip(obj: object) -> object:

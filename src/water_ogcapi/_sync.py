@@ -220,7 +220,8 @@ class NWIS(OGCService):
     Raises
     ------
     ValidationError
-        If the key holds a character other than printable ASCII.
+        If the key holds a character other than printable ASCII, or is not exactly
+        ``str``.
     """
 
     def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:

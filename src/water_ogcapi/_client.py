@@ -34,7 +34,7 @@ from water_ogcapi._paging import (
 from water_ogcapi._query import Checkpoint, Held, Request, items_request, path_segment
 from water_ogcapi._redact import REDACTED
 from water_ogcapi._results import Page, QueryResult, crs_of
-from water_ogcapi._transport import Transport, parse_count, reject_credentials
+from water_ogcapi._transport import Transport, parse_count, reject_credentials, reject_non_str
 from water_ogcapi.exceptions import (
     PaginationError,
     PartialResultsError,
@@ -96,8 +96,11 @@ def _origin(url: str) -> tuple[str, str | None, int | None] | None:
 
 def _merged(headers: Mapping[str, str] | None, own: Mapping[str, str]) -> dict[str, str]:
     """Return ``headers`` with ``own`` added last, dropping any name ``own`` sets."""
+    # An unpickled Request skips its own check, and a name that is not a str has no lower().
+    headers, own = dict(headers or {}), dict(own)
+    reject_non_str([*headers, *own], "header names")
     names = {name.lower() for name in own}
-    return {k: v for k, v in (headers or {}).items() if k.lower() not in names} | dict(own)
+    return {k: v for k, v in headers.items() if k.lower() not in names} | dict(own)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -276,6 +279,13 @@ class OGCService:
         The service's page sizes, key convention, and rate-limit window, set by each
         service class. ``None`` here: a query sends the server's default ``limit``, any
         ``limit`` goes unchecked, and requests start 1 s apart (D-49).
+
+    Raises
+    ------
+    TypeError
+        If ``base_url`` is missing for a service without a profile.
+    ValidationError
+        If ``base_url`` is not exactly ``str`` (D-65).
     """
 
     profile: ClassVar[ServiceProfile | None] = None
@@ -286,6 +296,8 @@ class OGCService:
                 msg = "base_url is required for a service without a profile"
                 raise TypeError(msg)
             base_url = self.profile.base_url
+        # Error messages echo it, and a subclass can read another URL to urlsplit() (D-65).
+        reject_non_str([base_url], "base_url")
         self._base_url = base_url.rstrip("/")
         self._owns_transport = transport is None
         self._transport = Transport() if transport is None else transport

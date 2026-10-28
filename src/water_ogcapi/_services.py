@@ -10,6 +10,7 @@ from itertools import batched
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from water_ogcapi._client import OGCService, ServiceProfile
+from water_ogcapi._transport import reject_non_str
 from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
@@ -148,7 +149,9 @@ def _key(api_key: str | None) -> str | None:
     """Return the key NWIS sends: ``api_key``, else ``USGS_API_KEY``, ``None`` for none."""
     if api_key is None and NWIS_PROFILE.key_env:
         api_key = os.environ.get(NWIS_PROFILE.key_env)
-    # Transport.request() refuses such a key too, but only once a query runs (D-43).
+    # Transport.request() refuses such a key too, but only once a query runs (D-43, D-65).
+    if api_key is not None:
+        reject_non_str([api_key], "the USGS API key")
     if api_key and not (api_key.isascii() and api_key.isprintable()):
         msg = "the USGS API key must be printable ASCII"
         raise ValidationError(msg)
@@ -174,7 +177,8 @@ class NWIS(OGCService):
     Raises
     ------
     ValidationError
-        If the key holds a character other than printable ASCII, such as a newline.
+        If the key holds a character other than printable ASCII, such as a newline,
+        or is not exactly ``str`` (D-65).
     """
 
     profile = NWIS_PROFILE

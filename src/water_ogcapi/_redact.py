@@ -23,8 +23,12 @@ def redact_url(url: str) -> str:
     """Mask credential query values and drop userinfo and fragment from ``url``.
 
     Other query entries keep their bytes, so an opaque cursor still replays. A URL
-    that needs no change is returned as given, and an unparsable one as ``REDACTED``.
+    that needs no change is returned as given, and an unparsable one, or one that is
+    not exactly ``str``, as ``REDACTED`` (D-65).
     """
+    if type(url) is not str:
+        # A subclass can make urlsplit() read another URL than the one it holds.
+        return REDACTED
     try:
         parts = urlsplit(url)
     except ValueError:

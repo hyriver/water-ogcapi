@@ -15,6 +15,7 @@ from typing import Any
 import httpx2
 import pytest
 
+import water_ogcapi
 from water_ogcapi import Page, QueryResult, Schema, ServiceProfile
 from water_ogcapi._cache import TTL
 from water_ogcapi._query import Checkpoint, Request
@@ -1071,6 +1072,23 @@ def test_a_request_header_cannot_replace_the_service_key() -> None:
     assert seen[0].headers.get_list("x-api-key") == ["k"]
 
 
+@pytest.mark.parametrize("name", [b"x-api-key", 7])
+def test_a_stored_header_name_that_is_not_a_str_is_refused_before_sending(name: object) -> None:
+    """A tampered pickle can hold such a name, which _merged() cannot match to the key."""
+    request = Request(url=f"{BASE}/collections/c/items", params={"f": "json"})
+    object.__setattr__(request, "headers", {name: "other"})
+    start = Checkpoint(base_url=BASE, collection="c", pending=(request,))
+    transport, seen = serve(without_next(hu02()[0]))
+
+    async def run() -> None:
+        async for _ in Keyed(BASE, transport=transport)._run(start):
+            pass
+
+    with pytest.raises(ValidationError, match=f"names must be str, got {type(name).__name__}$"):
+        asyncio.run(run())
+    assert seen == []
+
+
 def test_service_headers_reach_every_request() -> None:
     feature = {"type": "Feature", "geometry": None, "properties": {}}
     page = without_next(hu02()[0])
@@ -1403,6 +1421,24 @@ def test_a_split_query_resumes_every_unsent_piece() -> None:
     assert result.pagination.page_count == 3
 
 
+class LooksLikeAccept(str):
+    """A name that every case-folded check reads as ``accept`` and that is sent as itself."""
+
+    __slots__ = ()
+
+    def lower(self) -> str:
+        return "accept"
+
+
+class LyingURL(str):
+    """A URL that ``urlsplit()`` reads without its query and httpx2 sends as itself."""
+
+    __slots__ = ()
+
+    def lstrip(self, *_: object) -> str:
+        return f"{GEOCONNEX}/collections/hu02/items"
+
+
 def test_a_request_refuses_a_credential_and_freezes_its_mappings() -> None:
     url = f"{GEOCONNEX}/collections/hu02/items"
     for kwargs in (
@@ -1421,6 +1457,117 @@ def test_a_request_refuses_a_credential_and_freezes_its_mappings() -> None:
     assert dict(request.params) == {"f": "json"}
     with pytest.raises(TypeError):
         request.params["api_key"] = "SECRET"  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "kind"),
+    [
+        ({"params": {b"api_key": "SECRET"}}, "bytes"),
+        ({"params": {LooksLikeAccept("api_key"): "SECRET"}}, "LooksLikeAccept"),
+        ({"headers": {b"Accept": "SECRET"}}, "bytes"),
+        ({"headers": {LooksLikeAccept("X-Api-Key"): "SECRET"}}, "LooksLikeAccept"),
+        ({"url": LyingURL(f"{GEOCONNEX}/collections/hu02/items?api_key=SECRET")}, "LyingURL"),
+    ],
+)
+def test_a_request_refuses_a_string_that_is_not_a_str(kwargs: dict[str, Any], kind: str) -> None:
+    fields = {"url": f"{GEOCONNEX}/collections/hu02/items"} | kwargs
+    with pytest.raises(ValidationError, match=rf" must be str, got {kind}$") as excinfo:
+        Request(**fields)
+    assert "SECRET" not in str(excinfo.value)
+
+
+class OffOrigin(str):
+    """A URL that ``urlsplit()`` reads as another host's, with no port or query."""
+
+    __slots__ = ()
+
+    def lstrip(self, *_: object) -> str:
+        return "https://evil.example/items"
+
+
+def test_a_refused_url_that_is_not_a_str_leaves_its_key_out_of_the_error() -> None:
+    """An unpickled Request skips its URL check; the refusal must not echo the URL."""
+    request = Request(url=f"{BASE}/collections/c/items", params={"f": "json"})
+    object.__setattr__(request, "url", OffOrigin("https://evil.example:bad/x?api_key=SECRET"))
+    start = Checkpoint(base_url=BASE, collection="c", pending=(request,))
+    transport, seen = serve(without_next(hu02()[0]))
+
+    async def run() -> None:
+        async for _ in Keyed(BASE, transport=transport)._run(start):
+            pass
+
+    with pytest.raises(PaginationError) as excinfo:
+        asyncio.run(run())
+    assert seen == []
+    assert "SECRET" not in str(excinfo.value)
+    assert b"SECRET" not in pickle.dumps(excinfo.value)
+
+
+class LyingBase(str):
+    """A base URL that keeps itself through ``rstrip()`` and reads as ``BASE`` to ``urlsplit()``."""
+
+    __slots__ = ()
+
+    def rstrip(self, *_: object) -> str:
+        return self
+
+    def lstrip(self, *_: object) -> str:
+        return BASE
+
+
+@pytest.mark.parametrize("cls", [OGCService, water_ogcapi.OGCService])
+def test_a_base_url_that_is_not_a_str_is_refused_at_construction(cls: type) -> None:
+    with pytest.raises(ValidationError, match=r"base_url must be str, got LyingBase$") as excinfo:
+        cls(LyingBase(f"{BASE}?api_key=SECRET"))
+    assert "SECRET" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("base_url", LyingBase(f"{BASE}?api_key=SECRET")), ("collection", LooksLikeAccept("c"))],
+)
+def test_a_checkpoint_refuses_a_string_that_is_not_a_str(field: str, value: str) -> None:
+    request = Request(url=f"{BASE}/collections/c/items")
+    fields = {"base_url": BASE, "collection": "c", field: value}
+    kind = type(value).__name__
+    with pytest.raises(ValidationError, match=rf"{field} must be str, got {kind}$"):
+        Checkpoint(**fields, pending=(request,))
+    checkpoint = Checkpoint(base_url=BASE, collection="c", pending=(request,))
+    object.__setattr__(checkpoint, field, value)
+    with pytest.raises(ValidationError, match=rf"{field} must be str, got {kind}$"):
+        pickle.loads(pickle.dumps(checkpoint))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("url", OffOrigin("https://evil.example:bad/x?api_key=SECRET")),
+        ("params", {"api_key": "SECRET"}),
+        ("headers", {"X-Api-Key": "SECRET"}),
+    ],
+)
+def test_a_pickled_request_runs_its_checks_on_load(field: str, value: object) -> None:
+    request = Request(url=f"{BASE}/collections/c/items", params={"f": "json"})
+    object.__setattr__(request, field, value)
+    checkpoint = Checkpoint(base_url=BASE, collection="c", pending=(request,))
+    for pickled in (pickle.dumps(request), pickle.dumps(checkpoint)):
+        with pytest.raises(ValidationError) as excinfo:
+            pickle.loads(pickled)
+        assert "SECRET" not in str(excinfo.value)
+
+
+class OddKeyed(OGCService):
+    """A service class whose own header name is not a str."""
+
+    def _headers(self) -> dict[str, str]:
+        return {7: "k"}  # type: ignore[dict-item]
+
+
+def test_a_service_header_name_that_is_not_a_str_is_refused_before_sending() -> None:
+    transport, seen = serve(without_next(hu02()[0]))
+    with pytest.raises(ValidationError, match=r"header names must be str, got int$"):
+        asyncio.run(OddKeyed(BASE, transport=transport).collect("c"))
+    assert seen == []
 
 
 class Shifting(Mapping[str, str]):

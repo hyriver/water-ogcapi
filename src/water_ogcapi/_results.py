@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast
 from urllib.parse import parse_qs, urlsplit
 
 from water_ogcapi._redact import CREDENTIAL_PARAMS, REDACTED, redact_url
+from water_ogcapi._transport import reject_non_str
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -83,12 +84,17 @@ class ReadOnlyDict[V](dict[str, V]):
 
 
 def _redact_params(params: Mapping[str, str]) -> ReadOnlyDict[str]:
+    # One reading, so the stored names are the ones checked (L-13).
+    params = dict(params)
+    reject_non_str(params, "query parameter names")
     return ReadOnlyDict(
         {k: REDACTED if k.lower() in CREDENTIAL_PARAMS else v for k, v in params.items()}
     )
 
 
 def _keep_headers(headers: Mapping[str, str]) -> ReadOnlyDict[str]:
+    headers = dict(headers)
+    reject_non_str(headers, "header names")
     return ReadOnlyDict({k.lower(): v for k, v in headers.items() if k.lower() in KEPT_HEADERS})
 
 
@@ -254,6 +260,12 @@ class Page:
         ``next`` link was refused, on `item` pages, and on the pages of a
         `QueryResult`, which carries its own.
 
+    Raises
+    ------
+    ValidationError
+        If ``url`` or a name in ``params`` or ``headers`` is not exactly ``str``
+        (D-65).
+
     Notes
     -----
     ``params`` and ``headers`` are read-only copies. ``body`` and ``content`` are the
@@ -277,6 +289,7 @@ class Page:
     checkpoint: Checkpoint | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        reject_non_str([self.url], "a URL")
         object.__setattr__(self, "url", redact_url(self.url))
         object.__setattr__(self, "params", _redact_params(self.params))
         object.__setattr__(self, "headers", _keep_headers(self.headers))

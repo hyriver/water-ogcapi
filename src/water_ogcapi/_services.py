@@ -225,7 +225,7 @@ class NWIS(OGCService):
         return pieces
 
     def __getstate__(self) -> dict[str, Any]:
-        return {**self.__dict__, "_api_key": None}
+        return {**super().__getstate__(), "_api_key": None}
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)

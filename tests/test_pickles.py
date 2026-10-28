@@ -34,7 +34,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 URL = "https://example.com/collections/c/items"
 
 # A pickle loads in a later release only while each of these paths resolves. A module
-# move leaves an alias at the old path; a new pickled type joins this set.
+# move leaves an alias at the old path; a new pickled type joins this set. Service
+# pickles go to workers on the same release and are left out (D-64).
 PICKLED_PATHS = {
     ("water_ogcapi._client", "ServiceProfile"),
     ("water_ogcapi._metadata", "Collection"),

@@ -633,3 +633,7 @@ class Transport:
 
     async def __aexit__(self, *_: object) -> None:
         await self.aclose()
+
+    def __getstate__(self) -> dict[str, Any]:
+        # The client and semaphore belong to this process's loop; a load binds anew (D-64).
+        return {**self.__dict__, "_loop": None, "_sem": None, "_client": None}

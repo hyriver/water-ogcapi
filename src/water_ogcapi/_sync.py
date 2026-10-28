@@ -161,7 +161,8 @@ class OGCService:
     `collections`, `queryables`, `schema`, `iter_pages`, `collect`, and `item` block on
     the async methods of the same name. A `Transport` passed here binds to that loop, so
     share it only among sync services (D-10); `close()` closes it, and a service sharing
-    it reconnects on its next request.
+    it reconnects on its next request. It pickles as `water_ogcapi.aio.OGCService` does
+    (D-64).
 
     Parameters
     ----------

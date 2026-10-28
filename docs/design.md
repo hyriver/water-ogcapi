@@ -1924,15 +1924,19 @@ Layering rule for anything new:
 - **Check:** `uv publish --dry-run --trusted-publishing never --token dummy dist/*` on a
     local `uv build`.
 
-### L-13: The query check read the caller's params while the request sent its copy
+### L-13: A check read the caller's params while the request sent another reading
 
 - **What happened:** `iter_pages()` built its request from a copy of `params`, then
     passed the caller's mapping to `_validate()`, which read its names after awaiting
     the collection index. A task that swapped `{"typo": "x"}` for a queryable's name
     during that await had the new names checked and `typo` sent, and the query read
-    `complete` (D-47).
-- **Rule:** A check reads the object the request sends, here `request.params`.
-- **Check:** `test_params_changed_during_the_check_are_checked_as_sent`.
+    `complete` (D-47). The review of that fix found the same class in
+    `Transport.request()`: it checked the caller's `params` for a credential, then read
+    them again after each pacing and backoff wait, so an `api_key` added during a retry
+    wait reached the URL (D-18).
+- **Rule:** A check and every send read one private copy, taken before the check.
+- **Check:** `test_params_changed_during_the_check_are_checked_as_sent` and
+    `test_params_changed_during_a_retry_wait_are_sent_as_checked`.
 
 ## Open questions
 

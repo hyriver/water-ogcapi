@@ -256,7 +256,9 @@ class OGCService:
     """Async client for one OGC API Features service.
 
     Construction performs no HTTP (docs/design.md D-10). The first request binds the
-    transport to the running event loop.
+    transport to the running event loop. A pickle leaves out the HTTP client, the
+    metadata cache, and the governor's readings, rebuilt on first use, so a service that
+    has run queries loads in another process (D-64).
 
     Parameters
     ----------
@@ -996,3 +998,7 @@ class OGCService:
 
     async def __aexit__(self, *_: object) -> None:
         await self.aclose()
+
+    def __getstate__(self) -> dict[str, Any]:
+        # Loop-bound locks, and cache entries stamped by this process's clock (D-64).
+        return {**self.__dict__, "_cache": {}, "_locks": {}, "_locks_loop": None}

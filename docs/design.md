@@ -1063,7 +1063,8 @@ Layering rule for anything new:
 
 - **Status:** accepted. Since 2026-10-16 `Transport.request()` also refuses a key that
     is not printable ASCII (D-43); `NWIS` keeps its check so the error comes at
-    construction. Since 2026-10-26 a pickle leaves the key out.
+    construction. Since 2026-10-26 a pickle leaves the key out. Since 2026-10-28 a used
+    service pickles too (D-64).
 - **Date:** 2026-10-15.
 - **Decision:** `NWIS(api_key=None)` takes its key from the argument, else from
     `USGS_API_KEY`, read once at construction. An empty string sends no key, and a key
@@ -1084,12 +1085,13 @@ Layering rule for anything new:
     Writing a passed key into `os.environ` so every process reads it there, which hands
     the key to every subprocess and lets a second instance replace the first's key.
 - **Limits:** The instance holds the key unredacted in a private attribute; the default
-    `repr` does not show it. Only a service that has sent no request pickles: a used one
-    holds its event loop and HTTP client. A passed `api_key` does not survive a pickle,
+    `repr` does not show it. A pickle leaves out the per-process state, though not what
+    an injected transport recorded (D-64). A passed `api_key` does not survive a pickle,
     `""` included, and a process without `USGS_API_KEY` loads a service that sends no
-    key. `copy.deepcopy` reads the environment the same way; `copy.copy` of the blocking
-    `NWIS` shares its async service and keeps the key. Unkeyed NWIS responses carry no
-    `X-RateLimit-*` headers (D-30), so the governor (#18) uses its static default there.
+    key. `copy.deepcopy` reads the environment the same way and drops the same state;
+    `copy.copy` of the blocking `NWIS` shares its async service and keeps the key.
+    Unkeyed NWIS responses carry no `X-RateLimit-*` headers (D-30), so the governor
+    (#18) uses its static default there.
 
 ### D-43: `Transport` is public
 
@@ -1792,6 +1794,42 @@ Layering rule for anything new:
     job stops after 20 minutes. A FabricData outage skips its network test (D-14) and
     fails its OpenAPI fetch. The planted-diff check ran offline against a mocked service
     and once live against an edited snapshot, never through the scheduled run itself.
+
+### D-64: A pickled service keeps its settings and rebuilds its per-process state
+
+- **Status:** accepted. Amends D-42.
+- **Date:** 2026-10-28.
+- **Decision:** A pickle of a `Transport`, a `Governor`, or an async service leaves out
+    the state that belongs to the process that made it: the transport's HTTP client,
+    semaphore, and event loop; the governor's start times and rate-limit readings; and
+    the service's metadata cache and its locks with their loop. Each is rebuilt on first
+    use. `copy.deepcopy` goes through the same hooks and drops the same state. A
+    `copy.copy` of an async service drops only its own cache and locks and shares the
+    original's transport and governor, loop binding and readings included (checked by
+    probe). A blocking service pickles its async service the same way, and services
+    pickled together keep sharing one transport. So a service that has run queries loads
+    in another process, such as a Dask or `multiprocessing` worker, and `NWIS` reads its
+    key there as D-42 sets.
+- **Why:** The client, semaphore, and locks are bound to an event loop, which does not
+    pickle, so a service holding them raised on pickle (D-42) and a worker had to build
+    its own. The cache entries and governor readings hold `time.monotonic()` times,
+    which another host's clock does not share: a 60 s hold read on a host with a shorter
+    uptime would stall its first request for the difference.
+- **Rejected:** Carrying the cache with wall-clock times, which saves each worker one or
+    two metadata requests. Rebuilding the state in `__setstate__`, which would create
+    the client outside a running loop.
+- **Limits:** Each loaded copy fetches its own metadata and starts at the static
+    interval until a response carries counts (D-49), so several workers pace
+    independently against one quota. A transport shared by several services stays shared
+    only among the services of one pickle. An `httpx2` transport the caller injects
+    travels as built, with whatever it holds: a mock handler's recorded requests carry
+    their headers, the key included, and a connection pool does not pickle. A service
+    pickle names private module paths that D-51 does not pin, so it loads in a worker
+    running the same release. A `fork` child that inherits a used service unpickled, as
+    a `multiprocessing.Process` argument does under the fork start method, raises D-10's
+    `RuntimeError` on its first request (checked by probe); pass the service where it is
+    pickled, such as a `Pool.map` argument or a Dask task, or build it in the worker. A
+    worker whose `USGS_API_KEY` is not printable ASCII raises `ValidationError` at load.
 
 ## Lessons
 

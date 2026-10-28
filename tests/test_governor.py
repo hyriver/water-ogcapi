@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import copy
 import itertools
 import logging
+import pickle
 import types
+from collections.abc import Callable
 from typing import Any
 
 import httpx2
@@ -119,6 +122,22 @@ def test_a_429_with_retry_after_skips_its_counts(clock: list[float]) -> None:
     governor = Governor(3600.0, interval=0.0)
     governor.observe(429, {"retry-after": "7", **counts(1000, 0)})
     assert starts(governor, clock, 2) == [7.0, 7.0], "no 60 s reading from the zero count"
+
+
+@pytest.mark.parametrize(
+    "clone", [lambda g: pickle.loads(pickle.dumps(g)), copy.copy, copy.deepcopy]
+)
+def test_a_copied_governor_keeps_its_settings_and_starts_as_a_new_one(
+    clock: list[float], clone: Callable[[Governor], Governor]
+) -> None:
+    governor = Governor(3600.0)
+    governor.observe(200, counts(1000, 1))
+    starts(governor, clock, 1)
+    governor.observe(429, {"retry-after": "7"})
+    loaded = clone(governor)
+    assert (loaded.window, loaded.interval) == (3600.0, 1.0)
+    # A kept hold starts at 7, a kept start at 1, kept readings space the second by 60.
+    assert starts(loaded, clock, 2) == [0.0, 1.0], "its times hold another process's clock"
 
 
 @pytest.mark.parametrize(("window", "interval"), [(0.0, 1.0), (-1.0, 1.0), (60.0, -1.0)])

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from water_ogcapi._logging import logger
 from water_ogcapi._transport import MAX_SLEEP, parse_count, parse_retry_after
@@ -133,3 +133,7 @@ class Governor:
             return
         pace = self._window / remaining - self._window / (limit * RAMP) if remaining else MAX_SLEEP
         self._readings[limit] = (min(max(pace, 0.0), MAX_SLEEP), now)
+
+    def __getstate__(self) -> dict[str, Any]:
+        # Its times come from this process's monotonic clock (D-64).
+        return {**self.__dict__, "_last": float("-inf"), "_hold": float("-inf"), "_readings": {}}

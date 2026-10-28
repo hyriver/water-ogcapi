@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import os
 import pickle
+import subprocess
+import sys
 from collections.abc import Callable
+from pathlib import Path
 
 import httpx2
 import pytest
@@ -108,10 +112,13 @@ def test_nwis_sends_the_key_to_a_next_link(monkeypatch: pytest.MonkeyPatch) -> N
 def test_nwis_refuses_a_key_that_is_not_printable_ascii(
     monkeypatch: pytest.MonkeyPatch, key: str
 ) -> None:
+    pickled = pickle.dumps(NWIS(api_key="arg-key"))
     monkeypatch.setenv("USGS_API_KEY", key)
     with pytest.raises(ValueError, match="printable ASCII") as excinfo:
         NWIS()
     assert "SECRET" not in repr(excinfo.value)
+    with pytest.raises(ValueError, match="printable ASCII"):
+        pickle.loads(pickled)
 
 
 def roundtrip(obj: object) -> object:
@@ -136,6 +143,94 @@ def test_a_pickled_nwis_leaves_its_key_out_and_reads_the_environment_on_load(
         monkeypatch.setenv("USGS_API_KEY", env)
     loaded = clone(service)
     assert getattr(loaded, "_service", loaded)._headers() == sent
+
+
+PAGE = {"type": "FeatureCollection", "features": [FEATURE], "links": []}
+# Module level, so a pickled MockTransport names it and another process imports it.
+SEEN: list[str] = []
+
+
+def answer(request: httpx2.Request) -> httpx2.Response:
+    SEEN.append(request.url.path.rsplit("/", 1)[-1])
+    return httpx2.Response(200, json=INDEX if request.url.path.endswith("/collections") else PAGE)
+
+
+CHILD = """
+import asyncio, pickle, sys
+service = pickle.loads(sys.stdin.buffer.read())
+query = service.collect("c")
+result = asyncio.run(query) if asyncio.iscoroutine(query) else query
+sys.stdout.buffer.write(pickle.dumps((result, sys.modules[sys.argv[1]].SEEN)))
+"""
+
+
+def pickled_after_a_query(service: NWIS | water_ogcapi.NWIS) -> bytes:
+    if isinstance(service, water_ogcapi.NWIS):
+        with service:
+            service.collect("c")
+            return pickle.dumps(service)
+
+    async def run() -> bytes:
+        async with service._transport:
+            await service.collect("c")
+            return pickle.dumps(service)
+
+    return asyncio.run(run())
+
+
+async def answer_later(request: httpx2.Request) -> httpx2.Response:
+    await asyncio.sleep(0.01)
+    return answer(request)
+
+
+def test_a_service_pickles_while_a_metadata_request_waits() -> None:
+    transport = Transport(transport=httpx2.MockTransport(answer_later), max_retries=0)
+    service = GeoConnex(transport=transport)
+
+    async def run() -> bytes:
+        async with transport:
+            # The first call holds the index lock, and the second waits on it.
+            calls = [asyncio.create_task(service.collections()) for _ in range(2)]
+            await asyncio.sleep(0)
+            pickled = pickle.dumps(service)
+            await asyncio.gather(*calls)
+            return pickled
+
+    loaded = pickle.loads(asyncio.run(run()))
+
+    async def again() -> None:
+        async with loaded._transport:
+            await loaded.collections()
+
+    asyncio.run(again())
+
+
+@pytest.mark.parametrize("cls", [NWIS, water_ogcapi.NWIS])
+def test_a_used_service_pickles_and_queries_in_another_process(cls: type) -> None:
+    transport = Transport(transport=httpx2.MockTransport(answer), max_retries=0)
+    data = pickled_after_a_query(cls(api_key="arg-key", transport=transport))
+    assert b"arg-key" not in data
+    env = {k: v for k, v in os.environ.items() if k != "USGS_API_KEY"}
+    child = subprocess.run(
+        [sys.executable, "-c", CHILD, __name__],
+        input=data,
+        capture_output=True,
+        check=True,
+        cwd=Path(__file__).parent.parent,
+        env=env,
+        timeout=60,
+    )
+    result, seen = pickle.loads(child.stdout)
+    assert result.geojson["features"] == PAGE["features"]
+    assert seen == ["collections", "items"], "the child fetches its own index"
+
+
+def test_services_pickled_together_keep_sharing_their_transport() -> None:
+    transport = Transport()
+    services = [water_ogcapi.NWIS(transport=transport), water_ogcapi.GeoConnex(transport=transport)]
+    loaded = pickle.loads(pickle.dumps(services))
+    shared = {id(s._transport) for s in loaded} | {id(s._service._transport) for s in loaded}
+    assert len(shared) == 1
 
 
 def test_fabricdata_sends_no_key(monkeypatch: pytest.MonkeyPatch) -> None:

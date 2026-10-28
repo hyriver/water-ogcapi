@@ -1933,10 +1933,13 @@ Layering rule for anything new:
     `complete` (D-47). The review of that fix found the same class in
     `Transport.request()`: it checked the caller's `params` for a credential, then read
     them again after each pacing and backoff wait, so an `api_key` added during a retry
-    wait reached the URL (D-18).
+    wait reached the URL (D-18). The alignment review found it in `Request` too, with no
+    await: a mapping read once for the credential check and again for the stored copy
+    could name `api_key` only the second time, and a checkpoint kept it (D-52).
 - **Rule:** A check and every send read one private copy, taken before the check.
-- **Check:** `test_params_changed_during_the_check_are_checked_as_sent` and
-    `test_params_changed_during_a_retry_wait_are_sent_as_checked`.
+- **Check:** `test_params_changed_during_the_check_are_checked_as_sent`,
+    `test_params_changed_during_a_retry_wait_are_sent_as_checked`, and
+    `test_a_request_stores_the_params_it_checked`.
 
 ## Open questions
 

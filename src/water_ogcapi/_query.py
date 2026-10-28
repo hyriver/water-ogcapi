@@ -87,7 +87,9 @@ class Request:
         if method not in METHODS:
             msg = f"a request is a GET or a POST, got {self.method!r}"
             raise ValidationError(msg)
-        reject_credentials(self.url, self.params)
+        # One reading of params, so the stored copy is the one checked.
+        params = dict(self.params)
+        reject_credentials(self.url, params)
         try:
             userinfo = urlsplit(self.url).netloc.rpartition("@")[0]
         except ValueError:
@@ -100,7 +102,7 @@ class Request:
             msg = f"a request carries only Accept and Content-Type headers, got {', '.join(extra)}"
             raise ValidationError(msg)
         object.__setattr__(self, "method", method)
-        object.__setattr__(self, "params", ReadOnlyDict(dict(self.params)))
+        object.__setattr__(self, "params", ReadOnlyDict(params))
         object.__setattr__(self, "headers", None if self.headers is None else ReadOnlyDict(headers))
 
     def identity(self) -> RequestId:

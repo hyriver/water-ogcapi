@@ -7,6 +7,7 @@ import copy
 import dataclasses
 import json
 import pickle
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -1420,6 +1421,28 @@ def test_a_request_refuses_a_credential_and_freezes_its_mappings() -> None:
     assert dict(request.params) == {"f": "json"}
     with pytest.raises(TypeError):
         request.params["api_key"] = "SECRET"  # type: ignore[index]
+
+
+class Shifting(Mapping[str, str]):
+    """Params that name ``f`` on the first read and ``api_key`` on every later one."""
+
+    def __init__(self) -> None:
+        self.reads = 0
+
+    def __getitem__(self, key: str) -> str:
+        return "SECRET" if key == "api_key" else "json"
+
+    def __iter__(self) -> Iterator[str]:
+        self.reads += 1
+        return iter(["f"] if self.reads == 1 else ["api_key"])
+
+    def __len__(self) -> int:
+        return 1
+
+
+def test_a_request_stores_the_params_it_checked() -> None:
+    request = Request(url=f"{GEOCONNEX}/collections/hu02/items", params=Shifting())
+    assert dict(request.params) == {"f": "json"}
 
 
 def test_a_refused_piece_keeps_the_other_pieces_pending() -> None:

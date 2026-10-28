@@ -773,7 +773,8 @@ class OGCService:
             )
             pieces = tuple(self._pieces(request, split_datetime, sites_per_piece))
             if validate:
-                await self._validate(collection, params, id_property)
+                # The request's copy: the caller's mapping may change during the await.
+                await self._validate(collection, request.params, id_property)
             start = Checkpoint(base_url=self.base_url, collection=collection, pending=pieces)
         # Closed with this iterator, so the pieces in flight are cancelled at once.
         async with contextlib.aclosing(self._run(start)) as pages:

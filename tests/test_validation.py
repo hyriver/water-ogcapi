@@ -74,6 +74,24 @@ def test_an_unknown_parameter_lists_the_queryables_and_the_query_parameters() ->
     assert seen == ["/collections", "/collections/daily/queryables"]
 
 
+def test_params_changed_during_the_check_are_checked_as_sent() -> None:
+    transport, seen = serve(nwis_routes())
+    service = OGCService(BASE, transport=transport)
+    params = {"typo": "x"}
+
+    async def run() -> None:
+        query = asyncio.create_task(service.collect("daily", params=params))
+        # The query now waits on the index request, its params already copied.
+        await asyncio.sleep(0)
+        params.clear()
+        params["parameter_code"] = "00060"
+        await query
+
+    with pytest.raises(ValidationError, match="'typo' for 'daily'"):
+        asyncio.run(run())
+    assert seen == ["/collections", "/collections/daily/queryables"]
+
+
 def test_an_unknown_id_property_lists_the_queryables() -> None:
     transport, _ = serve(nwis_routes())
     service = OGCService(BASE, transport=transport)

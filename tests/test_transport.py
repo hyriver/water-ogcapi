@@ -457,6 +457,29 @@ def test_key_in_query_is_rejected_before_sending(url: str, params: dict[str, str
     assert "SECRET" not in str(excinfo.value)
 
 
+def test_params_changed_during_a_retry_wait_are_sent_as_checked() -> None:
+    params = {"q": "safe"}
+    sent: list[str] = []
+    answered = asyncio.Event()
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        sent.append(str(request.url))
+        answered.set()
+        return httpx2.Response(503 if len(sent) == 1 else 200, json={})
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=1, backoff=0)
+
+    async def run() -> None:
+        request = asyncio.create_task(transport.get(URL, params=params))
+        # The first attempt was answered; the retry waits on its backoff.
+        await answered.wait()
+        params["api_key"] = "SECRET"
+        await request
+
+    asyncio.run(run())
+    assert sent == [f"{URL}?q=safe"] * 2
+
+
 @pytest.mark.parametrize("url", [f"{URL}?ap\ti_key=SECRET", f"{URL}?api\n_key=SECRET"])
 def test_key_split_by_a_control_character_is_rejected(url: str) -> None:
     """httpx2 refuses these URLs, and the ServiceError it causes prints the URL, key and all."""

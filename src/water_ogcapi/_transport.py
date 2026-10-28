@@ -529,8 +529,9 @@ class Transport:
             If ``params`` carries a credential such as ``api_key``, or a header value is
             not printable ASCII. The message names the header, never its value.
         """
+        # Copies, so every attempt sends the params and headers that passed the checks.
+        params = dict(params) if params else None
         reject_credentials(url, params)
-        # A copy, so every attempt sends the headers that passed the check.
         headers = dict(headers or {})
         _reject_unsendable_headers(headers)
         method = method.upper()

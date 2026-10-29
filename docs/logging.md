@@ -94,19 +94,23 @@ def test_rate_limit_is_logged(caplog):
     assert any(record.levelname == "WARNING" for record in caplog.records)
 ```
 
-## The httpx2 logger
+## The httpx2 and httpcore2 loggers
 
-The HTTP library logs to its own `httpx2` logger, which propagates normally. At INFO it
-writes one line per request:
+The HTTP library logs to its own `httpx2` and `httpcore2` loggers, which propagate to
+the root logger. At INFO, `httpx2` writes one line per request, full URL included:
 
 ```text
 HTTP Request: GET https://api.waterdata.usgs.gov/ogcapi/v1/collections?f=json "HTTP/1.1 200 OK"
 ```
 
-These lines show up wherever the root logger is at INFO or below. The URL never holds
-the key ([D-18](design.md#d-18-the-api-key-travels-only-in-a-header)). To silence them,
-raise that logger's level:
+At DEBUG, `httpcore2` writes every response header, a redirect's `Location` among them.
+A download can follow a redirect to a signed URL whose query is a credential, so
+importing `water_ogcapi` sets `httpx2` to WARNING and `httpcore2` to INFO, and a root
+logger at INFO or DEBUG shows neither by default
+([D-69](design.md#d-69-transportdownload-streams-a-file-and-follows-redirects)). A level
+you set on either logger wins, whether before or after the import. To see the request
+lines again, accepting that a signed URL can appear in them:
 
 ```python
-logging.getLogger("httpx2").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.INFO)
 ```

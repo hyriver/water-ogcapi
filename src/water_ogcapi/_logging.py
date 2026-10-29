@@ -46,6 +46,12 @@ logger.propagate = False
 _hpack = logging.getLogger("hpack")
 if _hpack.level == logging.NOTSET:
     _hpack.setLevel(logging.INFO)
+# httpx2 logs every request URL at INFO and httpcore2 every response header at DEBUG, and
+# a download's redirect target is a signed URL whose query is a credential (D-69); a level
+# the caller set first wins.
+for _name, _floor in (("httpx2", logging.WARNING), ("httpcore2", logging.INFO)):
+    if logging.getLogger(_name).level == logging.NOTSET:
+        logging.getLogger(_name).setLevel(_floor)
 
 
 def _level(value: Level) -> int:

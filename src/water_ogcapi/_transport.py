@@ -7,12 +7,16 @@ one-file edit as long as nothing else touches it.
 from __future__ import annotations
 
 import asyncio
+import http.cookiejar
 import json
 import logging
+import os
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import TYPE_CHECKING, Any, Self
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn, Self
 from urllib.parse import parse_qsl, unquote, unquote_plus, urlencode, urlsplit
 
 import httpx2
@@ -26,7 +30,7 @@ if TYPE_CHECKING:
 
     from water_ogcapi._governor import Governor
 
-__all__ = ["Response", "Transport"]
+__all__ = ["Download", "Response", "Transport"]
 
 RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 # TransportError subclasses that will not fix themselves, so retrying only burns
@@ -47,6 +51,29 @@ MAX_DELTA_SECONDS = 2**31
 # Bytes of an error response an exception keeps: enough for a server's JSON or HTML
 # reason, small enough that a failed page in a pickled checkpoint stays light (D-68).
 MAX_ERROR_BODY = 64 * 1024
+# Redirects a download follows before it gives up (D-69).
+MAX_REDIRECTS = 5
+# Headers a download keeps once a redirect leaves the first origin. Anything else, such
+# as X-Api-Key or Authorization, stays with the origin it was meant for (D-69).
+CROSS_ORIGIN_HEADERS = frozenset(
+    {"accept", "accept-encoding", "if-modified-since", "if-none-match", "user-agent"}
+)
+# Response headers a Download keeps: what a later conditional download or a size check
+# needs. Anything else, such as Set-Cookie or a Content-Location echoing a signed URL, goes.
+DOWNLOAD_HEADERS = frozenset(
+    {
+        "age",
+        "cache-control",
+        "content-disposition",
+        "content-length",
+        "content-type",
+        "date",
+        "etag",
+        "last-modified",
+        "x-ratelimit-limit",
+        "x-ratelimit-remaining",
+    }
+)
 
 
 def _is_transient(exc: Exception) -> bool:
@@ -294,36 +321,38 @@ class Response:
         return json.loads(self.content)
 
 
-def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Response:
-    """Convert a successful httpx2 response, or raise a typed error."""
-    url = str(resp.url)
+def _raise_for(
+    resp: httpx2.Response,
+    content: bytes | None,
+    *,
+    url: str,
+    attempts: int,
+    body: bytes | None,
+    note: str = "",
+    phrase: bool = True,
+) -> NoReturn:
+    """Raise the typed error for a 3xx, 4xx, or 5xx response.
+
+    ``url`` names the request in the error; ``note`` is appended to the message. A
+    ``content`` of ``None`` keeps no body, and ``phrase=False`` leaves out the server's
+    reason phrase, which a download's signed host can fill.
+    """
     method = resp.request.method
     headers = dict(resp.headers.items())
-    if resp.status_code < 300 or resp.status_code == 304:
-        logger.debug(
-            "%s %s returned HTTP %d after %d attempt(s)", method, url, resp.status_code, attempts
-        )
-        return Response(
-            url=url,
-            status=resp.status_code,
-            headers=headers,
-            content=resp.content,
-            attempts=attempts,
-        )
     if resp.status_code < 400:
         # follow_redirects is off so the caller never leaks credentials to another
         # host. Returning the bodyless redirect as a success would surface later as
         # a JSON decode error instead.
         location = headers.get("location")
         target = _describe_location(location) if location else "an unspecified location"
-        msg = f"server redirected to {target}"
+        msg = f"server redirected to {target}{note}"
         raise ServiceError(
             msg, url, status=resp.status_code, attempts=attempts, method=method, request_body=body
         )
     retry_after = parse_retry_after(headers.get("retry-after"), headers.get("date"))
     if resp.status_code == 429:
         remaining = headers.get("x-ratelimit-remaining")
-        msg = "rate limit exceeded"
+        msg = f"rate limit exceeded{note}"
         raise RateLimitError(
             msg,
             url,
@@ -332,18 +361,116 @@ def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Re
             attempts=attempts,
             method=method,
             request_body=body,
-            response_body=resp.content[:MAX_ERROR_BODY],
+            response_body=None if content is None else content[:MAX_ERROR_BODY],
         )
+    msg_0 = f"{(resp.reason_phrase if phrase else '') or 'request failed'}{note}"
     raise ServiceError(
-        resp.reason_phrase or "request failed",
+        msg_0,
         url,
         status=resp.status_code,
         attempts=attempts,
         retry_after=retry_after,
         method=method,
         request_body=body,
-        response_body=resp.content[:MAX_ERROR_BODY],
+        response_body=None if content is None else content[:MAX_ERROR_BODY],
     )
+
+
+def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Response:
+    """Convert a successful httpx2 response, or raise a typed error."""
+    url = str(resp.url)
+    if resp.status_code < 300 or resp.status_code == 304:
+        logger.debug(
+            "%s %s returned HTTP %d after %d attempt(s)",
+            resp.request.method,
+            url,
+            resp.status_code,
+            attempts,
+        )
+        return Response(
+            url=url,
+            status=resp.status_code,
+            headers=dict(resp.headers.items()),
+            content=resp.content,
+            attempts=attempts,
+        )
+    _raise_for(resp, resp.content, url=url, attempts=attempts, body=body)
+
+
+def _origin(url: httpx2.URL) -> tuple[str, str, int | None]:
+    return (url.scheme, url.host, url.port)
+
+
+def _bare(url: httpx2.URL) -> str:
+    """Name ``url`` by scheme, host, port, and path: a query can hold a signature."""
+    host = url.netloc.decode("ascii").rpartition("@")[2]
+    return f"{url.scheme}://{host}{url.raw_path.partition(b'?')[0].decode('ascii')}"
+
+
+def _refusal(current: httpx2.URL, target: httpx2.URL) -> str | None:
+    """Return why a download must not follow a redirect to ``target``, or ``None``."""
+    checks = (
+        (target.scheme not in {"http", "https"}, f"unsupported scheme {target.scheme!r}"),
+        (current.scheme == "https" and target.scheme == "http", "a downgrade from https to http"),
+        # httpx2 would turn userinfo into an Authorization header for the next host.
+        (bool(target.userinfo), "the location carries userinfo"),
+    )
+    reason = next((why for refused, why in checks if refused), None)
+    if reason is None:
+        try:
+            reject_credentials(str(target), None)
+        except ValidationError:
+            reason = "the location carries a credential"
+    return reason
+
+
+def _create_part(target: Path) -> tuple[BinaryIO, Path]:
+    """Create the temporary file a download writes, beside ``target`` (D-69).
+
+    ``O_EXCL`` under a random name refuses any entry already there, a planted symlink
+    included, and the mode is the one ``open()`` gives, the umask applied by the system.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    while True:
+        part = target.with_name(f".{target.name}.{secrets.token_hex(8)}.part")
+        try:
+            handle = os.open(part, flags, 0o666)
+        except FileExistsError:
+            continue
+        return os.fdopen(handle, "wb"), part
+
+
+@dataclass(frozen=True, slots=True)
+class Download:
+    """A file `Transport.download` wrote, and the response that filled it (D-69).
+
+    Parameters
+    ----------
+    path : Path
+        The file. After a 304 it is the existing file, untouched.
+    url : str
+        The request as first sent, by scheme, host, port, and path: a query can hold a
+        signature, so none is kept, and neither is a redirect target.
+    status : int
+        The status of the last response, 2xx or 304.
+    headers : mapping of str to str
+        The last response's headers, with lowercase names, such as ``etag`` and
+        ``last-modified`` for a later conditional download.
+    size : int
+        Bytes written, 0 after a 304.
+    attempts : int
+        Attempts made, retries included.
+    redirects : int
+        Redirects followed on the attempt that succeeded.
+    """
+
+    path: Path
+    url: str
+    status: int
+    headers: Mapping[str, str]
+    size: int
+    attempts: int
+    redirects: int
 
 
 class Transport:
@@ -456,6 +583,11 @@ class Transport:
                 timeout=self.timeout,
                 http2=self.http2,
                 follow_redirects=False,
+                # A jar that keeps nothing: a cookie would cross the services that share
+                # this transport, and a download's redirects, unchecked (D-69).
+                cookies=http.cookiejar.CookieJar(
+                    policy=http.cookiejar.DefaultCookiePolicy(allowed_domains=[])
+                ),
                 event_hooks={"response": [_stop_at_redirect]},
                 transport=self._transport,
             )
@@ -632,6 +764,271 @@ class Transport:
             # shortcut: no jitter, so the retries of NWIS pieces (D-56) that fail together
             # stay in lockstep, at most max_concurrent of them; add it if that load matters.
             await asyncio.sleep(delay)
+        # Unreachable: the last attempt returns or raises. Keeps the return type total.
+        raise AssertionError  # pragma: no cover
+
+    async def _receive(
+        self,
+        resp: httpx2.Response,
+        out: BinaryIO,
+        *,
+        named: str,
+        where: str,
+        quiet: bool,
+        attempt: int,
+        redirects: int,
+    ) -> tuple[int, dict[str, str], int, int] | float:
+        """Write a 2xx body to ``out``; for an error, return the retry delay or raise.
+
+        A ``quiet`` error keeps neither the body nor the reason phrase, since a signed
+        URL's host can echo the signature in either.
+        """
+        if resp.status_code < 300 or resp.status_code == 304:
+            size = 0
+            if resp.status_code != 304:
+                out.seek(0)
+                out.truncate()
+                async for chunk in resp.aiter_bytes():
+                    out.write(chunk)
+                    size += len(chunk)
+                out.flush()
+            kept = {k: v for k, v in resp.headers.items() if k in DOWNLOAD_HEADERS}
+            return resp.status_code, kept, size, redirects
+        content = None
+        if not quiet:
+            content = b""
+            async for chunk in resp.aiter_bytes():
+                content += chunk
+                if len(content) >= MAX_ERROR_BODY:
+                    break
+        delay = None if attempt == self.max_retries else self._retry_delay(resp, attempt)
+        if delay is None:
+            _raise_for(
+                resp,
+                content,
+                url=named,
+                attempts=attempt + 1,
+                body=None,
+                note=where,
+                phrase=not quiet,
+            )
+        logger.info(
+            "GET %s returned HTTP %d%s; retry %d of %d in %.1f s",
+            named,
+            resp.status_code,
+            where,
+            attempt + 1,
+            self.max_retries,
+            delay,
+        )
+        return delay
+
+    @staticmethod
+    def _next_hop(current: httpx2.URL, location: str, redirects: int) -> httpx2.URL | str:
+        """Return the URL a redirect points to, or why a download must not follow it."""
+        if redirects >= MAX_REDIRECTS:
+            return f"more than {MAX_REDIRECTS} redirects"
+        try:
+            target = current.join(location)
+        except (httpx2.InvalidURL, ValueError):
+            return "the location does not parse"
+        return _refusal(current, target) or target
+
+    async def _stream_to(
+        self,
+        client: httpx2.AsyncClient,
+        sem: asyncio.Semaphore,
+        first: httpx2.URL,
+        *,
+        headers: dict[str, str],
+        out: BinaryIO,
+        pacer: Governor | _Unpaced,
+        attempt: int,
+    ) -> tuple[int, dict[str, str], int, int] | float:
+        """Run one download attempt; return the result, or the delay before a retry.
+
+        Raises the attempt's error when it is final or not worth retrying. Every error is
+        raised outside an ``except`` block, so none chains a raw ``Location``.
+        """
+        final = attempt == self.max_retries
+        # Quiet once any URL of the chain has a query or the chain has left the first
+        # origin: from then on a server's text can echo a signature.
+        named, quiet = _bare(first), bool(first.query)
+        target, hop_headers, redirects = first, headers, 0
+        try:
+            while True:
+                # Each hop waits for the governor outside the permit, as request() does.
+                await pacer.wait()
+                redirect: _RedirectedError | None = None
+                try:
+                    async with sem:
+                        if self._client is not client or client.is_closed:
+                            msg = "transport closed while the request waited"
+                            raise ServiceError(msg, named, attempts=attempt, method="GET")
+                        async with client.stream("GET", target, headers=hop_headers) as resp:
+                            pacer.observe(resp.status_code, resp.headers)
+                            where = (
+                                ""
+                                if target == first
+                                else f" from {_describe_location(str(target))}"
+                            )
+                            return await self._receive(
+                                resp,
+                                out,
+                                named=named,
+                                where=where,
+                                quiet=quiet,
+                                attempt=attempt,
+                                redirects=redirects,
+                            )
+                except _RedirectedError as caught:
+                    redirect = caught
+                pacer.observe(redirect.status, redirect.headers)
+                status, location = redirect.status, redirect.location
+                del redirect
+                hop = self._next_hop(target, location, redirects)
+                if isinstance(hop, str):
+                    msg = f"server redirected to {_describe_location(location)}: {hop}"
+                    raise ServiceError(msg, named, status=status, attempts=attempt + 1)
+                target, redirects = hop, redirects + 1
+                quiet = quiet or bool(target.query)
+                if _origin(target) != _origin(first):
+                    quiet = True
+                    hop_headers = {
+                        k: v for k, v in headers.items() if k.lower() in CROSS_ORIGIN_HEADERS
+                    }
+                logger.info(
+                    "GET %s redirected (%d) to %s", named, status, _describe_location(str(target))
+                )
+        except (httpx2.HTTPError, httpx2.InvalidURL) as exc:
+            # A library message can quote the URL or status line it failed on, so a URL
+            # with a query, or a later hop, is named by the exception type only.
+            if target == first:
+                failure = type(exc).__name__ if quiet else _describe(exc)
+            else:
+                failure = f"{type(exc).__name__} from {_describe_location(str(target))}"
+            transient = _is_transient(exc)
+        if final or not transient:
+            raise ServiceError(failure, named, attempts=attempt + 1, method="GET")
+        delay = self._delay(attempt)
+        logger.info(
+            "GET %s failed with %s; retry %d of %d in %.1f s",
+            named,
+            failure,
+            attempt + 1,
+            self.max_retries,
+            delay,
+        )
+        return delay
+
+    async def download(
+        self,
+        url: str,
+        path: str | os.PathLike[str],
+        *,
+        params: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
+        governor: Governor | None = None,
+        total: float | None = 3600.0,
+    ) -> Download:
+        """Stream a ``GET`` response to a file, following redirects (D-69).
+
+        The body goes to a temporary ``.part`` file beside ``path``, created under a name
+        only this call knows, renamed to ``path`` once complete and removed on any
+        failure, so ``path`` holds either the old file or the whole new one. Parent
+        folders are created. Every attempt starts the file over, and a 304, the answer
+        to an ``If-None-Match`` or ``If-Modified-Since`` in ``headers``, leaves ``path``
+        as it was. ``Accept-Encoding: identity`` is sent unless ``headers`` names an
+        encoding, so the file holds the bytes the server stores. The transport's
+        ``timeout`` applies to each read of the body.
+
+        Up to ``MAX_REDIRECTS`` redirects are followed, each paced by ``governor`` and
+        sent under its own concurrency permit. Once one leaves the scheme, host, and
+        port of ``url``, only the headers in ``CROSS_ORIGIN_HEADERS`` go along, so a key
+        header stays with its own host. A redirect from ``https`` to ``http``, to a URL
+        with userinfo, or to a URL whose query carries a credential such as ``api_key``,
+        is refused. A query can hold a signature, so the result, errors, and log records
+        name each URL by scheme, host, port, and path only.
+
+        Parameters
+        ----------
+        url : str
+            Absolute URL of the file.
+        path : str or path-like
+            Where to write it.
+        params, headers, governor
+            As for `request`. ``params`` go on the first request only.
+        total : float or None, optional
+            Seconds the whole call may take, retries, redirects, and waits included,
+            defaults to 3600. ``None`` bounds only each read.
+
+        Returns
+        -------
+        Download
+            The path, status, kept headers, size, and attempt and redirect counts.
+
+        Raises
+        ------
+        ServiceError
+            As `request` does, and also for a refused redirect, more than
+            ``MAX_REDIRECTS`` redirects, or a call that outlasted ``total``.
+        ValidationError
+            As for `request`.
+        """
+        params = dict(params) if params else None
+        reject_credentials(url, params)
+        headers = dict(headers or {})
+        _reject_unsendable_headers(headers)
+        if not any(name.lower() == "accept-encoding" for name in headers):
+            headers["Accept-Encoding"] = "identity"
+        try:
+            first = _merge_query(url, params) if params else httpx2.URL(url)
+        except httpx2.InvalidURL:
+            first = None
+        if first is None:
+            msg = "malformed URL"
+            raise ServiceError(msg, _describe_location(url), attempts=0, method="GET")
+        named = _bare(first)
+        target = Path(path)
+        client, sem = self._bind()
+        pacer = _UNPACED if governor is None else governor
+        target.parent.mkdir(parents=True, exist_ok=True)
+        out, part = _create_part(target)
+        made = 0
+        try:
+            async with asyncio.timeout(total):
+                for attempt in range(self.max_retries + 1):
+                    made = attempt + 1
+                    outcome = await self._stream_to(
+                        client, sem, first, headers=headers, out=out, pacer=pacer, attempt=attempt
+                    )
+                    if not isinstance(outcome, tuple):
+                        await asyncio.sleep(outcome)
+                        continue
+                    status, kept, size, redirects = outcome
+                    # Closed first: Windows does not rename a file that is still open.
+                    out.close()
+                    if status != 304:
+                        part.replace(target)
+                    return Download(
+                        path=target,
+                        url=named,
+                        status=status,
+                        headers=kept,
+                        size=size,
+                        attempts=made,
+                        redirects=redirects,
+                    )
+        except TimeoutError:
+            msg = f"download exceeded its total budget of {total} s"
+            raise ServiceError(msg, named, attempts=made) from None
+        finally:
+            # Synchronous, so the cleanup runs even while the task is being cancelled, and
+            # even when closing fails on a full disk.
+            try:
+                out.close()
+            finally:
+                part.unlink(missing_ok=True)
         # Unreachable: the last attempt returns or raises. Keeps the return type total.
         raise AssertionError  # pragma: no cover
 

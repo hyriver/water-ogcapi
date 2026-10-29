@@ -17,7 +17,9 @@ services. Read them in this order:
 
 For packages that use the same services,
 [`water-ogcapi` as the transport for `dataretrieval`](dataretrieval.md) shows where its
-Water Data getters could send their requests through this package.
+Water Data getters could send their requests through this package, and
+[Migrating from `pynhd.ogcapi`](pynhd.md) maps each `pynhd.ogcapi` call to its
+`water-ogcapi` equivalent.
 
 The [example notebooks](../examples/index.md) walk through each service, and the
 [API reference](../api.md) lists every parameter.

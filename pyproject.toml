@@ -48,6 +48,8 @@ urls.Issues = "https://github.com/hyriver/water-ogcapi/issues"
 dev = [
   # Basemaps under the example notebooks' maps.
   "contextily",
+  # The user guide's Dask worker example.
+  "dask[distributed]",
   "git-cliff",
   "ipykernel",
   "jupytext",
@@ -123,6 +125,8 @@ nb-run = { depends-on = [ "nb-sync", "nb-execute" ] }
 nb-pair = "jupytext --set-formats 'ipynb,py:percent' docs/examples/*.ipynb"
 # The D-14 benchmarks, offline; docs/performance.md records a run.
 bench = "python scripts/bench.py"
+# Run every python block of docs/guide/ in order. They call the live APIs.
+guides = "python scripts/run_guides.py"
 
 [tool.pixi.feature.docs.tasks]
 notebooks = "python scripts/convert_notebooks.py"

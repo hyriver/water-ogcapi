@@ -1,7 +1,7 @@
 # API reference
 
-The blocking service classes, their async twins in `water_ogcapi.aio`, and the types
-both return.
+The blocking service classes, their async twins in `water_ogcapi.aio`, the HTTP clients,
+and the types they return.
 
 ## Services
 
@@ -16,6 +16,8 @@ both return.
 ::: water_ogcapi.ServiceProfile
 
 ::: water_ogcapi.Transport
+
+::: water_ogcapi.Client
 
 ::: water_ogcapi.Governor
 

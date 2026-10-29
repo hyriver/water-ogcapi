@@ -1244,9 +1244,10 @@ Layering rule for anything new:
 
 ### D-48: The blocking classes are the top-level names, the async ones are in `aio`
 
-- **Status:** accepted. Supersedes the module layout of D-46. Since 2026-10-20 a plain
-    `import water_ogcapi` binds `aio` and `exceptions`, both in `__all__`, so
-    `water_ogcapi.aio.NWIS` works and type-checks.
+- **Status:** accepted; amended by D-70, which adds the blocking `Client`. Supersedes
+    the module layout of D-46. Since 2026-10-20 a plain `import water_ogcapi` binds
+    `aio` and `exceptions`, both in `__all__`, so `water_ogcapi.aio.NWIS` works and
+    type-checks.
 - **Date:** 2026-10-19.
 - **Decision:** `water_ogcapi` exports the blocking `OGCService`, `NWIS`, `FabricData`,
     and `GeoConnex`, and `water_ogcapi.aio` exports the async classes under the same
@@ -2007,6 +2008,32 @@ Layering rule for anything new:
     their entry renamed to `path` and the downloaded bytes are lost; nothing is written
     through it. A download URL with userinfo whose server redirects within its own host
     is refused, since the joined target keeps the userinfo; this fails closed.
+
+### D-70: `Client` is the blocking HTTP class, and `Transport` stays the async engine
+
+- **Status:** accepted. Amends D-48.
+- **Date:** 2026-10-29.
+- **Decision:** `water_ogcapi.Client` runs one `Transport` on the background loop of
+    D-08, as the blocking service classes do, and offers blocking `request()`, `get()`,
+    and `download()` that take the arguments of the `Transport` methods of the same name
+    (`_blocking` wraps them, and `scripts/griffe_twins.py` documents them). It takes an
+    existing `Transport` or builds one, `close()` and a `with` block close it, and it
+    pickles as its transport does (D-64). `Transport` keeps its name and its async
+    methods. Chosen by the maintainer.
+- **Why:** Every HTTP route was async, and a `Transport` binds to its first event loop,
+    so sync code that wrapped each call in `asyncio.run()` raised
+    `RuntimeError:   Transport is bound to another event loop` on the second call
+    (probed 2026-10-29). The runner the service classes use was private. HyRiver's data
+    functions are sync and need plain HTTP and downloads beside the OGC API services.
+- **Rejected:** A blocking `water_ogcapi.Transport` with the async one in `aio`, the
+    symmetric reading of D-48, which renames the class every service takes. `Session`,
+    which reads like `requests.Session` though the client keeps no cookies or auth state
+    of its own. A public loop runner, which hands callers the loop machinery of D-08.
+- **Limits:** A `Transport` a `Client` used is bound to the background loop, so code
+    that also runs `water_ogcapi.aio` services in its own loop needs a second
+    `Transport` (D-10). A blocking call made inside a coroutine blocks that loop until
+    it returns (D-48). `Response` and `Download`, which the methods return, stay private
+    types read through their documented attributes (D-43).
 
 ## Lessons
 

@@ -1,4 +1,4 @@
-"""The blocking service classes that `water_ogcapi` exports (D-08, D-46, D-48).
+"""The blocking classes that `water_ogcapi` exports (D-08, D-46, D-48, D-70).
 
 Each class has the name, constructor, and methods of its async twin in
 `water_ogcapi.aio`. A method blocks until the async method of the same name returns, and
@@ -30,7 +30,7 @@ from water_ogcapi._transport import Transport
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 
-__all__ = ["NWIS", "FabricData", "GeoConnex", "OGCService"]
+__all__ = ["NWIS", "Client", "FabricData", "GeoConnex", "OGCService"]
 
 # Seconds between interrupt checks while a call waits; a call still returns once its result
 # is ready. A blocked wait misses an interrupt that only sets the flag, as ipykernel's on
@@ -113,11 +113,11 @@ async def _anext[T](pages: AsyncIterator[T]) -> T:
 
 def _blocking[**P, T](
     method: Callable[Concatenate[Any, P], Coroutine[Any, Any, T]],
-) -> Callable[Concatenate[OGCService, P], T]:
+) -> Callable[Concatenate[OGCService | Client, P], T]:
     """Return a method that blocks on the async ``method`` of the wrapped service."""
 
     @functools.wraps(method)
-    def call(self: OGCService, /, *args: P.args, **kwargs: P.kwargs) -> T:
+    def call(self: OGCService | Client, /, *args: P.args, **kwargs: P.kwargs) -> T:
         # By name, so a service class that overrides the method gets its own.
         service = self._service  # pyright: ignore[reportPrivateUsage]
         return _run(getattr(service, method.__name__)(*args, **kwargs))
@@ -255,3 +255,53 @@ class GeoConnex(OGCService):
     def __init__(self, *, transport: Transport | None = None) -> None:
         self._transport = Transport() if transport is None else transport
         self._service = _services.GeoConnex(transport=self._transport)
+
+
+class Client:
+    """Blocking HTTP client: one `Transport` run on the background loop (D-70).
+
+    Its methods `request`, `get`, and `download` block on the `Transport` methods of the
+    same name and take their arguments, so sync code sends any request and reuses one
+    transport's connections across calls. A `Transport` used this way binds to the
+    background loop, so share it only with the blocking classes (D-10). The client
+    pickles as its transport does (D-64).
+
+    ```python
+    from water_ogcapi import Client
+
+    with Client() as client:
+        page = client.get("https://api.water.usgs.gov/nldi/linked-data/comid/1722317")
+        client.download("https://example.org/file.zip", "data/file.zip")
+    ```
+
+    Parameters
+    ----------
+    transport : Transport, optional
+        Sends every request, a new default `Transport` when omitted. ``close()`` closes
+        it, and a blocking service sharing it reconnects on its next request.
+    """
+
+    # _blocking calls the method of the same name on _service, here the transport.
+    _service: Transport
+
+    request = _blocking(Transport.request)
+    get = _blocking(Transport.get)
+    download = _blocking(Transport.download)
+
+    def __init__(self, *, transport: Transport | None = None) -> None:
+        self._service = Transport() if transport is None else transport
+
+    @property
+    def transport(self) -> Transport:
+        """The transport every call goes through."""
+        return self._service
+
+    def close(self) -> None:
+        """Close the transport, whether this client created it or it was passed."""
+        _run(self._service.aclose())
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()

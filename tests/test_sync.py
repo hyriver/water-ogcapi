@@ -7,6 +7,7 @@ import asyncio
 import importlib
 import inspect
 import multiprocessing
+import pickle
 import subprocess
 import sys
 import threading
@@ -353,3 +354,58 @@ def stop_the_loop() -> None:
 @pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
 def test_a_call_raises_once_the_loop_has_stopped() -> None:
     assert exitcode_in_fork(stop_the_loop) == 0
+
+
+def _echo(request: httpx2.Request) -> httpx2.Response:
+    """Answer with the method and body; module level, so a transport holding it pickles."""
+    return httpx2.Response(200, json={"method": request.method, "body": request.content.decode()})
+
+
+def test_a_client_reuses_one_transport_across_calls() -> None:
+    """Two asyncio.run() calls on one Transport raise; a Client sends both (D-70)."""
+    transport = Transport(transport=httpx2.MockTransport(_echo))
+    with water_ogcapi.Client(transport=transport) as client:
+        assert client.get(f"{BASE}/a").json()["method"] == "GET"
+        bound = transport._client
+        posted = client.request("POST", f"{BASE}/b", content=b"q", headers={"x": "1"})
+        assert posted.json() == {"method": "POST", "body": "q"}
+        assert transport._client is bound
+        assert transport._loop is _sync._loop()[0]
+    assert transport._client is None, "close() closes the transport"
+
+
+def test_a_client_downloads_from_sync_code(tmp_path: Any) -> None:
+    transport = Transport(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, content=b"x"))
+    )
+    path = tmp_path / "f.bin"
+    with water_ogcapi.Client(transport=transport) as client:
+        result = client.download(f"{BASE}/f.bin", path)
+    assert (result.size, path.read_bytes()) == (1, b"x")
+
+
+def test_a_client_works_inside_a_running_loop() -> None:
+    transport = Transport(transport=httpx2.MockTransport(_echo))
+
+    async def notebook_cell() -> Any:
+        with water_ogcapi.Client(transport=transport) as client:
+            return client.get(f"{BASE}/a").json()
+
+    assert asyncio.run(notebook_cell())["method"] == "GET"
+
+
+def test_a_used_client_pickles_and_sends_again() -> None:
+    client = water_ogcapi.Client(transport=Transport(transport=httpx2.MockTransport(_echo)))
+    client.get(f"{BASE}/a")
+    restored = pickle.loads(pickle.dumps(client))
+    assert restored.transport._client is None, "the loop-bound state stays behind (D-64)"
+    assert restored.get(f"{BASE}/b").json()["method"] == "GET"
+    client.close()
+    restored.close()
+
+
+def test_the_root_names_the_async_engine_and_the_blocking_client() -> None:
+    """D-70 keeps Transport the async engine; the blocking HTTP class is Client."""
+    assert inspect.iscoroutinefunction(water_ogcapi.Transport.request)
+    assert not inspect.iscoroutinefunction(water_ogcapi.Client.request)
+    assert water_ogcapi.Client.download.__name__ == "download"

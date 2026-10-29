@@ -17,7 +17,7 @@ import pyproj
 import pytest
 import shapely
 
-from water_ogcapi import CRS, Pagination, QueryResult
+from water_ogcapi import CRS, Page, Pagination, QueryResult
 from water_ogcapi._results import CRS84
 from water_ogcapi._transport import Transport
 from water_ogcapi.aio import OGCService
@@ -35,8 +35,8 @@ def unchecked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(OGCService, "_validate", skip)
 
 
-def collected(directory: str, count: int) -> QueryResult:
-    """Collect the recorded pages of ``directory``, served with their recorded headers."""
+def served(directory: str, count: int) -> tuple[OGCService, str, dict[str, str]]:
+    """Serve the recorded pages of ``directory`` with their recorded headers."""
     records = [
         json.loads((FIXTURES / directory / f"items-{n}.json").read_text())
         for n in range(1, count + 1)
@@ -53,7 +53,21 @@ def collected(directory: str, count: int) -> QueryResult:
     first = records[0]["request"]
     base, _, rest = first["url"].partition("/collections/")
     service = OGCService(base, transport=transport)
-    return asyncio.run(service.collect(rest.split("/")[0], params=first["params"]))
+    return service, rest.split("/")[0], first["params"]
+
+
+def collected(directory: str, count: int) -> QueryResult:
+    service, collection, params = served(directory, count)
+    return asyncio.run(service.collect(collection, params=params))
+
+
+def iterated(directory: str, count: int) -> list[Page]:
+    service, collection, params = served(directory, count)
+
+    async def pages() -> list[Page]:
+        return [page async for page in service.iter_pages(collection, params=params)]
+
+    return asyncio.run(pages())
 
 
 EPSG4326 = "http://www.opengis.net/def/crs/EPSG/0/4326"
@@ -72,6 +86,28 @@ def result_of(features: list[dict[str, Any]], crs: CRS = DEFAULT) -> QueryResult
 def point(fid: object, x: float, *z: float, **properties: Any) -> dict[str, Any]:
     geometry = {"type": "Point", "coordinates": [x, 38.9, *z]}
     return {"type": "Feature", "id": fid, "geometry": geometry, "properties": properties}
+
+
+def page_of(
+    body: dict[str, Any] | None, content: bytes | None = None, headers: dict[str, str] | None = None
+) -> Page:
+    return Page(
+        url="https://example.test/collections/c/items",
+        params={},
+        status=200,
+        headers=headers or {},
+        links=(),
+        fetched_at=0.0,
+        number_matched=None,
+        number_returned=None,
+        feature_count=0,
+        body=body,
+        content=content,
+    )
+
+
+def collection_of(*features: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "FeatureCollection", "features": list(features)}
 
 
 def test_a_result_becomes_a_table_with_a_geoarrow_column() -> None:
@@ -287,11 +323,16 @@ def test_a_column_of_mixed_types_raises(features: list[dict[str, Any]]) -> None:
 
 
 @pytest.mark.parametrize("module", ["pyarrow", "shapely", "pyproj"])
-def test_without_the_extra_the_error_names_it(monkeypatch: pytest.MonkeyPatch, module: str) -> None:
+@pytest.mark.parametrize(
+    "source", [result_of([point(1, -77.0)]), page_of(collection_of(point(1, -77.0)))]
+)
+def test_without_the_extra_the_error_names_it(
+    monkeypatch: pytest.MonkeyPatch, module: str, source: QueryResult | Page
+) -> None:
     monkeypatch.delitem(sys.modules, "water_ogcapi._arrow", raising=False)
     monkeypatch.setitem(sys.modules, module, None)
     with pytest.raises(ModuleNotFoundError, match=r"water-ogcapi\[arrow\]") as info:
-        result_of([point(1, -77.0)]).to_arrow()
+        source.to_arrow()
     assert info.value.name == module
 
 
@@ -301,6 +342,47 @@ def test_another_missing_module_is_raised_as_it_is(monkeypatch: pytest.MonkeyPat
         result_of([point(1, -77.0)]).to_arrow()
     assert info.value.name == "water_ogcapi._arrow"
     assert "water-ogcapi[arrow]" not in str(info.value)
+
+
+def test_pages_convert_one_by_one_into_the_result_s_table() -> None:
+    tables = [page.to_arrow() for page in iterated("nwis/monitoring-locations", 3)]
+    expected = collected("nwis/monitoring-locations", 3).to_arrow()
+    assert len(tables) == 3
+    assert all(table.num_rows < expected.num_rows for table in tables)
+    joined = pa.concat_tables(tables, promote_options="permissive")
+    assert joined.equals(expected)
+    assert joined.schema.equals(expected.schema, check_metadata=True)
+
+
+def test_pages_whose_columns_differ_join_permissively() -> None:
+    first = page_of(collection_of(point(1, -77.0, a=None))).to_arrow()
+    second = page_of(collection_of(point(2, -77.1, a="x", b=1))).to_arrow()
+    joined = pa.concat_tables([first, second], promote_options="permissive")
+    assert joined.column("a").to_pylist() == [None, "x"]
+    assert joined.column("b").to_pylist() == [None, 1]
+
+
+def test_a_page_reads_its_crs_from_its_own_header() -> None:
+    feature = {**point(1, 0.0), "geometry": {"type": "Point", "coordinates": [38.9, -77.0]}}
+    page = page_of(collection_of(feature), headers={"Content-Crs": f"<{EPSG4326}>"})
+    geometry = shapely.from_wkb(page.to_arrow().column("geometry")[0].as_py())
+    assert (shapely.get_x(geometry), shapely.get_y(geometry)) == (-77.0, 38.9)
+
+
+def test_an_item_page_is_one_row() -> None:
+    table = page_of(point(7, -77.0, a=1)).to_arrow()
+    assert table.column("id").to_pylist() == [7]
+    assert table.column("a").to_pylist() == [1]
+
+
+def test_a_page_without_a_body_decodes_its_content() -> None:
+    content = json.dumps(collection_of(point(1, -77.0), point(2, -77.1))).encode()
+    assert page_of(None, content).to_arrow().column("id").to_pylist() == [1, 2]
+
+
+def test_a_page_that_kept_neither_body_nor_content_raises() -> None:
+    with pytest.raises(ValueError, match="kept no content"):
+        page_of(None).to_arrow()
 
 
 def test_the_core_import_path_loads_no_frame_library() -> None:

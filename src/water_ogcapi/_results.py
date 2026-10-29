@@ -110,6 +110,46 @@ def empty_extra() -> ReadOnlyDict[Any]:
     return ReadOnlyDict()
 
 
+@dataclass(frozen=True, slots=True)
+class CRS:
+    """The coordinate reference system of a result and how it was determined (D-37).
+
+    Parameters
+    ----------
+    requested : str or None
+        The ``crs`` query parameter of the first request as sent, ``None`` when absent.
+    page_crs : tuple of str or None
+        Each page's ``Content-Crs`` header with its angle brackets removed, ``None``
+        for a page without one. A repeated header lists its values comma-separated.
+    effective : str or None
+        The CRS of the geometries, ``None`` when no evidence settles it.
+    source : {"content_crs", "default", "unconfirmed", "unknown"}
+        ``content_crs`` when every page named the same CRS. Without a header on any
+        page: ``default`` (CRS84, the OGC API Features default) when no request asked
+        for another CRS, ``unconfirmed`` when every request asked for the same other
+        CRS, which a server applying it must name in ``Content-Crs``, and ``unknown``
+        when the requests disagreed. ``unknown`` also when pages named different CRSs
+        or only some named one.
+    """
+
+    requested: str | None
+    page_crs: tuple[str | None, ...]
+    effective: str | None
+    source: CRSSource
+
+
+def _to_table(features: list[Any], crs: CRS) -> pa.Table:
+    """Convert ``features`` through `_arrow`, naming the extra when a module is missing."""
+    try:
+        from water_ogcapi._arrow import to_table
+    except ModuleNotFoundError as err:
+        if err.name not in {"pyarrow", "shapely", "pyproj"}:
+            raise
+        msg = f'to_arrow() needs {err.name}: pip install "water-ogcapi[arrow]"'
+        raise ModuleNotFoundError(msg, name=err.name) from err
+    return to_table(features, crs)
+
+
 def _reject(_value: object) -> None:
     return None
 
@@ -308,6 +348,38 @@ class Page:
             raise ValueError(msg)
         return json.loads(self.content)
 
+    def to_arrow(self) -> pa.Table:
+        """Return this page's features as a pyarrow Table (D-66); needs the ``arrow`` extra.
+
+        Converts ``body``, or ``content`` when ``body`` is ``None``, the way
+        `QueryResult.to_arrow` converts a result, under the CRS this page's
+        ``Content-Crs`` header and request give. A large query converted page by page
+        from `iter_pages` holds the page it last yielded beside the pages in flight:
+        two pages for an unsplit query, up to the transport's ``max_concurrent`` plus
+        one for a split one. Each
+        page types its columns on its own, and ``pyarrow.concat_tables(tables,
+        promote_options="permissive")`` joins pages whose columns differ, filling a
+        column a page lacks with nulls. The join keeps the first table's ``geometry``
+        metadata, so check that the pages share a CRS before joining them.
+
+        Returns
+        -------
+        pyarrow.Table
+            One row per feature, in the document's order; one row for an `item` page.
+
+        Raises
+        ------
+        ValueError
+            If the page kept neither ``body`` nor ``content``, or for the reasons
+            `QueryResult.to_arrow` gives.
+        pyarrow.ArrowException
+            If one column holds values of types pyarrow cannot combine.
+        ModuleNotFoundError
+            Without pyarrow, shapely, or pyproj, naming the extra that installs them.
+        """
+        doc = self.body if self.body is not None else self.json()
+        return _to_table(doc.get("features", [doc]), crs_of((self,)))
+
 
 @dataclass(frozen=True, slots=True)
 class Pagination:
@@ -354,34 +426,6 @@ class Pagination:
         if (self.completeness == "limited") != (self.stop_reason is not None):
             msg = "stop_reason is set exactly when completeness is 'limited'"
             raise ValueError(msg)
-
-
-@dataclass(frozen=True, slots=True)
-class CRS:
-    """The coordinate reference system of a result and how it was determined (D-37).
-
-    Parameters
-    ----------
-    requested : str or None
-        The ``crs`` query parameter of the first request as sent, ``None`` when absent.
-    page_crs : tuple of str or None
-        Each page's ``Content-Crs`` header with its angle brackets removed, ``None``
-        for a page without one. A repeated header lists its values comma-separated.
-    effective : str or None
-        The CRS of the geometries, ``None`` when no evidence settles it.
-    source : {"content_crs", "default", "unconfirmed", "unknown"}
-        ``content_crs`` when every page named the same CRS. Without a header on any
-        page: ``default`` (CRS84, the OGC API Features default) when no request asked
-        for another CRS, ``unconfirmed`` when every request asked for the same other
-        CRS, which a server applying it must name in ``Content-Crs``, and ``unknown``
-        when the requests disagreed. ``unknown`` also when pages named different CRSs
-        or only some named one.
-    """
-
-    requested: str | None
-    page_crs: tuple[str | None, ...]
-    effective: str | None
-    source: CRSSource
 
 
 CRS84 = "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
@@ -483,11 +527,4 @@ class QueryResult:
         ModuleNotFoundError
             Without pyarrow, shapely, or pyproj, naming the extra that installs them.
         """
-        try:
-            from water_ogcapi._arrow import to_table
-        except ModuleNotFoundError as err:
-            if err.name not in {"pyarrow", "shapely", "pyproj"}:
-                raise
-            msg = f'to_arrow() needs {err.name}: pip install "water-ogcapi[arrow]"'
-            raise ModuleNotFoundError(msg, name=err.name) from err
-        return to_table(self)
+        return _to_table(self.geojson["features"], self.crs)

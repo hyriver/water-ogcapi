@@ -914,3 +914,23 @@ def test_http_date_retry_after_drives_the_retry_loop(no_sleep: list[float]) -> N
     )
     asyncio.run(Transport(transport=mock).get(URL))
     assert no_sleep == [5.0]
+
+
+def test_log_records_drop_the_url_userinfo(no_sleep: list[float]) -> None:
+    """A retry and a success are logged with the URL as Page and errors show it."""
+    records: list[str] = []
+
+    class Keep(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record.getMessage())
+
+    mock, _ = responder(httpx2.Response(503), httpx2.Response(200, json={}))
+    handler = Keep(logging.DEBUG)
+    logger.addHandler(handler)
+    try:
+        asyncio.run(Transport(transport=mock).get("https://user:PASSWD@example.com/x"))
+    finally:
+        logger.removeHandler(handler)
+    assert len(records) >= 2
+    assert all("PASSWD" not in m for m in records)
+    assert no_sleep, "the 503 was retried"

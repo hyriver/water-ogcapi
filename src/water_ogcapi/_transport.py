@@ -44,6 +44,9 @@ FATAL_ERRORS = (
 MAX_SLEEP = 60.0
 # RFC 9111 section 1.2.2: a delta-seconds value too large to represent reads as 2**31.
 MAX_DELTA_SECONDS = 2**31
+# Bytes of an error response an exception keeps: enough for a server's JSON or HTML
+# reason, small enough that a failed page in a pickled checkpoint stays light (D-68).
+MAX_ERROR_BODY = 64 * 1024
 
 
 def _is_transient(exc: Exception) -> bool:
@@ -329,6 +332,7 @@ def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Re
             attempts=attempts,
             method=method,
             request_body=body,
+            response_body=resp.content[:MAX_ERROR_BODY],
         )
     raise ServiceError(
         resp.reason_phrase or "request failed",
@@ -338,6 +342,7 @@ def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Re
         retry_after=retry_after,
         method=method,
         request_body=body,
+        response_body=resp.content[:MAX_ERROR_BODY],
     )
 
 

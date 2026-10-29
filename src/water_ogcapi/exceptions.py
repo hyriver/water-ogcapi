@@ -57,6 +57,10 @@ class ServiceError(WaterOGCAPIError):
         The request's HTTP method, defaults to ``GET``.
     request_body : bytes, optional
         The request body as sent, ``None`` for a request without one (D-38).
+    response_body : bytes, optional
+        The body of the 4xx or 5xx response, its first 64 KiB as the server sent them
+        (D-68), so a server's reason for refusing a request reaches the caller. ``None``
+        when no error response arrived. ``str()`` leaves it out.
     """
 
     def __init__(
@@ -69,6 +73,7 @@ class ServiceError(WaterOGCAPIError):
         retry_after: float | None = None,
         method: str = "GET",
         request_body: bytes | None = None,
+        response_body: bytes | None = None,
     ) -> None:
         # args holds the bare message: pickle and copy rebuild the instance from args
         # and then restore the attributes, so a formatted args[0] gained its prefix twice.
@@ -80,6 +85,7 @@ class ServiceError(WaterOGCAPIError):
         self.retry_after = retry_after
         self.method = method
         self.request_body = request_body
+        self.response_body = response_body
 
     def __str__(self) -> str:
         prefix = f"HTTP {self.status}: " if self.status is not None else ""
@@ -113,6 +119,8 @@ class RateLimitError(ServiceError):
         The request's HTTP method, defaults to ``GET``.
     request_body : bytes, optional
         The request body as sent, ``None`` for a request without one (D-38).
+    response_body : bytes, optional
+        The body of the 429 response, as for `ServiceError`.
     """
 
     def __init__(
@@ -125,6 +133,7 @@ class RateLimitError(ServiceError):
         attempts: int = 1,
         method: str = "GET",
         request_body: bytes | None = None,
+        response_body: bytes | None = None,
     ) -> None:
         super().__init__(
             message,
@@ -134,6 +143,7 @@ class RateLimitError(ServiceError):
             retry_after=retry_after,
             method=method,
             request_body=request_body,
+            response_body=response_body,
         )
         self.remaining = remaining
 

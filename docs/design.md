@@ -1603,7 +1603,7 @@ Layering rule for anything new:
 
 ### D-58: Frame conversion returns an Arrow table
 
-- **Status:** accepted; amended by D-59 and D-60. Supersedes D-25.
+- **Status:** accepted; amended by D-59, D-60, and D-66. Supersedes D-25.
 - **Date:** 2026-10-23.
 - **Decision:** `QueryResult.to_arrow()` returns a `pyarrow.Table`. pyarrow and shapely
     come with the `arrow` extra, and only the method imports them (D-09). Each property
@@ -1869,6 +1869,38 @@ Layering rule for anything new:
     `.value`. A `Request` or `Checkpoint` changed in memory with `object.__setattr__`
     skips the checks until a pickle of it loads: a refused one returns in the failure's
     `checkpoint` as given, while `_send()` still keeps the key to its own header (D-53).
+
+### D-66: A page converts to Arrow on its own
+
+- **Status:** accepted. Amends D-58.
+- **Date:** 2026-10-29.
+- **Decision:** `Page.to_arrow()` converts one page's document, `body` or else
+    `content`, by D-58's and D-60's rules, under the CRS that `crs_of()` reads from that
+    page's own `Content-Crs` header and request. A FeatureCollection gives a row per
+    feature, and an `item` page's Feature gives one row. Both `to_arrow()` methods call
+    `_arrow.to_table(features, crs)`. Chosen by the maintainer.
+- **Why:** `QueryResult.to_arrow()` needs the whole aggregate in Python beside the
+    table. On the D-14 harness's server, an unsplit query of 100,000 NWIS features in
+    pages of 10,000 peaked at 212 MiB of traced Python heap through
+    `collect().to_arrow()` and 70 MiB through `Page.to_arrow()` on each page from
+    `iter_pages()` joined by `concat_tables`, with Arrow's pool at 20 and 18 MiB for an
+    18 MiB table (measured once, deterministic).
+- **Rejected:** Documenting `iter_pages()` with `Page.json()` alone, which leaves each
+    caller to rebuild the `id`, geometry, and CRS rules. A Parquet writer in the
+    package, which picks a file format for the caller and breaks when a column's type
+    changes between pages.
+- **Limits:** `iter_pages()` keeps the page it last yielded while it fetches the next,
+    so an unsplit loop holds two decoded pages, and a split query up to the transport's
+    `max_concurrent` finished pages waiting to be yielded (D-56) plus that one. Each
+    page types its columns on its own, so a column that is null across one page has the
+    null type there. `concat_tables` with `promote_options="permissive"` joins such
+    pages, the default promotion raises, and a value pyarrow cannot promote, such as an
+    integer on one page and a string on another, raises either way. The pages of a
+    `QueryResult` convert only with `keep_pages=True`, since the others keep no content.
+    A page reads its CRS from its own evidence, so pages whose CRS differ each convert,
+    and `concat_tables` keeps the first table's `geometry` field metadata, joining them
+    under the first page's CRS with no error (pyarrow 26, 2026-10-29). Compare the field
+    metadata before a join.
 
 ## Lessons
 

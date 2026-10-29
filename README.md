@@ -25,8 +25,9 @@ install from this repository until the first final release.
     typo raises an error listing the valid names before it can return the whole
     collection.
 - Only two direct runtime dependencies, `httpx2` and `h2`.
-- With the `arrow` extra, `QueryResult.to_arrow()` returns a `pyarrow.Table` with a
-    `GeoArrow` geometry column that `geopandas`, `polars`, and `pandas` read.
+- With the `arrow` extra, `QueryResult.to_arrow()` and `Page.to_arrow()` return a
+    `pyarrow.Table` with a `GeoArrow` geometry column that `geopandas`, `polars`, and
+    `pandas` read, so a large query converts page by page.
 
 ## Services
 
@@ -49,7 +50,7 @@ or later):
 pip install git+https://github.com/hyriver/water-ogcapi
 ```
 
-The `arrow` extra adds `pyarrow`, `shapely`, and `pyproj` for `QueryResult.to_arrow()`:
+The `arrow` extra adds `pyarrow`, `shapely`, and `pyproj` for the `to_arrow()` methods:
 
 ```bash
 pip install "water-ogcapi[arrow] @ git+https://github.com/hyriver/water-ogcapi"

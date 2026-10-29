@@ -1927,6 +1927,25 @@ Layering rule for anything new:
     matches the prose. A shown-only block never runs, so it can go stale. The nav sorts
     the pages by file name, so `docs/guide/index.md` gives the reading order.
 
+### D-68: A failed request keeps the body of its error response
+
+- **Status:** accepted.
+- **Date:** 2026-10-29.
+- **Decision:** `ServiceError` and `RateLimitError` take a `response_body`: the first 64
+    KiB (`MAX_ERROR_BODY`) of a 4xx or 5xx response as the server sent it. A transport
+    error, a redirect, and a request refused before sending leave it `None`. `str()`
+    leaves it out, and it pickles with the error (D-51). Chosen by the maintainer.
+- **Why:** ArcGIS REST, NLDI, and pygeoapi servers put the reason for a refusal in the
+    body, such as an ArcGIS `{"error": {"message": "Invalid where clause"}}` on a 400,
+    and `_finalize()` dropped it, so a caller saw only the status line.
+- **Rejected:** The whole body, which an HTML error page or a large 5xx can make heavy
+    in a pickled `PartialResultsError`. The body in `str()`, which floods logs and
+    tracebacks.
+- **Limits:** The body is server text, kept as received and never redacted, as
+    `Page.body` is (D-29); a server that echoes a request's query or headers into its
+    error page leaves them there. A body cut at 64 KiB may end mid-character or
+    mid-JSON.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

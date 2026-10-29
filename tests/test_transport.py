@@ -16,6 +16,7 @@ import pytest
 from water_ogcapi._logging import logger
 from water_ogcapi._transport import (
     MAX_DELTA_SECONDS,
+    MAX_ERROR_BODY,
     MAX_SLEEP,
     Response,
     Transport,
@@ -258,6 +259,52 @@ def test_client_error_raises() -> None:
         asyncio.run(Transport(transport=mock).get(URL))
     assert len(seen) == 1, "4xx must not be retried"
     assert excinfo.value.attempts == 1
+
+
+@pytest.mark.parametrize(
+    ("reply", "kind"),
+    [
+        (httpx2.Response(400, json={"error": {"message": "Invalid where"}}), ServiceError),
+        (httpx2.Response(429, content=b"slow down"), RateLimitError),
+        (httpx2.Response(503, content=b"<html>maintenance</html>"), ServiceError),
+    ],
+)
+def test_an_error_response_keeps_its_body(reply: httpx2.Response, kind: type[ServiceError]) -> None:
+    """ArcGIS REST, NLDI, and pygeoapi put the reason for a refusal in the body (D-68)."""
+    body = reply.content
+    mock, _ = responder(reply)
+    with pytest.raises(kind) as excinfo:
+        asyncio.run(Transport(transport=mock, max_retries=0).get(URL))
+    assert excinfo.value.response_body == body
+    assert body.decode() not in str(excinfo.value)
+
+
+def test_an_error_body_is_capped() -> None:
+    mock, _ = responder(httpx2.Response(404, content=b"x" * (MAX_ERROR_BODY + 10)))
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(Transport(transport=mock).get(URL))
+    assert excinfo.value.response_body == b"x" * MAX_ERROR_BODY
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        httpx2.Response(302, headers={"Location": "https://elsewhere.test/"}),
+        httpx2.ConnectError("down"),
+    ],
+)
+def test_no_error_response_leaves_the_body_unset(
+    reply: httpx2.Response | httpx2.ConnectError,
+) -> None:
+    def handler(_: httpx2.Request) -> httpx2.Response:
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(transport.get(URL))
+    assert excinfo.value.response_body is None
 
 
 def test_server_error_retries_then_succeeds(no_sleep: list[float]) -> None:

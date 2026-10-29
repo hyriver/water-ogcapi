@@ -31,6 +31,8 @@ URL = "https://example.com/collections"
         ServiceError("service unavailable", URL, status=503, attempts=4, retry_after=2.0),
         RateLimitError("rate limit exceeded", URL, retry_after=3.0, remaining=0, attempts=2),
         ServiceError("bad filter", URL, status=400, method="POST", request_body=b"{}"),
+        ServiceError("bad where", URL, status=400, response_body=b'{"error": {"code": 400}}'),
+        RateLimitError("rate limit exceeded", URL, response_body=b"slow down"),
     ],
 )
 @pytest.mark.parametrize("clone", [copy.copy, lambda e: pickle.loads(pickle.dumps(e))])

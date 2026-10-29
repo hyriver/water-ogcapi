@@ -22,7 +22,7 @@ from urllib.parse import parse_qsl, unquote, unquote_plus, urlencode, urlsplit
 import httpx2
 
 from water_ogcapi._logging import logger
-from water_ogcapi._redact import CREDENTIAL_PARAMS
+from water_ogcapi._redact import CREDENTIAL_PARAMS, redact_url
 from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
@@ -383,7 +383,7 @@ def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Re
         logger.debug(
             "%s %s returned HTTP %d after %d attempt(s)",
             resp.request.method,
-            url,
+            redact_url(url),
             resp.status_code,
             attempts,
         )
@@ -731,7 +731,7 @@ class Transport:
                     logging.WARNING if resp.status_code == 429 else logging.INFO,
                     "%s %s returned HTTP %d; retry %d of %d in %.1f s",
                     method,
-                    sent,
+                    redact_url(sent),
                     resp.status_code,
                     attempt + 1,
                     self.max_retries,
@@ -755,7 +755,7 @@ class Transport:
             logger.info(
                 "%s %s failed with %s; retry %d of %d in %.1f s",
                 method,
-                sent,
+                redact_url(sent),
                 failure,
                 attempt + 1,
                 self.max_retries,

@@ -15,5 +15,9 @@ services. Read them in this order:
 1. [Dask and multiprocessing workers](workers.md): sending a service to worker
     processes.
 
+For packages that use the same services,
+[`water-ogcapi` as the transport for `dataretrieval`](dataretrieval.md) shows where its
+Water Data getters could send their requests through this package.
+
 The [example notebooks](../examples/index.md) walk through each service, and the
 [API reference](../api.md) lists every parameter.

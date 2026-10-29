@@ -235,7 +235,7 @@ Layering rule for anything new:
 
 ### D-12: Redirects are not followed
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-69, which lets `Transport.download()` follow them.
 - **Decision:** `follow_redirects=False`. A 3xx other than 304 raises `ServiceError`
     naming the `Location` by scheme, host, and path only (L-11). A 304 is returned as a
     response, since D-07 revalidation needs it. A response hook raises on a redirect
@@ -1945,6 +1945,68 @@ Layering rule for anything new:
     `Page.body` is (D-29); a server that echoes a request's query or headers into its
     error page leaves them there. A body cut at 64 KiB may end mid-character or
     mid-JSON.
+
+### D-69: `Transport.download()` streams a file and follows redirects
+
+- **Status:** accepted. Amends D-12.
+- **Date:** 2026-10-29.
+- **Decision:** `Transport.download(url, path)` streams a `GET` to a temporary `.part`
+    file beside `path`, created with `O_EXCL` under a random name, so no entry already
+    there, a planted symlink included, is opened, and written only through that call's
+    descriptor, and renames it to `path` once complete; any failure removes that file,
+    so `path` keeps the old file or holds the whole new one, and no symlink is written
+    through. The file is closed before the rename, which Windows needs, and gets the
+    mode `open()` gives, the umask applied by the system. Each attempt starts the file
+    over. The transport's `timeout` applies to each read, and `total` (default 3600 s,
+    `None` for none) bounds the whole call, retries and redirects included. It sends
+    `Accept-Encoding: identity` unless the caller names an encoding, and a 304 to a
+    caller's conditional header leaves the file untouched. It follows up to five
+    redirects (`MAX_REDIRECTS`), each paced by the governor and sent under its own
+    permit: once one leaves the scheme, host, and port of `url`, only
+    `CROSS_ORIGIN_HEADERS` (`Accept`, `Accept-Encoding`, `If-Modified-Since`,
+    `If-None-Match`, `User-Agent`) go along. A redirect to `http` from `https`, to a
+    scheme other than those two, to a URL with userinfo, or to a URL whose query carries
+    a credential raises `ServiceError`, decided inside the redirect handler and raised
+    after it, so no error chains the raw `Location`. The result, errors, and log records
+    name every URL by scheme, host, port, and path only. Once any URL of the chain has a
+    query, or the chain has left the first origin, an error names a failed request by
+    its exception type and a response by its status, with no `response_body`, library
+    message, or reason phrase, any of which can quote a signed URL. The returned
+    `Download` keeps the response headers in `DOWNLOAD_HEADERS` (`etag`,
+    `last-modified`, `content-type`, and a few more). The transport's client keeps no
+    cookies, for every request. `_logging.py` sets the `httpx2` logger to `WARNING` and
+    `httpcore2` to `INFO` unless the caller set their levels first. `request()` and the
+    service classes still refuse every redirect. Chosen by the maintainer.
+- **Why:** HyRiver's file hosts need both. HydroShare answers a file URL with 301, then
+    302 on the same host, then 302 to a signed `storage.googleapis.com` URL, and answers
+    `HEAD` with 405 (probed 2026-10-29); the CAMELS attributes file is 69 MB, which a
+    buffered body would hold in memory and D-19's 30 s attempt timeout would cut off. A
+    signed URL's query is a credential, so it stays out of results, errors, and logs:
+    httpx2 logs every request URL at INFO (D-18), httpcore2 every response header,
+    `Location` included, at DEBUG, and a `Content-Location` or `Set-Cookie` can echo it.
+    Codex and a security review found the first draft chained the raw `Location` into
+    every refusal, let URL userinfo and the cookie jar carry credentials past the header
+    allowlist, followed a planted `.part` symlink, and skipped the governor between
+    hops.
+- **Rejected:** Following redirects in `request()`, which would let a caller hand a
+    service class a transport that follows them (L-11). Skipping an existing file, which
+    keeps a file the server has changed; the caller decides freshness through
+    `If-None-Match` or `If-Modified-Since` and the returned `etag` and `last-modified`.
+    Resuming with `Range`, which NID's GeoPackage URL ignores (it answered a ranged
+    request with 200). Keeping a download URL's query, which a signed URL passed in
+    directly would carry into the result and the logs.
+- **Limits:** A redirect to another host keeps only the listed headers, so a host that
+    needs an `Authorization` header after a cross-origin redirect cannot be reached. The
+    result names the URL without its query, so two downloads that differ only in their
+    query read the same. File writes run on the event loop between reads. The governor
+    of the call observes the responses of every host the redirects reach. A caller who
+    set `httpx2`'s or `httpcore2`'s level still gets their records, signed URLs
+    included. Frame locals of any transport error still hold the request headers, which
+    a debugger or a frame-dumping tool shows. The rename and the cleanup go by name, so
+    someone who can write the folder and swaps the `.part` entry during the call gets
+    their entry renamed to `path` and the downloaded bytes are lost; nothing is written
+    through it. A download URL with userinfo whose server redirects within its own host
+    is refused, since the joined target keeps the userinfo; this fails closed.
 
 ## Lessons
 

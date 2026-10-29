@@ -52,7 +52,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
     ones. Each blocking class owns its async service and runs it on one background
     event-loop thread, never `asyncio.run()` or `nest_asyncio` (D-08, D-46, D-48).
 - No pandas, geopandas, xarray, Arrow, shapely, or STAC on the core import path (D-09).
-- Construction performs no HTTP (D-10), and redirects are never followed (D-12).
+- Construction performs no HTTP (D-10), and only `Transport.download()` follows
+    redirects, dropping all but a few headers once one leaves the origin (D-12, D-69).
 - The USGS API key never goes to a non-USGS host such as GeoConnex (D-13).
 - Service classes take no `base_url`, so a key goes only to its profile's host (D-42).
 - The API key travels only in the `X-Api-Key` header, never as a query parameter (D-18).

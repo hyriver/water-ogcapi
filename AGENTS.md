@@ -50,7 +50,8 @@ One-line summaries of the decisions any code change can break. The IDs point int
     using an allowlist (D-04).
 - The package root exports the blocking service classes and `water_ogcapi.aio` the async
     ones. Each blocking class owns its async service and runs it on one background
-    event-loop thread, never `asyncio.run()` or `nest_asyncio` (D-08, D-46, D-48).
+    event-loop thread, never `asyncio.run()` or `nest_asyncio` (D-08, D-46, D-48). The
+    blocking HTTP class is `Client`; `Transport` stays the async engine (D-70).
 - No pandas, geopandas, xarray, Arrow, shapely, or STAC on the core import path (D-09).
 - Construction performs no HTTP (D-10), and only `Transport.download()` follows
     redirects, dropping all but a few headers once one leaves the origin (D-12, D-69).

@@ -1902,6 +1902,31 @@ Layering rule for anything new:
     under the first page's CRS with no error (pyarrow 26, 2026-10-29). Compare the field
     metadata before a join.
 
+### D-67: Guide pages are Markdown, and a script runs their examples
+
+- **Status:** accepted.
+- **Date:** 2026-10-29.
+- **Decision:** The user guide and the guides for other packages are Markdown pages in
+    `docs/guide/`. `scripts/run_guides.py`, run by `pixi r -e dev guides`, writes each
+    page's `python` blocks in order to one script file and runs it, so a block sees the
+    names of the blocks before it. A page fails when the script cannot match one of its
+    `python` fences, such as a fence on a list item's line. A block whose fence follows
+    a `<!-- not run -->` line is shown only, for code of another package such as
+    `pynhd`. The setup page includes the installation section of `README.md` as a
+    snippet section (D-17). The `dev` environment has `dask[distributed]` for the worker
+    page's Dask example. Chosen by the maintainer.
+- **Why:** A guide is prose with short examples, and its installation and API-key pages
+    have little output to show, which suits a page better than a notebook. The strict
+    build runs no code, so running the blocks is the check that every example still
+    works. A script file, unlike `exec` of each block, lets a spawned `multiprocessing`
+    or Dask worker import the functions a page defines. The examples call the live APIs,
+    so the runner stays out of CI (D-63) and runs by hand before a guide change merges.
+- **Rejected:** Notebooks with cards, as the examples have (D-17). Running every block
+    with `exec` in one interpreter, which breaks the worker examples.
+- **Limits:** The pages show no output, and nothing checks that what a block prints
+    matches the prose. A shown-only block never runs, so it can go stale. The nav sorts
+    the pages by file name, so `docs/guide/index.md` gives the reading order.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

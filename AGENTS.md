@@ -82,6 +82,7 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Drift check, live          | `pixi r -e test315 drift`           |
 | Coverage report / HTML     | `pixi r -e test315 report` / `html` |
 | Benchmarks, offline        | `pixi r -e dev bench`               |
+| Guide examples, live       | `pixi r -e dev guides`              |
 | Run Python                 | `pixi r -e dev python ...`          |
 | Spell check (writes fixes) | `pixi r spell`                      |
 | Changelog preview          | `pixi r changelog`                  |
@@ -140,6 +141,9 @@ the site on every PR and deploys `main` to GitHub Pages.
 - The API page documents the blocking methods through `scripts/griffe_twins.py`, which
     copies each async method that a `_blocking` or `_iterating` call in `_sync.py`
     wraps. A new wrapper name goes in its `WRAPPERS`.
+- `pixi r -e dev guides` runs each `docs/guide/` page's `python` blocks in order as one
+    script, against the live APIs, so follow the live-api skill. A block whose fence
+    follows a `<!-- not run -->` line is shown only (D-67).
 - Each notebook gets a card in `docs/examples/index.md` with a thumbnail in
     `docs/examples/images/`, following the existing card. The strict build fails if a
     card links to a notebook that does not exist.

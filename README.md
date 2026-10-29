@@ -42,6 +42,8 @@ two services never receive it.
 
 ## Installation
 
+<!-- --8<-- [start:install] -->
+
 PyPI holds only a release candidate, which reserves the name and has no query API, and
 conda-forge has no package yet. Install the development version from GitHub (Python 3.13
 or later):
@@ -55,6 +57,8 @@ The `arrow` extra adds `pyarrow`, `shapely`, and `pyproj` for the `to_arrow()` m
 ```bash
 pip install "water-ogcapi[arrow] @ git+https://github.com/hyriver/water-ogcapi"
 ```
+
+<!-- --8<-- [end:install] -->
 
 ## Quick start
 
@@ -92,9 +96,11 @@ asyncio.run(main())
 
 ## Documentation
 
-The [documentation](https://docs.hyriver.io/water-ogcapi/) has the API reference, a
+The [documentation](https://docs.hyriver.io/water-ogcapi/) has a
+[user guide](https://docs.hyriver.io/water-ogcapi/guide/), example notebooks for each
+service, the API reference, a
 [logging guide](https://docs.hyriver.io/water-ogcapi/logging/), and the design decisions
-behind the library. Example notebooks for each service are in progress.
+behind the library.
 
 ## Roadmap
 

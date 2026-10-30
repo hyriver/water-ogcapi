@@ -124,6 +124,9 @@ the site on every PR and deploys `main` to GitHub Pages.
 - mdformat rewraps markdown to 88 columns during `pixi r lint`. pre-commit's
     `--all-files` sees only git-tracked files, so `pixi r lint` runs
     `scripts/lint_untracked.py` after it to lint untracked, non-ignored files by name.
+- `pixi r lint` also runs `scripts/lock_sdists.py`, which fails when `pixi.lock` pins a
+    PyPI sdist outside its `ALLOWED` set. A new sdist gets a platform floor in
+    `[tool.pixi.workspace] platforms` (D-71) or an `ALLOWED` entry with its reason.
 - `docs/index.md` only includes `README.md`, and `docs/contributing.md` only includes
     this file. Edit the source files. Links in both must be absolute URLs: a relative
     link resolves against the site, where its target does not exist, and the strict

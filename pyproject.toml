@@ -137,7 +137,7 @@ docs = { cmd = "zensical build --clean --strict", depends-on = [ "notebooks", "r
 docs-serve = { cmd = "zensical serve", depends-on = [ "notebooks", "roadmap" ] }
 
 [tool.pixi.feature.lint.tasks]
-lint = "pre-commit run --all-files && python scripts/lint_untracked.py"
+lint = "pre-commit run --all-files && python scripts/lint_untracked.py && python scripts/lock_sdists.py"
 # Resolves the runtime dependencies and extras from PyPI, as a new install would, and checks
 # them; a new extra goes in scripts/audit-requirements.txt.
 audit = "pysentry-rs . --fail-on low --requirements-files scripts/audit-requirements.txt"

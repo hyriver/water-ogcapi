@@ -312,7 +312,7 @@ Layering rule for anything new:
 
 ### D-16: Documentation site on Zensical
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-85, which keeps the site unversioned for 0.1.0.
 - **Date:** 2026-09-30.
 - **Decision:** The site builds with Zensical from `zensical.toml` in the pixi `docs`
     environment. `pixi r docs` runs a strict build, and `.github/workflows/docs.yml`
@@ -2285,6 +2285,25 @@ Layering rule for anything new:
 - **Rejected:** Keeping the fallback.
 - **Limits:** A server that sends such a subschema has every filter name refused until
     the caller passes `validate=False`.
+
+### D-85: The docs site stays unversioned for 0.1.0
+
+- **Status:** accepted. Amends D-16.
+- **Date:** 2026-10-30.
+- **Decision:** 0.1.0 ships with the one site D-16 describes, built from `main`.
+    Versioned docs come before 0.2.0, the first release that can differ from what the
+    site shows. Chosen by the maintainer.
+- **Why:** With one release there is one version to show. mike does not support
+    Zensical, and Zensical's native versioning is on its roadmap but not yet built
+    (checked 2026-10-30). The routes open today each cost something: squidfunk's mike
+    fork, which reads `zensical.toml` and which Zensical calls transitional, installs
+    from GitHub, bending D-27, and deploys to a `gh-pages` branch in place of the Pages
+    artifact; Read the Docs, which documents Zensical, moves hosting off
+    `docs.hyriver.io` and shows ads on the free plan; a hand-built folder per tag with
+    the theme's `versions.json` means custom scripts that rebuild old versions.
+- **Rejected:** The three routes above for now; each stays open for 0.2.0.
+- **Limits:** Between a release and the next, the site describes `main`, which may hold
+    changes the release does not.
 
 ## Lessons
 

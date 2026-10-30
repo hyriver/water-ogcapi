@@ -839,8 +839,8 @@ class OGCService:
             Continue a query that stopped on a failure (D-52): the ``result`` of a
             `PartialResultsError`, or the ``checkpoint`` of a `PaginationError` raised
             before any page arrived. The result's pages and features come first in the
-            new result, and no request for them is sent. No query keyword may come
-            with it.
+            new result, as the same objects, and no request for them is sent. No query
+            keyword may come with it.
 
         Returns
         -------
@@ -891,9 +891,9 @@ class OGCService:
                 msg = "this checkpoint holds pages; resume the QueryResult that holds them"
                 raise ValidationError(msg)
             if isinstance(resume, QueryResult):
-                # Copied, so the two results share no feature object (D-23).
+                # Shared with the result passed in: copying them doubles a large pull (D-79).
                 pages = list(resume.pages)
-                features = copy.deepcopy(resume.geojson["features"])
+                features = list(resume.geojson["features"])
             malformed = checkpoint.malformed
         try:
             async for page in self.iter_pages(

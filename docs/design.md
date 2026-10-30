@@ -2196,6 +2196,19 @@ Layering rule for anything new:
     caller sends; it stays open as a separate behavior change.
 - **Limits:** One agent per transport, so services sharing a transport share it.
 
+### D-79: A resumed `collect()` shares the features it was given
+
+- **Status:** accepted.
+- **Date:** 2026-10-30.
+- **Decision:** `collect(resume=result)` puts the features of `result.geojson` into the
+    new result as the same objects, in a new list.
+- **Why:** The deep copy cost 13.3 seconds and 702 MiB per million features (probe
+    during the final review), on a pull that had already failed once and was likely
+    large. A caller resuming hands the old result over to be continued, and the held
+    pages already carry no body (D-23), so the copy kept no page evidence apart.
+- **Rejected:** Keeping the copy and documenting its cost.
+- **Limits:** Editing a feature in either result edits it in both.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

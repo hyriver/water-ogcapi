@@ -30,13 +30,13 @@ repos:
     exclude: \.(html|svg)$
 
 - repo: https://github.com/bwhmather/ssort
-  rev: 0.17.0
+  rev: 0.19.0
   hooks:
   - id: ssort
     name: Sort top level statements with ssort
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.17.1
+  rev: v0.17.3
   hooks:
   - id: ruff
     name: Linting with Ruff

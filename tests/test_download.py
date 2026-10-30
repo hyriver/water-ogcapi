@@ -310,6 +310,7 @@ def test_each_redirect_hop_waits_for_the_governor(tmp_path: Path) -> None:
     assert governor.waits == 3
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot unlink an open file")
 def test_a_symlink_swapped_in_mid_download_is_not_written_through(tmp_path: Path) -> None:
     victim = tmp_path / "victim"
     victim.write_bytes(b"keep")

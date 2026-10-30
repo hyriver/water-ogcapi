@@ -879,6 +879,13 @@ class Transport:
                     size += len(chunk)
                 out.flush()
             kept = {k: v for k, v in resp.headers.items() if k in DOWNLOAD_HEADERS}
+            logger.debug(
+                "GET %s returned HTTP %d%s after %d attempt(s)",
+                named,
+                resp.status_code,
+                where,
+                attempt + 1,
+            )
             return resp.status_code, kept, size, redirects
         content = None
         if not quiet:
@@ -898,7 +905,8 @@ class Transport:
                 note=where,
                 phrase=not quiet,
             )
-        logger.info(
+        logger.log(
+            logging.WARNING if resp.status_code == 429 else logging.INFO,
             "GET %s returned HTTP %d%s; retry %d of %d in %.1f s",
             named,
             resp.status_code,

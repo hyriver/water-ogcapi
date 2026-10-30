@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, Concatenate, Self
 
 from water_ogcapi import _client, _services
 from water_ogcapi._transport import Transport
+from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
@@ -262,9 +263,9 @@ class Client:
 
     Its methods `request`, `get`, and `download` block on the `Transport` methods of the
     same name and take their arguments, so sync code sends any request and reuses one
-    transport's connections across calls. A `Transport` used this way binds to the
-    background loop, so share it only with the blocking classes (D-10). The client
-    pickles as its transport does (D-64).
+    transport's connections across calls; `run` runs a coroutine that sends many at once
+    (D-73). A `Transport` used this way binds to the background loop, so share it only
+    with the blocking classes (D-10). The client pickles as its transport does (D-64).
 
     ```python
     from water_ogcapi import Client
@@ -295,6 +296,46 @@ class Client:
     def transport(self) -> Transport:
         """The transport every call goes through."""
         return self._service
+
+    def run[T](self, coro: Coroutine[Any, Any, T]) -> T:
+        """Run ``coro`` on the background loop and return its result (D-73).
+
+        The coroutine sends its requests through `transport`, or through another
+        transport only blocking classes use, so one blocking call can await many
+        requests. An interrupt requests cancellation of the coroutine and the tasks it
+        awaits, then propagates; the cancellation finishes on the loop afterward.
+
+        ```python
+        async def fetch_all():
+            return await asyncio.gather(*(client.transport.get(url) for url in urls))
+
+        responses = client.run(fetch_all())
+        ```
+
+        Parameters
+        ----------
+        coro : coroutine
+            A coroutine object, such as ``fetch_all()``. Call ``asyncio.gather()`` inside
+            it, since the future it returns belongs to the loop that made it.
+
+        Returns
+        -------
+        T
+            What the coroutine returns.
+
+        Raises
+        ------
+        ValidationError
+            If ``coro`` is not a coroutine object: a coroutine function, a future, or a
+            task.
+        RuntimeError
+            If called inside a coroutine that `run` or another blocking call runs, which
+            would wait on itself, or once the loop's thread has stopped.
+        """
+        if not inspect.iscoroutine(coro):
+            msg = f"run() takes a coroutine object, got {type(coro).__name__}"
+            raise ValidationError(msg)
+        return _run(coro)
 
     def close(self) -> None:
         """Close the transport, whether this client created it or it was passed."""

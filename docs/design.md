@@ -2011,7 +2011,7 @@ Layering rule for anything new:
 
 ### D-70: `Client` is the blocking HTTP class, and `Transport` stays the async engine
 
-- **Status:** accepted. Amends D-48.
+- **Status:** accepted. Amends D-48; amended by D-73, which adds `Client.run()`.
 - **Date:** 2026-10-29.
 - **Decision:** `water_ogcapi.Client` runs one `Transport` on the background loop of
     D-08, as the blocking service classes do, and offers blocking `request()`, `get()`,
@@ -2080,6 +2080,33 @@ Layering rule for anything new:
     machine still shows only on install there. `typecheck`, `lint`, and `docs` install
     only on Ubuntu. Each change to a matrix renames required checks, which the ruleset
     must follow (`AGENTS.md`).
+
+### D-73: `Client.run()` runs a coroutine on the background loop
+
+- **Status:** accepted. Amends D-70, reversing its rejection of a public loop runner.
+- **Date:** 2026-10-30.
+- **Decision:** `Client.run(coro)` runs a coroutine object on the background loop of
+    D-08 through the runner the blocking classes use, with its interrupt handling,
+    loop-thread guard, and fork reset, and returns the coroutine's result. Anything
+    other than a coroutine object raises `ValidationError`.
+- **Why:** A package built on water-ogcapi, such as the HyRiver data package, has async
+    service classes and blocking twins that fan out: one call awaits object-id chunks,
+    batches of NLDI requests, or many downloads. Its blocking twins have to run that
+    composed coroutine on the loop where the shared `Transport` lives, since a transport
+    refuses a second loop (D-10), and the runner was private. Sync users who want many
+    requests at once gather them the same way, so the package needs no batch method.
+- **Rejected:** A module-level `water_ogcapi.run()`, a generic verb at the root beside
+    `configure_logger`, while a blocking twin already holds the `Client` whose transport
+    its coroutine uses. Public `_blocking` and `_iterating` decorators, which would
+    freeze the `_service` attribute convention and signature rewriting. A loop and
+    transport of the dependent package's own, which splits one process into two loops
+    and two connection pools. Accepting any awaitable: a future from `asyncio.gather()`
+    belongs to the loop that made it and cannot move.
+- **Limits:** The coroutine runs on the loop every blocking call shares, so blocking or
+    CPU-bound code inside it stalls them all. An interrupt requests cancellation and
+    propagates before cleanup finishes on the loop. There is no blocking iterator over
+    an async iterator yet; a coroutine wrapping `anext()` steps one item, and an
+    `iterate()` method can come as an addition.
 
 ## Lessons
 

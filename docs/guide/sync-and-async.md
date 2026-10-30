@@ -81,3 +81,33 @@ nwis.close()
 
 `close()` on either service closes the shared transport, and the other reconnects on its
 next request.
+
+## Plain HTTP from sync code
+
+`Client` sends any request from blocking code through one `Transport` on the background
+loop. `get()`, `request()`, and `download()` each send one request. To send many at
+once, write a coroutine that gathers `Transport` calls and pass it to `run()`, which
+runs it on the same loop and returns what it returns:
+
+```python
+import asyncio
+
+from water_ogcapi import Client
+
+NLDI = "https://api.water.usgs.gov/nldi/linked-data/comid"
+COMIDS = [1722317, 1722211, 1722207]
+
+with Client() as client:
+
+    async def fetch_all() -> list:
+        return await asyncio.gather(*(client.transport.get(f"{NLDI}/{c}") for c in COMIDS))
+
+    responses = client.run(fetch_all())
+print([response.status for response in responses])
+```
+
+Pass the coroutine object, `fetch_all()`. `run()` refuses a coroutine function, a
+future, or a task, so call `asyncio.gather()` inside the coroutine: the future it
+returns belongs to the loop that made it. An interrupt, such as stopping a notebook
+cell, cancels the coroutine and every request it gathered; the cancellation finishes on
+the loop after the interrupt reaches your code.

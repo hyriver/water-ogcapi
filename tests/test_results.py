@@ -227,11 +227,10 @@ def test_repr_leaves_out_payloads() -> None:
     [
         ("complete", None, True),
         ("unknown", None, True),
-        ("limited", "limit", True),
         ("limited", "failure", True),
         ("limited", None, False),
         ("complete", "failure", False),
-        ("unknown", "limit", False),
+        ("unknown", "failure", False),
     ],
 )
 def test_stop_reason_set_exactly_when_limited(

@@ -404,6 +404,111 @@ def test_a_used_client_pickles_and_sends_again() -> None:
     restored.close()
 
 
+def test_run_gathers_requests_on_the_clients_transport() -> None:
+    """D-73: one blocking call awaits many requests on the shared transport."""
+    transport = Transport(transport=httpx2.MockTransport(_echo))
+    with water_ogcapi.Client(transport=transport) as client:
+
+        async def fetch_all() -> list[Any]:
+            return await asyncio.gather(*(client.transport.get(f"{BASE}/{n}") for n in "abc"))
+
+        responses = client.run(fetch_all())
+        assert [r.url.rsplit("/", 1)[-1] for r in responses] == ["a", "b", "c"]
+        assert transport._loop is _sync._loop()[0]
+        assert client.get(f"{BASE}/d").json()["method"] == "GET", "the same transport sends on"
+
+
+def test_run_shares_one_transport_with_a_blocking_service() -> None:
+    """A dependent package's blocking twin runs its gather where NWIS sends (D-73)."""
+    transport, seen = serve()
+    nwis = water_ogcapi.OGCService(BASE, transport=transport)
+    client = water_ogcapi.Client(transport=transport)
+    nwis.collect("c")
+    pool = transport._client
+
+    async def fetch_all() -> list[Any]:
+        url = f"{BASE}/collections/c/items"
+        return await asyncio.gather(transport.get(url), transport.get(f"{url}?offset=1"))
+
+    first, last = client.run(fetch_all())
+    assert (first.json(), last.json()) == (FIRST, LAST)
+    assert transport._client is pool, "one connection pool for both"
+    assert len(seen) == 4
+    client.close()
+
+
+def _unstarted_future() -> asyncio.Future[None]:
+    loop = asyncio.new_event_loop()
+    future = loop.create_future()
+    loop.close()
+    return future
+
+
+def _done_task() -> asyncio.Task[None]:
+    loop = asyncio.new_event_loop()
+    task = loop.create_task(asyncio.sleep(0))
+    loop.run_until_complete(task)
+    loop.close()
+    return task
+
+
+@pytest.mark.parametrize(
+    "given",
+    [lambda: asyncio.sleep, lambda: 1, _unstarted_future, _done_task],
+    ids=["coroutine function", "value", "future of another loop", "task"],
+)
+def test_run_refuses_what_is_not_a_coroutine(given: Callable[[], Any]) -> None:
+    with (
+        water_ogcapi.Client() as client,
+        pytest.raises(ValidationError, match=r"run\(\) takes a coroutine object"),
+    ):
+        client.run(given())
+
+
+def test_run_inside_a_coroutine_it_runs_raises() -> None:
+    client = water_ogcapi.Client()
+
+    async def nested() -> None:
+        client.run(asyncio.sleep(0))
+
+    with pytest.raises(RuntimeError, match="would wait on itself"):
+        client.run(nested())
+
+
+def test_an_interrupt_cancels_every_gathered_request() -> None:
+    started: list[str] = []
+    cancelled: list[str] = []
+    both = threading.Event()
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        started.append(request.url.path)
+        if len(started) == 2:
+            both.set()
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            cancelled.append(request.url.path)
+            raise
+        return httpx2.Response(200)
+
+    def interrupt() -> None:
+        if both.wait(5):
+            _thread.interrupt_main()
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
+    client = water_ogcapi.Client(transport=transport)
+
+    async def fetch_all() -> list[Any]:
+        return await asyncio.gather(transport.get(f"{BASE}/a"), transport.get(f"{BASE}/b"))
+
+    threading.Thread(target=interrupt, daemon=True).start()
+    with pytest.raises(KeyboardInterrupt):
+        client.run(fetch_all())
+    assert settled_tasks() == 0
+    assert sorted(cancelled) == sorted(started) == ["/ogcapi/v1/a", "/ogcapi/v1/b"]
+    client.close()
+
+
 def test_the_root_names_the_async_engine_and_the_blocking_client() -> None:
     """D-70 keeps Transport the async engine; the blocking HTTP class is Client."""
     assert inspect.iscoroutinefunction(water_ogcapi.Transport.request)

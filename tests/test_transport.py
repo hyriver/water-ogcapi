@@ -967,3 +967,34 @@ def test_log_records_drop_the_url_userinfo(no_sleep: list[float]) -> None:
     assert len(records) >= 2
     assert all("PASSWD" not in m for m in records)
     assert no_sleep, "the 503 was retried"
+
+
+@pytest.mark.parametrize(
+    ("content_type", "body", "expected"),
+    [
+        ("text/csv; charset=ISO-8859-1", "café".encode("latin-1"), "café"),
+        ('text/plain; charset="utf-16"', "ü".encode("utf-16"), "ü"),
+        ("text/csv", "café".encode(), "café"),
+        ("text/csv; charset=not-a-codec", "café".encode(), "café"),
+        ("", b"plain", "plain"),
+        ('text/plain; charset=utf-8; title="x;charset=latin-1"', "café".encode(), "café"),
+    ],
+    ids=[
+        "named charset",
+        "quoted charset",
+        "none named",
+        "unknown charset",
+        "no header",
+        "charset-like text in a quoted parameter",
+    ],
+)
+def test_text_decodes_with_the_named_charset(content_type: str, body: bytes, expected: str) -> None:
+    """D-76."""
+    headers = {"content-type": content_type} if content_type else {}
+    assert Response(url=URL, status=200, headers=headers, content=body).text() == expected
+
+
+def test_text_raises_on_bytes_the_charset_cannot_decode() -> None:
+    response = Response(url=URL, status=200, headers={}, content=b"\xff\xfe\xfa")
+    with pytest.raises(UnicodeDecodeError):
+        response.text()

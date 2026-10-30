@@ -328,6 +328,39 @@ def test_server_error_exhaustion_reports_attempts() -> None:
     assert "after 4 attempts" in str(excinfo.value)
 
 
+@pytest.mark.usefixtures("no_sleep")
+@pytest.mark.parametrize(("override", "sent"), [(0, 1), (1, 2), (5, 6)])
+def test_one_call_sets_its_own_retries(override: int, sent: int) -> None:
+    """D-74: a call can stop after one attempt, or retry more, on a shared transport."""
+    mock, seen = responder(httpx2.Response(500))
+    transport = Transport(transport=mock, max_retries=3)
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(transport.request("POST", URL, content=b"q", max_retries=override))
+    assert (len(seen), excinfo.value.attempts) == (sent, sent)
+    assert transport.max_retries == 3, "the transport keeps its own setting"
+
+
+def test_a_negative_per_call_retry_count_is_refused() -> None:
+    mock, seen = responder(httpx2.Response(200))
+    with pytest.raises(ValidationError, match="must not be negative"):
+        asyncio.run(Transport(transport=mock).get(URL, max_retries=-1))
+    assert not seen
+
+
+def test_a_per_call_override_covers_transport_failures() -> None:
+    """D-74 also stops a retry after a connection failure."""
+    calls: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        calls.append(request)
+        raise httpx2.ConnectError("down", request=request)
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=3, backoff=0)
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(transport.get(URL, max_retries=0))
+    assert (len(calls), excinfo.value.attempts) == (1, 1)
+
+
 @pytest.mark.parametrize(
     ("attempt", "expected"), [(0, 0.5), (3, 4.0), (20, MAX_SLEEP), (5000, MAX_SLEEP)]
 )

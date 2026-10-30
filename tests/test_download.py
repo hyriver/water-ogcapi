@@ -206,6 +206,15 @@ class _Trickle(httpx2.AsyncByteStream):
             await asyncio.sleep(0.01)
 
 
+def test_a_download_can_skip_retries(tmp_path: Path) -> None:
+    """D-74: ``max_retries=0`` sends one attempt even on a retrying transport."""
+    transport, seen = serve({URL: lambda _: httpx2.Response(503)})
+    with pytest.raises(ServiceError) as excinfo:
+        fetch(transport, tmp_path / "f", max_retries=0)
+    assert (len(seen), excinfo.value.attempts) == (1, 1)
+    assert not list(tmp_path.iterdir())
+
+
 def test_the_total_budget_bounds_a_trickle(tmp_path: Path) -> None:
     transport, _ = serve({URL: lambda _: httpx2.Response(200, stream=_Trickle())})
     with pytest.raises(ServiceError, match=r"total budget of 0\.1 s"):

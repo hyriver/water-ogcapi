@@ -257,9 +257,12 @@ def test_httpx2_request_records_stay_out_of_the_root_logger() -> None:
 
 def test_a_signed_url_passed_in_stays_out_of_the_result_errors_and_logs(tmp_path: Path) -> None:
     signed = SIGNED.partition("?")[0]
-    transport, _ = serve({signed: body(b"z")})
+    replies = iter([httpx2.Response(429, headers={"Retry-After": "0"}), httpx2.Response(200)])
+    transport, _ = serve({signed: lambda _: next(replies)})
     records = _Records()
     logger.addHandler(records)
+    level = logger.level
+    logger.setLevel(logging.DEBUG)
     try:
         result = asyncio.run(transport.download(SIGNED, tmp_path / "f"))
         failing, _ = serve({signed: lambda _: httpx2.Response(404)})
@@ -267,11 +270,32 @@ def test_a_signed_url_passed_in_stays_out_of_the_result_errors_and_logs(tmp_path
             asyncio.run(failing.download(SIGNED, tmp_path / "g"))
     finally:
         logger.removeHandler(records)
+        logger.setLevel(level)
     assert result.url == signed
     assert "SECRETSIG" not in repr(result)
     assert "SECRETSIG" not in str(info.value)
     assert "SECRETSIG" not in pickle.dumps(info.value).decode("latin-1")
+    # The retry and the completion each log, so the check below reads real records.
+    assert len([m for m in records.messages if "storage.example.test" in m]) >= 2
     assert all("SECRETSIG" not in m for m in records.messages)
+
+
+def test_a_download_logs_a_429_retry_as_a_warning(tmp_path: Path) -> None:
+    """docs/logging.md: a 429 the transport waits out logs at WARNING, as request() does."""
+    replies = iter([httpx2.Response(429, headers={"Retry-After": "0"}), httpx2.Response(200)])
+    transport, _ = serve({URL: lambda _: next(replies)})
+    levels: list[int] = []
+    handler = logging.Handler(logging.DEBUG)
+    handler.emit = lambda record: levels.append(record.levelno)  # type: ignore[method-assign]
+    logger.addHandler(handler)
+    level = logger.level
+    logger.setLevel(logging.DEBUG)
+    try:
+        fetch(transport, tmp_path / "f")
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(level)
+    assert levels == [logging.WARNING, logging.DEBUG]
 
 
 def test_the_result_keeps_only_the_listed_headers(tmp_path: Path) -> None:

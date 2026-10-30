@@ -1,7 +1,9 @@
 # Contributing
 
 Conventions for human contributors and AI coding agents working in this repository. The
-docs site renders this file as its contributing guide.
+docs site renders this file as its contributing guide. Everyone taking part in the
+project follows the
+[code of conduct](https://github.com/hyriver/water-ogcapi/blob/main/CODE_OF_CONDUCT.md).
 
 ## Project
 

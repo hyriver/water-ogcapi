@@ -6,6 +6,7 @@ import asyncio
 import enum
 import json
 import logging
+import pickle
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from fractions import Fraction
@@ -1049,3 +1050,39 @@ def test_a_large_int_goes_out_whole() -> None:
     asyncio.run(Transport(transport=mock).get(URL, params={"n": 10**309}))
     assert seen[0].url.query == f"n={10**309}".encode()
 
+
+def test_a_user_agent_goes_on_every_request_unless_a_call_names_its_own() -> None:
+    """D-78; omitted, httpx2's default stands."""
+    mock, seen = responder(httpx2.Response(200))
+
+    async def calls() -> None:
+        await Transport(transport=mock, user_agent="hyriver/1.0").get(URL)
+        await Transport(transport=mock, user_agent="hyriver/1.0").get(
+            URL, headers={"User-Agent": "mine"}
+        )
+        await Transport(transport=mock).get(URL)
+
+    asyncio.run(calls())
+    agents = [r.headers["user-agent"] for r in seen]
+    assert agents[:2] == ["hyriver/1.0", "mine"]
+    assert agents[2].startswith("python-httpx2/")
+    assert Transport(user_agent="hyriver/1.0").user_agent == "hyriver/1.0"
+
+
+@pytest.mark.parametrize("agent", ["café/1", "a\nb", b"bytes"])
+def test_an_unsendable_user_agent_is_refused_at_construction(agent: object) -> None:
+    with pytest.raises(ValidationError, match=r"User-Agent|user_agent"):
+        Transport(user_agent=agent)  # type: ignore[arg-type]
+
+
+def _agent_echo(request: httpx2.Request) -> httpx2.Response:
+    """Module level, so a transport holding it pickles."""
+    return httpx2.Response(200, json={"agent": request.headers["user-agent"]})
+
+
+def test_a_user_agent_survives_pickling_and_a_rebind() -> None:
+    transport = Transport(transport=httpx2.MockTransport(_agent_echo), user_agent="hyriver/1.0")
+    assert asyncio.run(transport.get(URL)).json()["agent"] == "hyriver/1.0"
+    restored = pickle.loads(pickle.dumps(transport))
+    # A second asyncio.run() is a new loop, so the restored copy binds a new client.
+    assert asyncio.run(restored.get(URL)).json()["agent"] == "hyriver/1.0"

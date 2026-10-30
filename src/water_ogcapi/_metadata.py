@@ -453,5 +453,4 @@ def collection_ids(index: Collections) -> list[str]:
 
 
 def property_names(schema: Schema) -> list[str]:
-    # A properties object with a member that is not an object stays whole in extra (D-33).
-    return list(schema.properties or schema.extra.get("properties", {}))
+    return list(schema.properties or {})

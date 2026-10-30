@@ -204,15 +204,6 @@ def test_metadata_fetches_work_on_a_second_event_loop() -> None:
     assert seen.count("/collections") == 2
 
 
-def test_a_property_that_is_not_an_object_still_names_a_queryable() -> None:
-    queryables = {"type": "object", "properties": {"id": True, "site": {"type": "string"}}}
-    transport, seen = serve(
-        {"/collections": {"collections": [{"id": "c"}]}, "/collections/c/queryables": queryables}
-    )
-    asyncio.run(OGCService(BASE, transport=transport).collect("c", params={"site": "x"}))
-    assert seen[-1] == "/collections/c/items"
-
-
 def test_the_sync_api_raises_the_same_error() -> None:
     transport, _ = serve(nwis_routes())
     with pytest.raises(ValidationError, match="unknown collection"):

@@ -1640,7 +1640,7 @@ Layering rule for anything new:
 
 ### D-59: Python 3.13 is the floor, and the lock covers three platforms
 
-- **Status:** accepted; amended by D-71. Amends D-58.
+- **Status:** accepted; amended by D-71 and D-72. Amends D-58.
 - **Date:** 2026-10-23.
 - **Decision:** `requires-python` is `>=3.13`. The offline tests run in `test313` and
     `test315`, ruff targets `py313`, and pyright checks as 3.13. The `dev`, `typecheck`,
@@ -2053,6 +2053,24 @@ Layering rule for anything new:
     22.04, Debian 12); `pip` installs the package there, since it is pure Python. PyYAML
     6.0.3 has no Python 3.15 wheel for any platform, so `dev` and `docs` still build it
     from its sdist everywhere.
+
+### D-72: The offline tests run on Linux, macOS, and Windows
+
+- **Status:** accepted. Amends D-59.
+- **Date:** 2026-10-30.
+- **Decision:** The `ci.yml` test job runs `test313` and `test315` on `ubuntu-latest`,
+    `macos-latest`, and `windows-latest`, one runner per pixi platform, as six jobs
+    named `Test (<environment>, <runner>)`. `typecheck`, `lint`, and the docs build stay
+    on Ubuntu, since none of them depends on the platform.
+- **Why:** Chosen by the maintainer. The lock covers three platforms (D-59), but CI
+    installed only the `linux-64` test environments, so the `osx-arm64` and `win-64`
+    entries and the platform-dependent tests (fork, symlinks, file modes) ran only on
+    the maintainer's Mac or not at all.
+- **Rejected:** One summary job for the ruleset to require, which would keep the
+    required names fixed across matrix changes at the cost of a job that only reports.
+- **Limits:** No CI job installs `dev`, so a wheel missing from it, the case D-71 fixes,
+    still shows only when someone installs it. Each change to the matrix renames
+    required checks, which the ruleset must follow (`AGENTS.md`).
 
 ## Lessons
 

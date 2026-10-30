@@ -15,12 +15,14 @@ concurrency:
 
 jobs:
   test:
-    name: Test (${{ matrix.environment }})
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.environment }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         environment: [test313, test315]
+        # One runner per pixi platform: linux-64, osx-arm64, win-64.
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       with:

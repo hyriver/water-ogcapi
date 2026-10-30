@@ -1218,7 +1218,7 @@ Layering rule for anything new:
 ### D-47: Queries are checked against cached metadata before the first page request
 
 - **Status:** accepted; amended by D-80, which drops the revalidation of a cached copy
-    that lacks a name.
+    that lacks a name, and D-84, which reads only the parsed queryables.
 - **Date:** 2026-10-19.
 - **Decision:** `iter_pages()`, `collect()`, and `item()` take `validate=True`. Before
     the first page request each checks the collection against the cached collection
@@ -2270,6 +2270,21 @@ Layering rule for anything new:
     designing for rare cases.
 - **Rejected:** Keeping the encoder.
 - **Limits:** A caller building a filter from read-only mappings converts them first.
+
+### D-84: Validation names only the queryables a schema parses
+
+- **Status:** accepted. Amends D-47.
+- **Date:** 2026-10-30.
+- **Decision:** `validate=True` checks names against `Schema.properties` alone. A
+    `/queryables` whose `properties` holds a member that is not an object, which D-33
+    keeps whole in `extra`, lists no names, so a query with a filter on that collection
+    needs `validate=False`.
+- **Why:** None of the three services sends a boolean or other non-object property
+    subschema (recorded fixtures), and the fallback read the raw `extra` copy to serve
+    that case; the final review listed it under the rule against rare cases.
+- **Rejected:** Keeping the fallback.
+- **Limits:** A server that sends such a subschema has every filter name refused until
+    the caller passes `validate=False`.
 
 ## Lessons
 

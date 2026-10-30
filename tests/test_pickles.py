@@ -75,7 +75,7 @@ class GlobalRecorder(pickle.Unpickler):
 
 
 def body(path: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / path).read_text())["response"]["body"]
+    return json.loads((FIXTURES / path).read_text(encoding="utf-8"))["response"]["body"]
 
 
 def everything_pickled() -> list[object]:

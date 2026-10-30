@@ -113,7 +113,7 @@ def test_update_writes_a_snapshot_without_prose_and_sends_no_key(
     assert drift.main(["--update"], transport=serving(DOC, seen)) == 0
     assert sorted(p.parent.name for p in root.glob("*/openapi.json")) == sorted(drift.SERVICES)
     assert [(r.url.params["f"], r.headers.get("x-api-key")) for r in seen] == [("json", None)] * 3
-    stored = json.loads((root / "nwis" / "openapi.json").read_text())
+    stored = json.loads((root / "nwis" / "openapi.json").read_text(encoding="utf-8"))
     assert stored["url"] == drift.SERVICES["nwis"]
     assert "words" not in json.dumps(stored)
     doc = stored["openapi"]

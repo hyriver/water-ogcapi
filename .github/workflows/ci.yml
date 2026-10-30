@@ -34,6 +34,23 @@ jobs:
     # `test` excludes the network marker, so CI never touches USGS servers.
     - run: pixi run -e ${{ matrix.environment }} test
 
+  # The install is the check: a dev package locked as an sdist must build here (D-71).
+  dev-install:
+    name: Install dev (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        fetch-depth: 0  # hatch-vcs reads tags for the version
+    - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
+      with:
+        pixi-version: v0.82.1  # Dependabot does not bump this; see D-55
+        environments: dev
+
   typecheck:
     runs-on: ubuntu-latest
     steps:

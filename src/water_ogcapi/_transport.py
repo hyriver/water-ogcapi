@@ -7,6 +7,7 @@ one-file edit as long as nothing else touches it.
 from __future__ import annotations
 
 import asyncio
+import codecs
 import http.cookiejar
 import json
 import logging
@@ -14,6 +15,7 @@ import os
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from email.message import Message
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn, Self
@@ -319,6 +321,22 @@ class Response:
         first: a 304 carries headers and nothing else.
         """
         return json.loads(self.content)
+
+    def text(self) -> str:
+        """Decode the body with the charset its ``Content-Type`` names (D-76).
+
+        UTF-8 when the header names none, or names one Python does not know. Raises
+        ``UnicodeDecodeError`` on bytes that charset cannot decode.
+        """
+        # The email parser keeps a ";" inside a quoted parameter in its parameter.
+        header = Message()
+        header["content-type"] = self.headers.get("content-type", "")
+        charset = header.get_content_charset() or "utf-8"
+        try:
+            codecs.lookup(charset)
+        except LookupError:
+            charset = "utf-8"
+        return self.content.decode(charset)
 
 
 def _raise_for(

@@ -2143,6 +2143,22 @@ Layering rule for anything new:
 - **Limits:** Their fields become public API under D-21, so a new field goes last with a
     default, as for the other result types.
 
+### D-76: `Response.text()` decodes by the response's charset
+
+- **Status:** accepted.
+- **Date:** 2026-10-30.
+- **Decision:** `Response.text()` decodes the body with the charset its `Content-Type`
+    names, and with UTF-8 when it names none or one Python does not know. Bytes the
+    charset cannot decode raise `UnicodeDecodeError`, as `json()` raises
+    `JSONDecodeError`.
+- **Why:** CSV and plain-text services, such as Daymet's single-pixel API, return text
+    that every caller otherwise decodes by hand, and `content.decode()` assumes UTF-8
+    whatever the server declared.
+- **Rejected:** Detecting the encoding from the bytes, which adds a dependency and
+    guesses. Replacing undecodable bytes, which hides a wrong charset.
+- **Limits:** The charset comes from the header only, never from a byte-order mark or an
+    XML declaration.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

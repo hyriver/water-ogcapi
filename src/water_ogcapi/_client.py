@@ -381,16 +381,13 @@ class OGCService:
             governor=self._governor,
         )
 
-    async def _metadata[T](
-        self, url: str, parse: Callable[[Response], T], *, stale: CacheEntry | None = None
-    ) -> T:
+    async def _metadata[T](self, url: str, parse: Callable[[Response], T]) -> T:
         """Return the document at ``url`` as ``parse`` reads it, cached for an hour (D-07).
 
         An expired entry is revalidated with its ``ETag`` and ``Last-Modified``, and a
         304 keeps its payload. Only a response that ``parse`` accepts is stored. The
         payload is the cached object itself, so a public method returns a copy. Concurrent
-        calls for one URL send one request. An entry that is still ``stale`` is
-        revalidated however fresh, and stays cached as it was if that fails.
+        calls for one URL send one request.
         """
         loop = asyncio.get_running_loop()
         if loop is not self._locks_loop:
@@ -398,7 +395,7 @@ class OGCService:
             self._locks, self._locks_loop = {}, loop
         async with self._locks.setdefault(url, asyncio.Lock()):
             entry = self._cache.get(url)
-            if entry is not None and entry is not stale and not entry.expired():
+            if entry is not None and not entry.expired():
                 return entry.payload
             headers = entry.validators() if entry is not None else {}
             resp = await self._send("GET", url, params={"f": "json"}, headers=headers)
@@ -410,25 +407,6 @@ class OGCService:
                 msg = "HTTP 304 to a request that sent no validators"
                 raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
             return self._cache[url].payload
-
-    async def _listed[T](
-        self,
-        url: str,
-        parse: Callable[[Response], T],
-        names: Callable[[T], list[str]],
-        wanted: Collection[str],
-    ) -> list[str]:
-        """Return the names the document at ``url`` lists, as ``names`` reads them.
-
-        When a copy cached before this call lacks a name in ``wanted``, the copy is
-        revalidated once, since the server may have added the name since.
-        """
-        before = self._cache.get(url)
-        found = names(await self._metadata(url, parse))
-        entry = self._cache[url]
-        if entry is before and not set(wanted) <= set(found):
-            found = names(await self._metadata(url, parse, stale=entry))
-        return found
 
     async def _validate(
         self, collection: str, params: Mapping[str, str] | None, id_property: str | None
@@ -444,7 +422,7 @@ class OGCService:
             If a metadata request fails.
         """
         index = f"{self.base_url}/collections"
-        ids = await self._listed(index, parse_collections, collection_ids, [collection])
+        ids = collection_ids(await self._metadata(index, parse_collections))
         if collection not in ids:
             msg = f"unknown collection {collection!r}; use one of {', '.join(ids)}"
             raise ValidationError(msg)
@@ -453,7 +431,7 @@ class OGCService:
         if not wanted:
             return
         url = f"{self.base_url}/collections/{path_segment(collection, 'collection')}/queryables"
-        queryables = await self._listed(url, parse_schema, property_names, wanted)
+        queryables = property_names(await self._metadata(url, parse_schema))
         listing = ", ".join(queryables)
         if unknown := [name for name in filters if name not in queryables]:
             msg = (

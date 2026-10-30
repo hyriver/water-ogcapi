@@ -4,7 +4,7 @@ Each card is a notebook from the repository's `docs/examples/` directory, render
 its saved outputs. The notebooks also use packages that `water-ogcapi` does not install:
 
 ```bash
-pip install "water-ogcapi[arrow]" geopandas polars matplotlib contextily
+pip install "water-ogcapi[arrow]" geopandas polars matplotlib contextily rasterio
 ```
 
 <div class="grid cards" markdown>
@@ -20,5 +20,8 @@ pip install "water-ogcapi[arrow]" geopandas polars matplotlib contextily
 
 - [![Querying GeoConnex](images/geoconnex.png){ loading=lazy }](geoconnex.md "Querying GeoConnex")
     **Querying GeoConnex**
+
+- [![Clients for other web services](images/transport.png){ loading=lazy }](transport.md "Clients for other web services")
+    **Clients for other web services**
 
 </div>

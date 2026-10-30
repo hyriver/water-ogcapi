@@ -550,12 +550,17 @@ class Transport:
         Negotiate HTTP/2, defaults to ``True``.
     transport : httpx2.AsyncBaseTransport, optional
         Injected transport, for tests.
+    user_agent : str, optional
+        The ``User-Agent`` of every request, redirect hops included, so a server can
+        tell which package called it (D-78). httpx2's own, ``python-httpx2/<version>``,
+        when omitted. A ``User-Agent`` in a call's ``headers`` takes precedence.
 
     Raises
     ------
     ValidationError
-        If ``max_concurrent`` is below 1, or ``max_retries`` or ``backoff`` is
-        negative. A zero-permit semaphore would block every request forever.
+        If ``max_concurrent`` is below 1, ``max_retries`` or ``backoff`` is negative,
+        or ``user_agent`` is not a printable ASCII ``str``. A zero-permit semaphore
+        would block every request forever.
     """
 
     def __init__(
@@ -567,7 +572,11 @@ class Transport:
         backoff: float = 0.5,
         http2: bool = True,
         transport: httpx2.AsyncBaseTransport | None = None,
+        user_agent: str | None = None,
     ) -> None:
+        if user_agent is not None:
+            reject_non_str([user_agent], "user_agent")
+            _reject_unsendable_headers({"User-Agent": user_agent})
         if max_concurrent < 1:
             msg = f"max_concurrent must be at least 1, got {max_concurrent}"
             raise ValidationError(msg)
@@ -585,6 +594,7 @@ class Transport:
         self._backoff = backoff
         self._http2 = http2
         self._transport = transport
+        self._user_agent = user_agent
         self._loop: asyncio.AbstractEventLoop | None = None
         self._sem: asyncio.Semaphore | None = None
         self._client: httpx2.AsyncClient | None = None
@@ -610,6 +620,11 @@ class Transport:
         return self._backoff
 
     @property
+    def user_agent(self) -> str | None:
+        """The ``User-Agent`` sent with every request, or ``None`` for httpx2's."""
+        return self._user_agent
+
+    @property
     def http2(self) -> bool:
         """Whether HTTP/2 is negotiated."""
         return self._http2
@@ -630,6 +645,7 @@ class Transport:
             self._client = httpx2.AsyncClient(
                 timeout=self.timeout,
                 http2=self.http2,
+                headers=None if self.user_agent is None else {"User-Agent": self.user_agent},
                 follow_redirects=False,
                 # A jar that keeps nothing: a cookie would cross the services that share
                 # this transport, and a download's redirects, unchecked (D-69).

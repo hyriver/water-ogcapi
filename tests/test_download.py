@@ -112,6 +112,33 @@ def test_a_cross_origin_redirect_drops_the_key_and_keeps_the_signature_out(
     )
 
 
+def test_the_transport_user_agent_follows_a_cross_origin_redirect(tmp_path: Path) -> None:
+    """D-78: it is no secret, so the hop to another origin keeps it."""
+    routes = {URL: redirect(SIGNED), SIGNED.partition("?")[0]: body(b"x")}
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return routes[str(request.url.copy_with(query=None))](request)
+
+    transport = Transport(transport=httpx2.MockTransport(handler), user_agent="hyriver/1.0")
+    fetch(transport, tmp_path / "f")
+    assert [r.headers["user-agent"] for r in seen] == ["hyriver/1.0", "hyriver/1.0"]
+
+
+def test_a_call_s_user_agent_beats_the_transport_s_on_every_hop(tmp_path: Path) -> None:
+    routes = {URL: redirect(SIGNED), SIGNED.partition("?")[0]: body(b"x")}
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return routes[str(request.url.copy_with(query=None))](request)
+
+    transport = Transport(transport=httpx2.MockTransport(handler), user_agent="hyriver/1.0")
+    fetch(transport, tmp_path / "f", headers={"User-Agent": "mine"})
+    assert [r.headers["user-agent"] for r in seen] == ["mine", "mine"]
+
+
 def test_a_relative_location_resolves_against_the_current_url(tmp_path: Path) -> None:
     transport, seen = serve(
         {URL: redirect("other.bin"), "https://files.example.test/data/other.bin": body(b"y")}

@@ -2178,6 +2178,22 @@ Layering rule for anything new:
 - **Limits:** The service classes still take `str` values only. A caller who passed a
     `bool` before gets `true` where it got `True`.
 
+### D-78: `Transport(user_agent=)` names the calling package
+
+- **Status:** accepted.
+- **Date:** 2026-10-30.
+- **Decision:** `Transport` takes `user_agent=`, sent as the `User-Agent` of every
+    request, redirect hops across origins included, since it holds no secret. A
+    `User-Agent` in a call's `headers` takes precedence. Omitted, httpx2's
+    `python-httpx2/<version>` stands, so existing callers send what they sent before. A
+    value that is not a printable ASCII `str` raises `ValidationError` at construction.
+- **Why:** A package built on the transport, such as HyRiver, wants servers and their
+    operators to see which package calls them, and passing the header on every call
+    misses requests the package does not build itself, such as a service class's.
+- **Rejected:** A `water-ogcapi/<version>` default, which changes what every existing
+    caller sends; it stays open as a separate behavior change.
+- **Limits:** One agent per transport, so services sharing a transport share it.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

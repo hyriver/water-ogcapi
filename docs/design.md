@@ -2258,6 +2258,19 @@ Layering rule for anything new:
 - **Rejected:** Keeping the reserved value.
 - **Limits:** None.
 
+### D-83: A CQL2-JSON filter holds JSON types below its top level
+
+- **Status:** accepted.
+- **Date:** 2026-10-30.
+- **Decision:** A `filter` mapping is copied to a `dict` at its top level and encoded
+    with `json.dumps` as it stands, so a nested value that is not a JSON type, a
+    `MappingProxyType` included, raises the `TypeError` the methods document.
+- **Why:** A custom encoder converted nested read-only mappings, a case no caller of the
+    three services was known to send; the final review listed it under the rule against
+    designing for rare cases.
+- **Rejected:** Keeping the encoder.
+- **Limits:** A caller building a filter from read-only mappings converts them first.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

@@ -341,14 +341,6 @@ def _filter(
     return {"op": "in", "args": [{"property": id_property}, values]}
 
 
-def _json_default(value: object) -> object:
-    """Encode a mapping that ``json`` does not know, such as a ``MappingProxyType``."""
-    if isinstance(value, Mapping):
-        return dict(cast("Mapping[str, object]", value))
-    msg = f"Object of type {type(value).__name__} is not JSON serializable"
-    raise TypeError(msg)
-
-
 def _items_query(
     params: Mapping[str, str | int | float | bool] | None,
     bbox: Sequence[float] | None,
@@ -390,7 +382,8 @@ def _items_query(
     if cql2 is None:
         return query, None
     try:
-        body = json.dumps(cql2, separators=(",", ":"), allow_nan=False, default=_json_default)
+        # The top level may be any mapping, as the filter's type says; inside it, JSON types.
+        body = json.dumps(dict(cql2), separators=(",", ":"), allow_nan=False)
     except ValueError as exc:
         # A NaN or infinite number, or a mapping that contains itself.
         msg = f"filter cannot be sent as JSON: {exc}"

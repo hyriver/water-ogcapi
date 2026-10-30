@@ -7,10 +7,10 @@
 A Python client for USGS water data services over OGC API Features. Its service classes
 block, for scripts and notebooks, and `water_ogcapi.aio` holds their async twins.
 
-**Status:** early development. The async and sync query APIs and the metadata cache work
-on all three services, with the quota governor, page-level resume, and concurrent NWIS
-pieces. The release candidate on PyPI only reserves the name and has no query API, so
-install from this repository until the first final release.
+**Status:** alpha. The async and sync query APIs and the metadata cache work on all
+three services, with the quota governor, page-level resume, and concurrent NWIS pieces.
+Report problems and missing features in
+[GitHub issues](https://github.com/hyriver/water-ogcapi/issues).
 
 ## Features
 
@@ -44,18 +44,22 @@ two services never receive it.
 
 <!-- --8<-- [start:install] -->
 
-PyPI holds only a release candidate, which reserves the name and has no query API, and
-conda-forge has no package yet. Install the development version from GitHub (Python 3.13
-or later):
+Install from PyPI (Python 3.13 or later):
 
 ```bash
-pip install git+https://github.com/hyriver/water-ogcapi
+pip install water-ogcapi
 ```
 
 The `arrow` extra adds `pyarrow`, `shapely`, and `pyproj` for the `to_arrow()` methods:
 
 ```bash
-pip install "water-ogcapi[arrow] @ git+https://github.com/hyriver/water-ogcapi"
+pip install "water-ogcapi[arrow]"
+```
+
+conda-forge has no package yet. The development version installs from GitHub:
+
+```bash
+pip install git+https://github.com/hyriver/water-ogcapi
 ```
 
 <!-- --8<-- [end:install] -->

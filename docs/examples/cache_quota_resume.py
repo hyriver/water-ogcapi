@@ -32,7 +32,7 @@ nwis = NWIS()
 #
 # At the DEBUG level the package logs every request it sends. The first `collections()`
 # call fetches `/collections`; the second is served from the cache, so it logs nothing.
-# Entries last an hour and are then revalidated with `ETag` or `Last-Modified`.
+# Entries last an hour; the next call after that fetches the document again.
 
 # %%
 configure_logger(level="DEBUG")

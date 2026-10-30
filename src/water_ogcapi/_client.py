@@ -384,8 +384,8 @@ class OGCService:
     async def _metadata[T](self, url: str, parse: Callable[[Response], T]) -> T:
         """Return the document at ``url`` as ``parse`` reads it, cached for an hour (D-07).
 
-        An expired entry is revalidated with its ``ETag`` and ``Last-Modified``, and a
-        304 keeps its payload. Only a response that ``parse`` accepts is stored. The
+        An expired entry is fetched again. Only a response that ``parse`` accepts is
+        stored. The
         payload is the cached object itself, so a public method returns a copy. Concurrent
         calls for one URL send one request.
         """
@@ -397,15 +397,12 @@ class OGCService:
             entry = self._cache.get(url)
             if entry is not None and not entry.expired():
                 return entry.payload
-            headers = entry.validators() if entry is not None else {}
-            resp = await self._send("GET", url, params={"f": "json"}, headers=headers)
-            if resp.status != 304:
-                self._cache[url] = CacheEntry.store(parse(resp), resp.headers)
-            elif entry is not None and headers:
-                self._cache[url] = CacheEntry.store(entry.payload, resp.headers, entry)
-            else:
+            resp = await self._send("GET", url, params={"f": "json"})
+            if resp.status == 304:
+                # No conditional request goes out, so a 304 answers nothing asked (D-81).
                 msg = "HTTP 304 to a request that sent no validators"
                 raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
+            self._cache[url] = CacheEntry.store(parse(resp))
             return self._cache[url].payload
 
     async def _validate(
@@ -449,7 +446,7 @@ class OGCService:
     async def collections(self) -> Collections:
         """Return the collection index from ``/collections``.
 
-        The index is cached for an hour, then revalidated (D-07); `refresh` drops it.
+        The index is cached for an hour, then fetched again (D-07); `refresh` drops it.
 
         Raises
         ------
@@ -466,7 +463,7 @@ class OGCService:
     async def queryables(self, collection: str) -> Schema:
         """Return the properties a query on ``collection`` can filter on.
 
-        The document is cached for an hour, then revalidated (D-07); `refresh` drops it.
+        The document is cached for an hour, then fetched again (D-07); `refresh` drops it.
 
         Parameters
         ----------
@@ -487,7 +484,7 @@ class OGCService:
     async def schema(self, collection: str) -> Schema:
         """Return the properties each feature of ``collection`` carries.
 
-        The document is cached for an hour, then revalidated (D-07); `refresh` drops it.
+        The document is cached for an hour, then fetched again (D-07); `refresh` drops it.
 
         Parameters
         ----------

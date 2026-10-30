@@ -8,6 +8,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
+from fractions import Fraction
 from typing import Any
 
 import httpx2
@@ -998,3 +999,53 @@ def test_text_raises_on_bytes_the_charset_cannot_decode() -> None:
     response = Response(url=URL, status=200, headers={}, content=b"\xff\xfe\xfa")
     with pytest.raises(UnicodeDecodeError):
         response.text()
+
+
+def test_number_and_bool_params_go_out_as_query_text(tmp_path: Any) -> None:
+    """D-77: ArcGIS and OGC API servers take lowercase booleans and plain numbers."""
+    mock, seen = responder(httpx2.Response(200, content=b"x"))
+    transport = Transport(transport=mock)
+    params = {"returnIdsOnly": True, "inSR": 4326, "tolerance": 0.5, "f": "json", "z": False}
+
+    async def both() -> None:
+        await transport.get(URL, params=params)
+        await transport.download(URL, tmp_path / "f", params=params)
+
+    asyncio.run(both())
+    for request in seen:
+        assert request.url.query == b"returnIdsOnly=true&inSR=4326&tolerance=0.5&f=json&z=false"
+
+
+@pytest.mark.parametrize(
+    ("value", "kind"),
+    [
+        (None, "NoneType"),
+        (["a"], "list"),
+        (b"x", "bytes"),
+        (float("nan"), "non-finite float"),
+        (Fraction(1, 3), "Fraction"),
+    ],
+)
+def test_a_param_value_of_another_type_is_refused(value: object, kind: str, tmp_path: Any) -> None:
+    mock, seen = responder(httpx2.Response(200))
+    transport = Transport(transport=mock)
+    expected = rf"values must be str, int, float, or bool, got {kind}"
+    with pytest.raises(ValidationError, match=expected):
+        asyncio.run(transport.get(URL, params={"q": value}))  # type: ignore[dict-item]
+    with pytest.raises(ValidationError, match=expected):
+        asyncio.run(transport.download(URL, tmp_path / "f", params={"q": value}))  # type: ignore[dict-item]
+    assert not seen
+
+
+def test_a_refused_value_never_echoes_its_parameter_name() -> None:
+    mock, _ = responder(httpx2.Response(200))
+    with pytest.raises(ValidationError) as excinfo:
+        asyncio.run(Transport(transport=mock).get(URL, params={"SECRET": None}))  # type: ignore[dict-item]
+    assert "SECRET" not in str(excinfo.value)
+
+
+def test_a_large_int_goes_out_whole() -> None:
+    mock, seen = responder(httpx2.Response(200))
+    asyncio.run(Transport(transport=mock).get(URL, params={"n": 10**309}))
+    assert seen[0].url.query == f"n={10**309}".encode()
+

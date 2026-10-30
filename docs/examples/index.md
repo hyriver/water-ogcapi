@@ -1,7 +1,11 @@
 # Examples
 
 Each card is a notebook from the repository's `docs/examples/` directory, rendered with
-its saved outputs.
+its saved outputs. The notebooks also use packages that `water-ogcapi` does not install:
+
+```bash
+pip install "water-ogcapi[arrow]" geopandas polars matplotlib contextily
+```
 
 <div class="grid cards" markdown>
 

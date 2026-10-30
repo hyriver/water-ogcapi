@@ -1,7 +1,13 @@
 # User guide
 
 Each page covers one part of the package, and its examples run against the live
-services. Read them in this order:
+services. The examples also use packages that `water-ogcapi` does not install:
+
+```bash
+pip install "water-ogcapi[arrow]" geopandas polars "dask[distributed]"
+```
+
+Read the pages in this order:
 
 1. [Installation and the API key](setup.md): installing the package and its `arrow`
     extra, and how `NWIS` sends a USGS API key.

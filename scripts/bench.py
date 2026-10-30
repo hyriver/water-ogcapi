@@ -63,7 +63,7 @@ MIN_REMAINING = 100
 
 
 def _body(name: str) -> Any:
-    return json.loads((FIXTURES / name).read_text())["response"]["body"]
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))["response"]["body"]
 
 
 class Server:
@@ -355,7 +355,7 @@ def fetch(folder: Path) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     # A stopped capture leaves no timings, so --decode cannot pair new pages with old ones.
     (folder / "seconds.json").unlink(missing_ok=True)
-    (folder / "seconds.json").write_text(json.dumps(asyncio.run(run()), indent=1))
+    (folder / "seconds.json").write_text(json.dumps(asyncio.run(run()), indent=1), encoding="utf-8")
 
 
 def _rss_growth(module: str, page: Path) -> float:
@@ -384,7 +384,7 @@ def decode(folder: Path, runs: int) -> list[str]:
     saving are over that time.
     """
     rows = []
-    for name, wall in json.loads((folder / "seconds.json").read_text()).items():
+    for name, wall in json.loads((folder / "seconds.json").read_text(encoding="utf-8")).items():
         content = (folder / f"{name}.json").read_bytes()
         doc = json.loads(content)
         # Both must read the page alike; orjson rejects the NaN json.loads accepts.

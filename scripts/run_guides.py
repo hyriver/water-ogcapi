@@ -21,7 +21,7 @@ SKIP = "<!-- not run -->"
 
 def blocks(page: Path) -> list[tuple[int, str]]:
     """Return the line and code of each block of ``page`` to run."""
-    text = page.read_text()
+    text = page.read_text(encoding="utf-8")
     matches = list(FENCE.finditer(text))
     # A fence the pattern misses, such as one on a list item's line, would pass unrun.
     if len(matches) != text.count("```python"):
@@ -45,7 +45,7 @@ def main() -> None:
         code = "".join(f"# {page}:{line}\n{block}\n" for line, block in found)
         with tempfile.TemporaryDirectory() as folder:
             script = Path(folder) / f"{page.stem.replace('-', '_')}.py"
-            script.write_text(code)
+            script.write_text(code, encoding="utf-8")
             run = subprocess.run([sys.executable, str(script)], check=False)  # noqa: S603
         if run.returncode:
             failed.append(page)

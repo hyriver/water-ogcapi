@@ -34,7 +34,7 @@ from water_ogcapi._results import (
     StopReason,
 )
 from water_ogcapi._sync import NWIS, Client, FabricData, GeoConnex, OGCService
-from water_ogcapi._transport import Transport
+from water_ogcapi._transport import Download, Response, Transport
 
 try:
     __version__ = version("water-ogcapi")
@@ -51,6 +51,7 @@ __all__ = [
     "Collection",
     "Collections",
     "Completeness",
+    "Download",
     "Extent",
     "FabricData",
     "GeoConnex",
@@ -62,6 +63,7 @@ __all__ = [
     "Property",
     "QueryResult",
     "Request",
+    "Response",
     "Schema",
     "ServiceProfile",
     "SpatialExtent",

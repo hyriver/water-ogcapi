@@ -514,3 +514,14 @@ def test_the_root_names_the_async_engine_and_the_blocking_client() -> None:
     assert inspect.iscoroutinefunction(water_ogcapi.Transport.request)
     assert not inspect.iscoroutinefunction(water_ogcapi.Client.request)
     assert water_ogcapi.Client.download.__name__ == "download"
+
+
+def test_the_root_exports_the_types_the_transport_returns(tmp_path: Any) -> None:
+    """D-75: return types a dependent package can annotate with a public name."""
+    transport = Transport(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, content=b"x"))
+    )
+    with water_ogcapi.Client(transport=transport) as client:
+        assert isinstance(client.get(f"{BASE}/a"), water_ogcapi.Response)
+        assert isinstance(client.download(f"{BASE}/f", tmp_path / "f"), water_ogcapi.Download)
+    assert {"Response", "Download"} <= set(water_ogcapi.__all__)

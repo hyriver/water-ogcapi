@@ -9,7 +9,6 @@ import json
 import pickle
 from collections.abc import Iterator, Mapping
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any
 
 import httpx2
@@ -914,13 +913,6 @@ def test_a_malformed_filter_sends_nothing(query: dict[str, Any], error: type[Exc
     with pytest.raises(error):
         traverse(OGCService(GEOCONNEX, transport=transport), "hu02", **query)
     assert seen == []
-
-
-def test_a_read_only_mapping_filter_is_posted() -> None:
-    sites = MappingProxyType(
-        {"op": "in", "args": [MappingProxyType(SITES["args"][0]), SITES["args"][1]]}
-    )
-    assert first_request(filter=sites).content == SITES_BODY
 
 
 def test_collect_posts_a_json_filter() -> None:

@@ -911,7 +911,8 @@ Layering rule for anything new:
 
 ### D-36: `complete` means the traversal ended and the checks that ran passed
 
-- **Status:** accepted; amended by D-54 and D-57. Amends D-22.
+- **Status:** accepted; amended by D-54, D-57, and D-82, which drops the `limit` stop
+    reason. Amends D-22.
 - **Date:** 2026-10-13.
 - **Decision:** `collect()` reads `complete` when the last page had no `next` link
     (D-05) and every check that could run passed. `Pagination.checks` lists the checks
@@ -2244,6 +2245,18 @@ Layering rule for anything new:
 - **Rejected:** Keeping it for a future server that sends validators: an expired
     document is one small JSON request an hour.
 - **Limits:** A server that starts sending validators gets a full request each hour.
+
+### D-82: `StopReason` has one value, `failure`
+
+- **Status:** accepted. Amends D-36.
+- **Date:** 2026-10-30.
+- **Decision:** `StopReason` is `Literal["failure"]`, the only reason a traversal reads
+    `limited`.
+- **Why:** D-36 reserved `limit` for a caller cap that no method offers, so the public
+    type named a value no code produced. A cap, if one comes, adds the value back with
+    the method that produces it.
+- **Rejected:** Keeping the reserved value.
+- **Limits:** None.
 
 ## Lessons
 

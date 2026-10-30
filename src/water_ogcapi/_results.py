@@ -40,7 +40,7 @@ __all__ = [
 
 Check = Literal["end_of_links", "count", "unique_ids"]
 Completeness = Literal["complete", "limited", "unknown"]
-StopReason = Literal["limit", "failure"]
+StopReason = Literal["failure"]
 CRSSource = Literal["content_crs", "default", "unconfirmed", "unknown"]
 
 # Response headers a Page keeps. Anything unlisted is dropped, so a header nobody
@@ -398,8 +398,8 @@ class Pagination:
     completeness : {"complete", "limited", "unknown"}
         ``complete`` when traversal reached the end and every check passed,
         ``limited`` when it stopped early, ``unknown`` otherwise.
-    stop_reason : {"limit", "failure"}, optional
-        Why a ``limited`` traversal stopped: a caller limit or a failed page.
+    stop_reason : {"failure"}, optional
+        Why a ``limited`` traversal stopped: a failed page.
     sort_by : str, optional
         The sort key the pages were requested with.
     checks : tuple of {"end_of_links", "count", "unique_ids"}

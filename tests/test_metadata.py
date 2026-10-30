@@ -42,7 +42,7 @@ COLLECTION = {
 
 
 def body(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text())["response"]["body"]
+    return json.loads(path.read_text(encoding="utf-8"))["response"]["body"]
 
 
 def known_members_in_extra(obj: Any) -> list[str]:

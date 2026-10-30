@@ -38,7 +38,7 @@ def unchecked(monkeypatch: pytest.MonkeyPatch) -> None:
 def served(directory: str, count: int) -> tuple[OGCService, str, dict[str, str]]:
     """Serve the recorded pages of ``directory`` with their recorded headers."""
     records = [
-        json.loads((FIXTURES / directory / f"items-{n}.json").read_text())
+        json.loads((FIXTURES / directory / f"items-{n}.json").read_text(encoding="utf-8"))
         for n in range(1, count + 1)
     ]
     last = records[-1]["response"]["body"]

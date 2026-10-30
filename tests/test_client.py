@@ -43,7 +43,7 @@ def unchecked(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def body(path: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / path).read_text())["response"]["body"]
+    return json.loads((FIXTURES / path).read_text(encoding="utf-8"))["response"]["body"]
 
 
 def serve(
@@ -269,7 +269,7 @@ def test_only_a_created_transport_is_closed() -> None:
 
 
 def record(path: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / path).read_text())
+    return json.loads((FIXTURES / path).read_text(encoding="utf-8"))
 
 
 def without_next(doc: dict[str, Any]) -> dict[str, Any]:

@@ -15,8 +15,6 @@
 #     name: python3
 # ---
 
-# %%
-
 # %% [markdown]
 # # Clients for other web services
 #

@@ -2175,8 +2175,10 @@ Layering rule for anything new:
 - **Rejected:** Repeated keys through a sequence of pairs, since a repeated key already
     travels in the URL, which `_merge_query` keeps. Lists joined with commas, a
     convention each server spells its own way.
-- **Limits:** The service classes still take `str` values only. A caller who passed a
-    `bool` before gets `true` where it got `True`.
+- **Limits:** A caller who passed a `bool` before gets `true` where it got `True`. The
+    service classes' `iter_pages()`, `collect()`, and `item()` take the same types, and
+    `Request` converts its `params` the same way, so a request's identity (D-38) names
+    the query that goes out.
 
 ### D-78: `Transport(user_agent=)` names the calling package
 

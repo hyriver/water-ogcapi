@@ -16,7 +16,7 @@ from urllib.parse import quote, urlsplit
 
 from water_ogcapi._redact import redact_url
 from water_ogcapi._results import ReadOnlyDict
-from water_ogcapi._transport import reject_credentials, reject_non_str, sent_url
+from water_ogcapi._transport import query_strings, reject_credentials, reject_non_str, sent_url
 from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
@@ -57,7 +57,9 @@ class Request:
     method : str, optional
         ``GET``, the default, or ``POST``; every ``next`` link is requested the same way.
     params : mapping of str to str, optional
-        Query parameters of this request only; a ``next`` link carries its own.
+        Query parameters of this request only; a ``next`` link carries its own. An
+        ``int``, ``float``, or ``bool`` value is stored as the text the transport sends
+        (D-77).
     body : bytes, optional
         The body, sent to every ``next`` link as well.
     headers : mapping of str to str, optional
@@ -89,8 +91,9 @@ class Request:
         if method not in METHODS:
             msg = f"a request is a GET or a POST, got {self.method!r}"
             raise ValidationError(msg)
-        # One reading of params, so the stored copy is the one checked.
-        params = dict(self.params)
+        # One reading of params, converted as the transport sends them (D-77), so the
+        # stored copy is the one checked and the identity names the URL that goes out.
+        params = query_strings(self.params) or {}
         reject_credentials(self.url, params)
         try:
             userinfo = urlsplit(self.url).netloc.rpartition("@")[0]
@@ -347,7 +350,7 @@ def _json_default(value: object) -> object:
 
 
 def _items_query(
-    params: Mapping[str, str] | None,
+    params: Mapping[str, str | int | float | bool] | None,
     bbox: Sequence[float] | None,
     geometry: Mapping[str, Any] | GeoInterface | None,
     cql2: str | Mapping[str, Any] | None,
@@ -365,7 +368,7 @@ def _items_query(
     TypeError
         If a CQL2-JSON filter holds a value JSON cannot encode, such as a set.
     """
-    query = {"f": "json", **(params or {})}
+    query = {"f": "json", **(query_strings(params) or {})}
     if cql2 is not None and not cql2:
         msg = "filter is empty; pass None for no filter"
         raise ValidationError(msg)
@@ -414,7 +417,7 @@ def items_request(
     base_url: str,
     collection: str,
     *,
-    params: Mapping[str, str] | None,
+    params: Mapping[str, str | int | float | bool] | None,
     bbox: Sequence[float] | None,
     geometry: Mapping[str, Any] | GeoInterface | None,
     cql2: str | Mapping[str, Any] | None,

@@ -1096,7 +1096,7 @@ Layering rule for anything new:
 ### D-43: `Transport` is public
 
 - **Status:** accepted. Since 2026-10-16 `request()` refuses a header value that is not
-    printable ASCII (see Limits).
+    printable ASCII (see Limits). Amended by D-75, which exports `Response`.
 - **Date:** 2026-10-15.
 - **Decision:** The package exports `Transport`. A caller tunes the timeout, retries,
     backoff, concurrency, and HTTP/2 by passing one to a service class, and several
@@ -2011,7 +2011,8 @@ Layering rule for anything new:
 
 ### D-70: `Client` is the blocking HTTP class, and `Transport` stays the async engine
 
-- **Status:** accepted. Amends D-48; amended by D-73, which adds `Client.run()`.
+- **Status:** accepted. Amends D-48; amended by D-73, which adds `Client.run()`, and
+    D-75, which exports `Response` and `Download`.
 - **Date:** 2026-10-29.
 - **Decision:** `water_ogcapi.Client` runs one `Transport` on the background loop of
     D-08, as the blocking service classes do, and offers blocking `request()`, `get()`,
@@ -2127,6 +2128,20 @@ Layering rule for anything new:
     retried statuses, which serves the ArcGIS case only.
 - **Limits:** The override sets the count only; the backoff, `Retry-After` handling, and
     `RETRY_STATUS` stay the transport's.
+
+### D-75: `Response` and `Download` are public
+
+- **Status:** accepted. Amends D-43 and D-70, which kept both private.
+- **Date:** 2026-10-30.
+- **Decision:** The package root exports `Response` and `Download`, the classes
+    `Transport.request()` and `download()` already return, unchanged.
+- **Why:** A package built on the transport names them in its own return types, and the
+    HyRiver prototype could only import `Download` from `water_ogcapi._transport`, which
+    a strict type checker accepts and D-21 does not protect.
+- **Rejected:** Protocols that describe the attributes, which a caller would have to
+    keep in step with the classes.
+- **Limits:** Their fields become public API under D-21, so a new field goes last with a
+    default, as for the other result types.
 
 ## Lessons
 

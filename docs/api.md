@@ -19,6 +19,10 @@ and the types they return.
 
 ::: water_ogcapi.Client
 
+::: water_ogcapi.Response
+
+::: water_ogcapi.Download
+
 ::: water_ogcapi.Governor
 
 ## Async API

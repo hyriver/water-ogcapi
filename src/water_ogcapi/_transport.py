@@ -11,6 +11,8 @@ import codecs
 import http.cookiejar
 import json
 import logging
+import math
+import numbers
 import os
 import secrets
 from dataclasses import dataclass
@@ -129,6 +131,34 @@ def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
     if leaked or CREDENTIAL_PARAMS & names:
         msg = "pass the API key in the X-Api-Key header, not as a query parameter"
         raise ValidationError(msg)
+
+
+def _query_strings(
+    params: Mapping[str, str | int | float | bool] | None,
+) -> dict[str, str] | None:
+    """Copy ``params`` with each value as the text it goes out as (D-77).
+
+    A ``bool`` goes out as ``true`` or ``false``, the spelling OGC API, ArcGIS, and NLDI
+    servers take, and a number as Python writes it.
+    """
+    if not params:
+        return None
+    sent: dict[str, str] = {}
+    for name, value in params.items():
+        if isinstance(value, str):
+            sent[name] = value
+        elif isinstance(value, bool):
+            sent[name] = "true" if value else "false"
+        elif isinstance(value, numbers.Integral):
+            sent[name] = str(int(value))
+        elif isinstance(value, float) and math.isfinite(value):
+            sent[name] = str(value)
+        else:
+            # Type only: a name has not passed the D-65 check yet and could hold a secret.
+            kind = "non-finite float" if isinstance(value, float) else type(value).__name__
+            msg = f"query parameter values must be str, int, float, or bool, got {kind}"
+            raise ValidationError(msg)
+    return sent
 
 
 def _reject_unsendable_headers(headers: Mapping[str, str]) -> None:
@@ -647,7 +677,7 @@ class Transport:
         self,
         url: str,
         *,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | int | float | bool] | None = None,
         headers: Mapping[str, str] | None = None,
         governor: Governor | None = None,
         max_retries: int | None = None,
@@ -662,7 +692,7 @@ class Transport:
         method: str,
         url: str,
         *,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | int | float | bool] | None = None,
         headers: Mapping[str, str] | None = None,
         content: bytes | None = None,
         governor: Governor | None = None,
@@ -679,9 +709,11 @@ class Transport:
             HTTP method, such as ``GET`` or ``POST``.
         url : str
             Absolute URL to fetch.
-        params : mapping of str to str, optional
+        params : mapping of str to str, int, float, or bool, optional
             Query parameters, merged into any query already in ``url``. A name in both
-            takes its value from ``params``. Credentials are not allowed here.
+            takes its value from ``params``. A ``bool`` goes out as ``true`` or
+            ``false`` and a number as Python writes it (D-77). Credentials are not
+            allowed here.
         headers : mapping of str to str, optional
             Request headers, credentials included. Each value must be printable ASCII.
         content : bytes, optional
@@ -716,12 +748,13 @@ class Transport:
             If ``params`` carries a credential such as ``api_key``, ``url`` or a
             parameter or header name or header value is not exactly ``str`` (D-65), a
             header value is not printable ASCII, or ``max_retries`` is negative. The
-            message names the header, never its value.
+            message names the header, never its value. Also if a ``params`` value is
+            of another type, or a non-finite float.
         """
         retries = self._retries(max_retries)
         # Copies, so every attempt sends the params and headers that passed the checks.
-        params = dict(params) if params else None
-        reject_credentials(url, params)
+        query = _query_strings(params)
+        reject_credentials(url, query)
         headers = dict(headers or {})
         _reject_unsendable_headers(headers)
         method = method.upper()
@@ -737,7 +770,7 @@ class Transport:
             try:
                 async with sem, asyncio.timeout(self.timeout):
                     # Parsed inside the try so a malformed URL raises a typed ServiceError.
-                    target = _merge_query(url, params) if params else httpx2.URL(url)
+                    target = _merge_query(url, query) if query else httpx2.URL(url)
                     sent = str(target)
                     if self._client is not client or client.is_closed:
                         # aclose() ran while this call waited for a permit or a backoff,
@@ -965,7 +998,7 @@ class Transport:
         url: str,
         path: str | os.PathLike[str],
         *,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | int | float | bool] | None = None,
         headers: Mapping[str, str] | None = None,
         governor: Governor | None = None,
         total: float | None = 3600.0,
@@ -1016,14 +1049,14 @@ class Transport:
             As for `request`.
         """
         retries = self._retries(max_retries)
-        params = dict(params) if params else None
-        reject_credentials(url, params)
+        query = _query_strings(params)
+        reject_credentials(url, query)
         headers = dict(headers or {})
         _reject_unsendable_headers(headers)
         if not any(name.lower() == "accept-encoding" for name in headers):
             headers["Accept-Encoding"] = "identity"
         try:
-            first = _merge_query(url, params) if params else httpx2.URL(url)
+            first = _merge_query(url, query) if query else httpx2.URL(url)
         except httpx2.InvalidURL:
             first = None
         if first is None:

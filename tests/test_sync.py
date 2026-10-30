@@ -19,7 +19,7 @@ import pytest
 import water_ogcapi
 from water_ogcapi import Page, QueryResult, Transport, _sync, aio
 from water_ogcapi.aio import NWIS, FabricData, GeoConnex, OGCService
-from water_ogcapi.exceptions import PaginationError, ValidationError
+from water_ogcapi.exceptions import PaginationError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -525,3 +525,17 @@ def test_the_root_exports_the_types_the_transport_returns(tmp_path: Any) -> None
         assert isinstance(client.get(f"{BASE}/a"), water_ogcapi.Response)
         assert isinstance(client.download(f"{BASE}/f", tmp_path / "f"), water_ogcapi.Download)
     assert {"Response", "Download"} <= set(water_ogcapi.__all__)
+
+
+def test_a_client_call_takes_its_own_retries_and_typed_params() -> None:
+    """D-74 and D-77 reach the blocking wrappers, which copy the async signatures."""
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return httpx2.Response(503)
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=3, backoff=0)
+    with water_ogcapi.Client(transport=transport) as client, pytest.raises(ServiceError):
+        client.get(f"{BASE}/a", max_retries=0, params={"x": True})
+    assert [r.url.query for r in seen] == [b"x=true"]

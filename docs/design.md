@@ -2159,6 +2159,25 @@ Layering rule for anything new:
 - **Limits:** The charset comes from the header only, never from a byte-order mark or an
     XML declaration.
 
+### D-77: Transport query values can be numbers and booleans
+
+- **Status:** accepted.
+- **Date:** 2026-10-30.
+- **Decision:** `Transport.request()`, `get()`, and `download()` take `params` values of
+    type `str`, `int`, `float`, or `bool`. A `bool` goes out as `true` or `false`, and a
+    number as Python writes it. Any other value, and a non-finite float, raises
+    `ValidationError` before sending, naming the type and never the parameter, whose
+    name has not passed the D-65 check yet.
+- **Why:** ArcGIS REST and the NLDI take integers and booleans (`inSR=4326`,
+    `returnIdsOnly=true`), and the `Mapping[str, str]` type made a strict type checker
+    reject working code. Without a conversion, `True` went out as `True` and `None` as
+    `None`, which a server reads as a value.
+- **Rejected:** Repeated keys through a sequence of pairs, since a repeated key already
+    travels in the URL, which `_merge_query` keeps. Lists joined with commas, a
+    convention each server spells its own way.
+- **Limits:** The service classes still take `str` values only. A caller who passed a
+    `bool` before gets `true` where it got `True`.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

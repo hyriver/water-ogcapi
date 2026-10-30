@@ -22,7 +22,7 @@ FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}
 
 
 def body(path: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / path).read_text())["response"]["body"]
+    return json.loads((FIXTURES / path).read_text(encoding="utf-8"))["response"]["body"]
 
 
 def serve(routes: dict[str, Any]) -> tuple[Transport, list[str]]:

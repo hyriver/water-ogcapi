@@ -13,7 +13,7 @@ import pytest
 import water_ogcapi
 from water_ogcapi import Checkpoint, Request, Transport
 from water_ogcapi.aio import OGCService
-from water_ogcapi.exceptions import ServiceError, ValidationError
+from water_ogcapi.exceptions import ValidationError
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BASE = "https://api.waterdata.usgs.gov/ogcapi/v1"
@@ -150,7 +150,8 @@ def test_a_credential_in_params_is_refused_before_the_check_sends() -> None:
     assert seen == []
 
 
-def test_a_cached_index_is_revalidated_once_for_a_name_it_lacks() -> None:
+def test_a_cached_index_answers_an_unknown_name_without_a_request() -> None:
+    """D-80: the cached index decides; refresh() fetches one with a name added since."""
     routes = {"/collections": {"collections": [{"id": "old"}]}}
     transport, seen = serve(routes)
     service = OGCService(BASE, transport=transport)
@@ -158,27 +159,10 @@ def test_a_cached_index_is_revalidated_once_for_a_name_it_lacks() -> None:
     async def run() -> None:
         await service.collect("old")
         routes["/collections"] = {"collections": [{"id": "old"}, {"id": "new"}]}
+        with pytest.raises(ValidationError, match=r"use one of old$"):
+            await service.collect("new")
+        service.refresh()
         await service.collect("new")
-        with pytest.raises(ValidationError, match="use one of old, new"):
-            await service.collect("gone")
-
-    asyncio.run(run())
-    index = [path for path in seen if path == "/collections"]
-    # The first fetch, a revalidation that finds "new", and one that does not find "gone".
-    assert len(index) == 3
-
-
-def test_a_failed_revalidation_leaves_the_cached_copy_fresh() -> None:
-    routes = {"/collections": {"collections": [{"id": "old"}]}}
-    transport, seen = serve(routes)
-    service = OGCService(BASE, transport=transport)
-
-    async def run() -> None:
-        await service.collect("old")
-        del routes["/collections"]
-        with pytest.raises(ServiceError, match="HTTP 404"):
-            await service.collect("typo")
-        await service.collect("old")
 
     asyncio.run(run())
     assert seen.count("/collections") == 2

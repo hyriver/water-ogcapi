@@ -1216,7 +1216,8 @@ Layering rule for anything new:
 
 ### D-47: Queries are checked against cached metadata before the first page request
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-80, which drops the revalidation of a cached copy
+    that lacks a name.
 - **Date:** 2026-10-19.
 - **Decision:** `iter_pages()`, `collect()`, and `item()` take `validate=True`. Before
     the first page request each checks the collection against the cached collection
@@ -2208,6 +2209,22 @@ Layering rule for anything new:
     pages already carry no body (D-23), so the copy kept no page evidence apart.
 - **Rejected:** Keeping the copy and documenting its cost.
 - **Limits:** Editing a feature in either result edits it in both.
+
+### D-80: A name the cached metadata lacks is refused without another request
+
+- **Status:** accepted. Amends D-47.
+- **Date:** 2026-10-30.
+- **Decision:** `validate=True` checks a collection and its query names against the
+    cached index and `/queryables` as they are. A name missing from a copy cached within
+    the hour raises `ValidationError` at once; `refresh()` drops the copy, so the next
+    query fetches one that lists a name the server added since.
+- **Why:** The final review found that the revalidation D-47 added made every typo after
+    a service's first query cost a live request, while the case it served, a collection
+    or queryable added within the cached hour, is rare for these services. It also kept
+    a `stale` path through the metadata cache.
+- **Rejected:** Keeping the revalidation behind a keyword, which keeps the path.
+- **Limits:** A name the server added within the hour reads as unknown until the copy
+    expires or the caller calls `refresh()`.
 
 ## Lessons
 

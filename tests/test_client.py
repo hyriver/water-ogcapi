@@ -551,6 +551,25 @@ def test_a_passing_count_check_is_listed_when_another_check_fails() -> None:
     assert result.pagination.checks == ("end_of_links", "count", "unique_ids")
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.example/collections",
+        f"http://{GEOCONNEX.removeprefix('https://')}/collections",
+        f"{GEOCONNEX}:8443/collections",
+    ],
+    ids=["host", "scheme", "port"],
+)
+def test_send_refuses_a_url_outside_the_base_origin(url: str) -> None:
+    """D-34, D-40: the service's headers never leave the origin of ``base_url``."""
+    transport, seen = serve({"ok": True})
+    service = OGCService(GEOCONNEX, transport=transport)
+    with pytest.raises(ServiceError, match="refused a URL outside") as excinfo:
+        asyncio.run(service._send("GET", url))
+    assert not seen
+    assert excinfo.value.attempts == 0
+
+
 def test_a_next_link_back_to_the_first_request_is_a_repeat() -> None:
     doc = hu02()[0]
     first = f"{GEOCONNEX}/collections/hu02/items?f=json&limit=10"

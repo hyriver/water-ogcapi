@@ -133,7 +133,7 @@ def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
         raise ValidationError(msg)
 
 
-def _query_strings(
+def query_strings(
     params: Mapping[str, str | int | float | bool] | None,
 ) -> dict[str, str] | None:
     """Copy ``params`` with each value as the text it goes out as (D-77).
@@ -769,7 +769,7 @@ class Transport:
         """
         retries = self._retries(max_retries)
         # Copies, so every attempt sends the params and headers that passed the checks.
-        query = _query_strings(params)
+        query = query_strings(params)
         reject_credentials(url, query)
         headers = dict(headers or {})
         _reject_unsendable_headers(headers)
@@ -1065,7 +1065,7 @@ class Transport:
             As for `request`.
         """
         retries = self._retries(max_retries)
-        query = _query_strings(params)
+        query = query_strings(params)
         reject_credentials(url, query)
         headers = dict(headers or {})
         _reject_unsendable_headers(headers)

@@ -34,7 +34,13 @@ from water_ogcapi._paging import (
 from water_ogcapi._query import Checkpoint, Held, Request, items_request, path_segment
 from water_ogcapi._redact import REDACTED
 from water_ogcapi._results import Page, QueryResult, crs_of
-from water_ogcapi._transport import Transport, parse_count, reject_credentials, reject_non_str
+from water_ogcapi._transport import (
+    Transport,
+    parse_count,
+    query_strings,
+    reject_credentials,
+    reject_non_str,
+)
 from water_ogcapi.exceptions import (
     PaginationError,
     PartialResultsError,
@@ -319,7 +325,9 @@ class OGCService:
         """
         return {}
 
-    def _limited(self, params: Mapping[str, str] | None) -> Mapping[str, str] | None:
+    def _limited(
+        self, params: Mapping[str, str | int | float | bool] | None
+    ) -> Mapping[str, str] | None:
         """Return ``params`` with the profile's ``default_limit`` added unless given.
 
         Raises
@@ -327,11 +335,12 @@ class OGCService:
         ValidationError
             If ``limit`` is not an integer from 1 to the profile's ``max_limit``.
         """
+        # Converted as the transport sends them (D-77), so the check reads what goes out.
+        sent = query_strings(params)
         if self.profile is None:
-            return params
-        query = {"limit": str(self.profile.default_limit), **(params or {})}
-        # str(): httpx2 sends an int limit as given, so the check reads it the same way.
-        count = parse_count(str(query["limit"]))
+            return sent
+        query = {"limit": str(self.profile.default_limit), **(sent or {})}
+        count = parse_count(query["limit"])
         if count is None or not 1 <= count <= self.profile.max_limit:
             msg = (
                 f"limit takes an integer from 1 to {self.profile.max_limit}, got {query['limit']!r}"
@@ -651,7 +660,7 @@ class OGCService:
         self,
         collection: str,
         *,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | int | float | bool] | None = None,
         bbox: Sequence[float] | None = None,
         geometry: Mapping[str, Any] | GeoInterface | None = None,
         filter: str | Mapping[str, Any] | None = None,  # noqa: A002
@@ -672,10 +681,11 @@ class OGCService:
         ----------
         collection : str
             The collection id.
-        params : mapping of str to str, optional
+        params : mapping of str to str, int, float, or bool, optional
             Query parameters of the first request, such as ``limit`` or ``datetime``,
             with ``f=json`` and the profile's ``default_limit`` added unless given.
-            Later requests take their query from the ``next`` link.
+            Values go out as `Transport.request` sends them (D-77). Later requests take
+            their query from the ``next`` link.
         bbox : sequence of float, optional
             ``(west, south, east, north)`` in CRS84, or six values with the minimum and
             maximum heights, sent as the ``bbox`` parameter with every digit kept. West
@@ -799,7 +809,7 @@ class OGCService:
         self,
         collection: str,
         *,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | int | float | bool] | None = None,
         bbox: Sequence[float] | None = None,
         geometry: Mapping[str, Any] | GeoInterface | None = None,
         filter: str | Mapping[str, Any] | None = None,  # noqa: A002
@@ -932,7 +942,7 @@ class OGCService:
         collection: str,
         item_id: str | int,
         *,
-        params: Mapping[str, str] | None = None,
+        params: Mapping[str, str | int | float | bool] | None = None,
         validate: bool = True,
     ) -> Page:
         """Fetch one feature of a collection by its id (D-22).
@@ -943,9 +953,9 @@ class OGCService:
             The collection id.
         item_id : str or int
             The feature id, percent-encoded into the URL path.
-        params : mapping of str to str, optional
+        params : mapping of str to str, int, float, or bool, optional
             Query parameters, such as ``crs`` or ``skipGeometry``, with ``f=json`` added
-            unless given.
+            unless given. Values go out as `Transport.request` sends them (D-77).
         validate : bool, optional
             Before the request, check ``collection`` against the cached collection
             index, as `iter_pages` does. Defaults to ``True``.
@@ -972,7 +982,7 @@ class OGCService:
             f"{self.base_url}/collections/{path_segment(collection, 'collection')}"
             f"/items/{path_segment(item_id, 'item_id')}"
         )
-        query = {"f": "json", **(params or {})}
+        query = {"f": "json", **(query_strings(params) or {})}
         reject_credentials(url, query)
         if validate:
             await self._validate(collection, None, None)

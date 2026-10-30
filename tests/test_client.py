@@ -562,6 +562,18 @@ def test_a_next_link_back_to_the_first_request_is_a_repeat() -> None:
     assert err.result.geojson["features"] == doc["features"]
 
 
+def test_a_next_link_back_with_a_bool_param_is_a_repeat() -> None:
+    """D-77: a bool goes out as ``true``, and the repeat check reads the same spelling."""
+    doc = hu02()[0]
+    first = f"{GEOCONNEX}/collections/hu02/items?f=json&limit=10&skipGeometry=true"
+    links = [{**link, "href": first} if link["rel"] == "next" else link for link in doc["links"]]
+    transport, seen = serve({**doc, "links": links}, doc)
+    service = OGCService(GEOCONNEX, transport=transport)
+    _, err = collected(service, params={"limit": 10, "skipGeometry": True})
+    assert [str(r.url) for r in seen] == [first]
+    assert isinstance(err, PartialResultsError)
+
+
 def stamped(doc: dict[str, Any], rel: str, suffix: str) -> dict[str, Any]:
     """Copy ``doc`` with ``suffix`` appended to the href of its ``rel`` link."""
     links = [
@@ -1662,3 +1674,10 @@ def test_checkpoints_of_one_run_share_their_held_record() -> None:
     records = {id(p.checkpoint.held._ids) for p in pages if p.checkpoint is not None}
     assert len(records) == 1
     assert [len(p.checkpoint.held) for p in pages[:3] if p.checkpoint] == [1, 2, 3]
+
+
+def test_a_request_converts_its_params_as_the_transport_sends_them() -> None:
+    """D-77: the identity names the URL that goes out, so a next link back to it repeats."""
+    request = Request(url=f"{BASE}/collections/c/items", params={"skipGeometry": True, "limit": 50})
+    assert dict(request.params) == {"skipGeometry": "true", "limit": "50"}
+    assert "skipGeometry=true" in request.identity()[1]

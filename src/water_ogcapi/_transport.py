@@ -616,6 +616,15 @@ class Transport:
             return None
         return self._delay(attempt) if wait is None else wait
 
+    def _retries(self, override: int | None) -> int:
+        """Return the retries one call may make: ``override``, or the transport's."""
+        if override is None:
+            return self.max_retries
+        if override < 0:
+            msg = f"max_retries must not be negative, got {override}"
+            raise ValidationError(msg)
+        return override
+
     async def get(
         self,
         url: str,
@@ -623,9 +632,12 @@ class Transport:
         params: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
         governor: Governor | None = None,
+        max_retries: int | None = None,
     ) -> Response:
         """Send a ``GET`` through `request`, which documents the parameters and errors."""
-        return await self.request("GET", url, params=params, headers=headers, governor=governor)
+        return await self.request(
+            "GET", url, params=params, headers=headers, governor=governor, max_retries=max_retries
+        )
 
     async def request(
         self,
@@ -636,6 +648,7 @@ class Transport:
         headers: Mapping[str, str] | None = None,
         content: bytes | None = None,
         governor: Governor | None = None,
+        max_retries: int | None = None,
     ) -> Response:
         """Send a request, retrying transient failures.
 
@@ -658,6 +671,10 @@ class Transport:
         governor : Governor, optional
             Paces every attempt, retries included, and reads the rate-limit headers of
             every response (D-06). Each service class passes its own.
+        max_retries : int, optional
+            Retries after the first attempt for this call, the transport's
+            ``max_retries`` when omitted (D-74). ``0`` sends one attempt, for a request
+            that must not be replayed or a failure the caller handles itself.
 
         Returns
         -------
@@ -679,10 +696,11 @@ class Transport:
             If called from an event loop other than the one this transport bound to.
         ValidationError
             If ``params`` carries a credential such as ``api_key``, ``url`` or a
-            parameter or header name or header value is not exactly ``str`` (D-65), or
-            a header value is not printable ASCII. The message names the header,
-            never its value.
+            parameter or header name or header value is not exactly ``str`` (D-65), a
+            header value is not printable ASCII, or ``max_retries`` is negative. The
+            message names the header, never its value.
         """
+        retries = self._retries(max_retries)
         # Copies, so every attempt sends the params and headers that passed the checks.
         params = dict(params) if params else None
         reject_credentials(url, params)
@@ -693,8 +711,8 @@ class Transport:
         pacer = _UNPACED if governor is None else governor
         # Every error names the request as sent, query included (docs/design.md D-24).
         sent = url
-        for attempt in range(self.max_retries + 1):
-            final = attempt == self.max_retries
+        for attempt in range(retries + 1):
+            final = attempt == retries
             status: int | None = None
             # Outside the permit, so a paced wait never blocks another service.
             await pacer.wait()
@@ -734,7 +752,7 @@ class Transport:
                     redact_url(sent),
                     resp.status_code,
                     attempt + 1,
-                    self.max_retries,
+                    retries,
                     delay,
                 )
                 await asyncio.sleep(delay)
@@ -758,7 +776,7 @@ class Transport:
                 redact_url(sent),
                 failure,
                 attempt + 1,
-                self.max_retries,
+                retries,
                 delay,
             )
             # shortcut: no jitter, so the retries of NWIS pieces (D-56) that fail together
@@ -776,6 +794,7 @@ class Transport:
         where: str,
         quiet: bool,
         attempt: int,
+        retries: int,
         redirects: int,
     ) -> tuple[int, dict[str, str], int, int] | float:
         """Write a 2xx body to ``out``; for an error, return the retry delay or raise.
@@ -801,7 +820,7 @@ class Transport:
                 content += chunk
                 if len(content) >= MAX_ERROR_BODY:
                     break
-        delay = None if attempt == self.max_retries else self._retry_delay(resp, attempt)
+        delay = None if attempt == retries else self._retry_delay(resp, attempt)
         if delay is None:
             _raise_for(
                 resp,
@@ -818,7 +837,7 @@ class Transport:
             resp.status_code,
             where,
             attempt + 1,
-            self.max_retries,
+            retries,
             delay,
         )
         return delay
@@ -844,13 +863,14 @@ class Transport:
         out: BinaryIO,
         pacer: Governor | _Unpaced,
         attempt: int,
+        retries: int,
     ) -> tuple[int, dict[str, str], int, int] | float:
         """Run one download attempt; return the result, or the delay before a retry.
 
         Raises the attempt's error when it is final or not worth retrying. Every error is
         raised outside an ``except`` block, so none chains a raw ``Location``.
         """
-        final = attempt == self.max_retries
+        final = attempt == retries
         # Quiet once any URL of the chain has a query or the chain has left the first
         # origin: from then on a server's text can echo a signature.
         named, quiet = _bare(first), bool(first.query)
@@ -879,6 +899,7 @@ class Transport:
                                 where=where,
                                 quiet=quiet,
                                 attempt=attempt,
+                                retries=retries,
                                 redirects=redirects,
                             )
                 except _RedirectedError as caught:
@@ -916,7 +937,7 @@ class Transport:
             named,
             failure,
             attempt + 1,
-            self.max_retries,
+            retries,
             delay,
         )
         return delay
@@ -930,6 +951,7 @@ class Transport:
         headers: Mapping[str, str] | None = None,
         governor: Governor | None = None,
         total: float | None = 3600.0,
+        max_retries: int | None = None,
     ) -> Download:
         """Stream a ``GET`` response to a file, following redirects (D-69).
 
@@ -956,7 +978,7 @@ class Transport:
             Absolute URL of the file.
         path : str or path-like
             Where to write it.
-        params, headers, governor
+        params, headers, governor, max_retries
             As for `request`. ``params`` go on the first request only.
         total : float or None, optional
             Seconds the whole call may take, retries, redirects, and waits included,
@@ -975,6 +997,7 @@ class Transport:
         ValidationError
             As for `request`.
         """
+        retries = self._retries(max_retries)
         params = dict(params) if params else None
         reject_credentials(url, params)
         headers = dict(headers or {})
@@ -997,10 +1020,17 @@ class Transport:
         made = 0
         try:
             async with asyncio.timeout(total):
-                for attempt in range(self.max_retries + 1):
+                for attempt in range(retries + 1):
                     made = attempt + 1
                     outcome = await self._stream_to(
-                        client, sem, first, headers=headers, out=out, pacer=pacer, attempt=attempt
+                        client,
+                        sem,
+                        first,
+                        headers=headers,
+                        out=out,
+                        pacer=pacer,
+                        attempt=attempt,
+                        retries=retries,
                     )
                     if not isinstance(outcome, tuple):
                         await asyncio.sleep(outcome)

@@ -958,8 +958,8 @@ Layering rule for anything new:
 
 ### D-38: A request is identified by its method, URL as sent, and body
 
-- **Status:** accepted; amended by D-39, D-44, and D-52, which replaces `_traverse()`
-    with `_run()`. Amends D-22 and D-24.
+- **Status:** accepted; amended by D-39, D-44, D-52, which replaces `_traverse()` with
+    `_run()`, and D-74, which lets one call turn its retries off. Amends D-22 and D-24.
 - **Date:** 2026-10-13.
 - **Decision:** `Transport.request(method, url, params=, headers=, content=)` sends
     every request, and `get()` calls it. Every `ServiceError` and every `Page` carries
@@ -2107,6 +2107,26 @@ Layering rule for anything new:
     propagates before cleanup finishes on the loop. There is no blocking iterator over
     an async iterator yet; a coroutine wrapping `anext()` steps one item, and an
     `iterate()` method can come as an addition.
+
+### D-74: One call can set its own retries
+
+- **Status:** accepted. Amends D-38, whose `POST` retries a caller can now turn off.
+- **Date:** 2026-10-30.
+- **Decision:** `Transport.request()`, `get()`, and `download()` take `max_retries=`,
+    the retries after the first attempt for that call, defaulting to the transport's
+    `max_retries`. `Client` passes it through. A negative count raises
+    `ValidationError`.
+- **Why:** A HyRiver prototype on this package found two requests that a shared
+    transport must not retry: a process execution, which is not safe to replay, and an
+    ArcGIS query whose response passes the server's size limit, which fails with HTTP
+    500 every time, so the client halves the chunk instead. The transport retried WBD's
+    HUC12 500 three times, 35 to 44 seconds per call. With retries fixed per transport,
+    each case needed a second transport and so a second connection pool and concurrency
+    bound.
+- **Rejected:** A second transport per use, which splits the pool. A per-call set of
+    retried statuses, which serves the ArcGIS case only.
+- **Limits:** The override sets the count only; the backoff, `Retry-After` handling, and
+    `RETRY_STATUS` stay the transport's.
 
 ## Lessons
 

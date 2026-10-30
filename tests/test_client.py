@@ -114,51 +114,12 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     return now
 
 
-def test_an_expired_entry_revalidates_and_a_304_keeps_its_payload(clock: list[float]) -> None:
+def test_an_expired_entry_is_fetched_again_without_validators(clock: list[float]) -> None:
+    """D-81: no conditional request, even after a response that carried an ETag."""
     transport, seen = serve(
         httpx2.Response(200, json=body("nwis/collections.json"), headers={"ETag": '"v1"'}),
-        httpx2.Response(304, headers={"ETag": '"v2"'}),
-        httpx2.Response(304),
-        httpx2.Response(304),
+        body("geoconnex/collections.json"),
     )
-    service = OGCService(BASE, transport=transport)
-
-    async def run() -> list[Any]:
-        results = [await service.collections()]
-        clock[0] += TTL
-        results += [await service.collections(), await service.collections()]
-        for _ in range(2):
-            clock[0] += TTL
-            results.append(await service.collections())
-        return results
-
-    results = asyncio.run(run())
-    assert all(result == results[0] for result in results)
-    # The third call is served from the entry the 304 renewed. A 304's ETag replaces
-    # the stored one, and a 304 without one keeps it.
-    assert [r.headers.get("if-none-match") for r in seen] == [None, '"v1"', '"v2"', '"v2"']
-
-
-def test_last_modified_revalidates_with_if_modified_since(clock: list[float]) -> None:
-    stamp = "Wed, 07 Oct 2026 12:00:00 GMT"
-    transport, seen = serve(
-        httpx2.Response(200, json=body("nwis/collections.json"), headers={"Last-Modified": stamp}),
-        httpx2.Response(304),
-    )
-    service = OGCService(BASE, transport=transport)
-
-    async def run() -> None:
-        await service.collections()
-        clock[0] += TTL
-        await service.collections()
-
-    asyncio.run(run())
-    assert seen[1].headers.get("if-modified-since") == stamp
-    assert "if-none-match" not in seen[1].headers
-
-
-def test_an_expired_entry_without_validators_is_replaced(clock: list[float]) -> None:
-    transport, seen = serve(body("nwis/collections.json"), body("geoconnex/collections.json"))
     service = OGCService(BASE, transport=transport)
 
     async def run() -> tuple[Any, Any]:

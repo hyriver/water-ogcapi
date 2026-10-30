@@ -171,7 +171,7 @@ Layering rule for anything new:
 
 ### D-07: In-memory, success-only metadata cache
 
-- **Status:** accepted; built in #17.
+- **Status:** accepted; built in #17; amended by D-81, which drops revalidation.
 - **Decision:** Per-URL TTL. Writes only on 2xx. Revalidation with `ETag` and
     `Last-Modified`. Expired entries are kept so they can revalidate, and a 304 keeps
     the original payload. `refresh()` clears the cache and the collection index. No
@@ -2225,6 +2225,25 @@ Layering rule for anything new:
 - **Rejected:** Keeping the revalidation behind a keyword, which keeps the path.
 - **Limits:** A name the server added within the hour reads as unknown until the copy
     expires or the caller calls `refresh()`.
+
+### D-81: The metadata cache refetches an expired document
+
+- **Status:** accepted. Amends D-07.
+- **Date:** 2026-10-30.
+- **Decision:** An expired metadata entry is fetched again in full. No `If-None-Match`
+    or `If-Modified-Since` goes out, so any 304 to a metadata request raises
+    `ServiceError`. `Transport` still returns a 304 to a caller who sends conditional
+    headers itself, and `download()` still keeps the file on one (D-69).
+- **Why:** D-07's Limits already recorded that none of the three services sends `ETag`
+    or `Last-Modified`. A probe on 2026-10-30 found none on the metadata endpoints of
+    the other pygeoapi services the HyRiver plan uses either (GDP, the NLDI processes),
+    only CDN `age` or `cache-control`. ArcGIS layers (3DHP, WBD, NLD) send an `ETag`,
+    but their metadata belongs to a HyRiver client, not to this cache. The revalidation
+    was a validator store, conditional headers, and 304 renewal that no server
+    exercised.
+- **Rejected:** Keeping it for a future server that sends validators: an expired
+    document is one small JSON request an hour.
+- **Limits:** A server that starts sending validators gets a full request each hour.
 
 ## Lessons
 

@@ -1254,7 +1254,10 @@ def test_a_resumed_collect_sends_no_request_for_a_held_page() -> None:
     assert result.pagination.completeness == "complete"
     assert result.pagination.checks == ("end_of_links", "count", "unique_ids")
     assert result.checkpoint is None
-    assert result.geojson["features"][0] is not err.result.geojson["features"][0]
+    held = err.result.geojson["features"]
+    assert result.geojson["features"][0] is held[0], "D-79: the features are shared"
+    assert result.geojson["features"] is not held, "in a new list"
+    assert len(held) == len(docs[0]["features"]), "so the earlier result keeps its own"
     assert all(p.checkpoint is None for p in result.pages)
 
 

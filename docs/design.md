@@ -2054,23 +2054,27 @@ Layering rule for anything new:
     6.0.3 has no Python 3.15 wheel for any platform, so `dev` and `docs` still build it
     from its sdist everywhere.
 
-### D-72: The offline tests run on Linux, macOS, and Windows
+### D-72: CI tests and installs `dev` on Linux, macOS, and Windows
 
 - **Status:** accepted. Amends D-59.
 - **Date:** 2026-10-30.
 - **Decision:** The `ci.yml` test job runs `test313` and `test315` on `ubuntu-latest`,
     `macos-latest`, and `windows-latest`, one runner per pixi platform, as six jobs
-    named `Test (<environment>, <runner>)`. `typecheck`, `lint`, and the docs build stay
-    on Ubuntu, since none of them depends on the platform.
+    named `Test (<environment>, <runner>)`. A `dev-install` job installs the `dev`
+    environment on the same three runners, as `Install dev (<runner>)`. `typecheck`,
+    `lint`, and the docs build stay on Ubuntu, since none of them depends on the
+    platform.
 - **Why:** Chosen by the maintainer. The lock covers three platforms (D-59), but CI
     installed only the `linux-64` test environments, so the `osx-arm64` and `win-64`
     entries and the platform-dependent tests (fork, symlinks, file modes) ran only on
-    the maintainer's Mac or not at all.
+    the maintainer's Mac or not at all. No CI job installed `dev`, so its Linux entry
+    locked an orjson sdist that failed to build (D-71) until a Linux user installed it.
 - **Rejected:** One summary job for the ruleset to require, which would keep the
     required names fixed across matrix changes at the cost of a job that only reports.
-- **Limits:** No CI job installs `dev`, so a wheel missing from it, the case D-71 fixes,
-    still shows only when someone installs it. Each change to the matrix renames
-    required checks, which the ruleset must follow (`AGENTS.md`).
+- **Limits:** `typecheck`, `lint`, and `docs` install only on Ubuntu, so a package those
+    environments lock as an sdist for macOS or Windows still shows only when someone
+    installs it there. Each change to a matrix renames required checks, which the
+    ruleset must follow (`AGENTS.md`).
 
 ## Lessons
 

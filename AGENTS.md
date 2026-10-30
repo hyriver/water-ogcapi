@@ -153,10 +153,11 @@ the site on every PR and deploys `main` to GitHub Pages.
     which does not read `.agents/`.
 - The ruleset on `main` names its required checks by job: the six
     `Test (<environment>, <runner>)` jobs (`test313` and `test315` on `ubuntu-latest`,
-    `macos-latest`, and `windows-latest`), `typecheck`, and `lint` from `ci.yml`, and
-    `build` from `docs.yml`. Renaming a job or a matrix entry leaves the old name
-    unreported, so the renaming PR and every PR after it wait forever. Swap the name
-    under `Settings > Rules > Rulesets > Protect main` as that PR merges.
+    `macos-latest`, and `windows-latest`), the three `Install dev (<runner>)` jobs,
+    `typecheck`, and `lint` from `ci.yml`, and `build` from `docs.yml`. Renaming a job
+    or a matrix entry leaves the old name unreported, so the renaming PR and every PR
+    after it wait forever. Swap the name under
+    `Settings > Rules > Rulesets > Protect main` as that PR merges.
 
 ## Git
 

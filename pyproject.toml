@@ -95,9 +95,10 @@ build.targets.wheel.packages = [
 [tool.pixi.workspace]
 channels = [ "conda-forge" ]
 # rasterio, under contextily, ships osx-arm64 wheels for macOS 15.0 and later only (pyproj for
-# 14.0), and pixi builds its sdist, which needs GDAL, below that.
+# 14.0), and pixi builds its sdist, which needs GDAL, below that. orjson ships its Python 3.15
+# Linux wheel for glibc 2.39 only, and its sdist needs a recent Rust.
 platforms = [
-  "linux-64",
+  { platform = "linux-64", glibc = "2.39" },
   { platform = "osx-arm64", macos = "15.0" },
   "win-64",
 ]

@@ -1640,7 +1640,7 @@ Layering rule for anything new:
 
 ### D-59: Python 3.13 is the floor, and the lock covers three platforms
 
-- **Status:** accepted. Amends D-58.
+- **Status:** accepted; amended by D-71. Amends D-58.
 - **Date:** 2026-10-23.
 - **Decision:** `requires-python` is `>=3.13`. The offline tests run in `test313` and
     `test315`, ruff targets `py313`, and pyright checks as 3.13. The `dev`, `typecheck`,
@@ -2034,6 +2034,25 @@ Layering rule for anything new:
     `Transport` (D-10). A blocking call made inside a coroutine blocks that loop until
     it returns (D-48). `Response` and `Download`, which the methods return, stay private
     types read through their documented attributes (D-43).
+
+### D-71: The Linux lock assumes glibc 2.39
+
+- **Status:** accepted. Amends D-59.
+- **Date:** 2026-10-30.
+- **Decision:** The `linux-64` platform entry declares `glibc = "2.39"`, as the
+    `osx-arm64` entry declares macOS 15.
+- **Why:** orjson 3.13.0, in `dev` for the decode benchmark (Q-09), ships its Python
+    3.15 Linux wheel as `manylinux_2_39` only. Under pixi's default glibc 2.28 the lock
+    took the sdist, and `pixi install -e dev` on Ubuntu failed building it: the sdist
+    needs Rust 1.95. With the floor the lock takes the wheel. The CI runners
+    (`ubuntu-latest`) have glibc 2.39.
+- **Rejected:** A `system-requirements` table on the `dev` feature alone, which pixi
+    0.83 refuses once the platforms carry their own floors. Leaving orjson out of `dev`
+    on Linux, which drops the benchmark's orjson arm there.
+- **Limits:** No pixi environment installs on a Linux older than glibc 2.39 (Ubuntu
+    22.04, Debian 12); `pip` installs the package there, since it is pure Python. PyYAML
+    6.0.3 has no Python 3.15 wheel for any platform, so `dev` and `docs` still build it
+    from its sdist everywhere.
 
 ## Lessons
 

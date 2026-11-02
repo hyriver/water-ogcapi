@@ -35,7 +35,7 @@ dependencies = [
   "httpx2>=2.12",
 ]
 optional-dependencies.arrow = [
-  "pyarrow>=17",
+  "pyarrow>=24",
   "pyproj>=3.7",
   "shapely>=2.1",
 ]

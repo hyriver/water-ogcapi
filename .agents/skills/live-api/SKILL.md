@@ -14,7 +14,10 @@ A leaked key ends up in git history, CI logs, or a public issue, where anyone ca
 its quota. Recorded fixtures and copied URLs are the easy ways for it to reach disk.
 
 - Read the key from the `USGS_API_KEY` environment variable. Never print it or write it
-    into a file, commit, issue, or chat message.
+    into a file, commit, issue, or chat message. Run an offline probe of code that reads
+    the variable as `env -u USGS_API_KEY <probe>` or with a fake value, and print only
+    comparisons (`headers["X-Api-Key"] == FAKE`); put `env -u` on the probe command
+    only, since the redaction filter below reads the variable.
 - USGS documents two forms: an `X-Api-Key` request header and an `api_key` query
     parameter. Use the header. The query form puts the key in the request URL, and the
     server may echo query parameters into the `next` links of the response body.
@@ -45,6 +48,13 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
 ## Quota
 
 - Keep probes small: a low `limit`, one page unless the question is about paging.
+- When a script derives a committed artifact (a snapshot, a fixture) from a live
+    response, save the raw response once, scrubbed as a fixture is, to the scratchpad
+    and never the repo, and develop the derivation against that file. Refetch only to
+    confirm the final artifact.
+- A test run reaches the live services only with `-m network` (`test-network`) or
+    `-m ''` (`test-all`); `addopts` deselects network-marked tests everywhere else, so a
+    narrowed run (`pixi r -e test315 pytest tests/test_x.py`) stays offline.
 - Probe through `Transport(max_retries=0)` so one call sends one request. The default
     retries up to three times, and the caller never sees the intermediate responses.
 - Read `X-RateLimit-Remaining` on each response and stop well before zero. It lags a

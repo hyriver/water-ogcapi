@@ -111,7 +111,9 @@ the site on every PR and deploys `main` to GitHub Pages.
 - NumPy-convention docstrings.
 - Source in `src/water_ogcapi/`, tests in `tests/`.
 - Offline tests mock HTTP with `httpx2.MockTransport`. Tests that reach a real server
-    carry `@pytest.mark.network`, and CI never requires them.
+    carry `@pytest.mark.network`, and CI never requires them. pytest's `addopts`
+    deselects them, so every pytest call runs offline unless it passes `-m network`
+    (`test-network`) or `-m ''` (`test-all`).
 
 ## Gotchas
 

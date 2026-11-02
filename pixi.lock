@@ -2232,7 +2232,7 @@ packages:
   requires_dist:
   - h2>=4.4.1,<5
   - httpx2>=2.12
-  - pyarrow>=17 ; extra == 'arrow'
+  - pyarrow>=24 ; extra == 'arrow'
   - pyproj>=3.7 ; extra == 'arrow'
   - shapely>=2.1 ; extra == 'arrow'
   requires_python: '>=3.13'

@@ -1641,7 +1641,9 @@ Layering rule for anything new:
     a conda user installs pyarrow and shapely alongside. A query that asks for another
     CRS does not convert; convert the CRS84 result and reproject the frame. shapely 2.0
     (GEOS 3.11) rejects a third coordinate in GeoJSON, so the extra needs shapely 2.1.
-    D-59 sets the development lock's macOS floor.
+    pyarrow 23 and earlier order inferred struct fields by name, which puts a property
+    such as `a` before `id` (probed on 23.0.1 and 24.0.0), so the extra needs pyarrow
+    24\. D-59 sets the development lock's macOS floor.
 
 ### D-59: Python 3.13 is the floor, and the lock covers three platforms
 

@@ -336,6 +336,22 @@ def test_without_the_extra_the_error_names_it(
     assert info.value.name == module
 
 
+@pytest.mark.parametrize("unreadable", ["result", "page"])
+def test_without_the_extra_its_error_comes_before_the_document_is_read(
+    monkeypatch: pytest.MonkeyPatch, unreadable: str
+) -> None:
+    """A result that lost ``features`` and a page with no body raise the extra's error."""
+    if unreadable == "result":
+        source: QueryResult | Page = result_of([point(1, -77.0)])
+        del source.geojson["features"]
+    else:
+        source = page_of(None)
+    monkeypatch.delitem(sys.modules, "water_ogcapi._arrow", raising=False)
+    monkeypatch.setitem(sys.modules, "pyarrow", None)
+    with pytest.raises(ModuleNotFoundError, match=r"water-ogcapi\[arrow\]"):
+        source.to_arrow()
+
+
 def test_another_missing_module_is_raised_as_it_is(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "water_ogcapi._arrow", None)
     with pytest.raises(ModuleNotFoundError) as info:

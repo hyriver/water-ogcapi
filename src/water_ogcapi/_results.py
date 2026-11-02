@@ -138,8 +138,11 @@ class CRS:
     source: CRSSource
 
 
-def _to_table(features: list[Any], crs: CRS) -> pa.Table:
-    """Convert ``features`` through `_arrow`, naming the extra when a module is missing."""
+def _converter() -> Callable[[list[Any], CRS], pa.Table]:
+    """Import `_arrow`'s converter, naming the extra when a module is missing.
+
+    Called before the document is read, so a missing extra is the first error.
+    """
     try:
         from water_ogcapi._arrow import to_table
     except ModuleNotFoundError as err:
@@ -147,7 +150,7 @@ def _to_table(features: list[Any], crs: CRS) -> pa.Table:
             raise
         msg = f'to_arrow() needs {err.name}: pip install "water-ogcapi[arrow]"'
         raise ModuleNotFoundError(msg, name=err.name) from err
-    return to_table(features, crs)
+    return to_table
 
 
 def _reject(_value: object) -> None:
@@ -377,8 +380,9 @@ class Page:
         ModuleNotFoundError
             Without pyarrow, shapely, or pyproj, naming the extra that installs them.
         """
+        convert = _converter()
         doc = self.body if self.body is not None else self.json()
-        return _to_table(doc.get("features", [doc]), crs_of((self,)))
+        return convert(doc.get("features", [doc]), crs_of((self,)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -527,4 +531,4 @@ class QueryResult:
         ModuleNotFoundError
             Without pyarrow, shapely, or pyproj, naming the extra that installs them.
         """
-        return _to_table(self.geojson["features"], self.crs)
+        return _converter()(self.geojson["features"], self.crs)

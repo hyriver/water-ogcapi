@@ -2317,7 +2317,10 @@ Layering rule for anything new:
     `Transport.get()`, and their `Client` twins raise, and in the `water_ogcapi` log
     records of those calls. A caller puts a credential in a request header and fetches a
     signed URL with `Transport.download()`, which names every URL by scheme, host, port,
-    and path (D-69). Chosen by the maintainer.
+    and path (D-69). `OGCService` raises `ValidationError` at construction for a
+    `base_url` with userinfo, or one that does not parse, as `Request` refuses a request
+    URL with userinfo: its metadata calls would send it as Basic auth, and its pickle
+    and the refusals that name `base_url` would keep it. Chosen by the maintainer.
 - **Why:** Service queries and plain requests share `request()`, and D-24 needs the
     query in every error so a failed page can be replayed. The caller wrote the query,
     so the result returns only what they sent. Userinfo is a credential: httpx2 sends it

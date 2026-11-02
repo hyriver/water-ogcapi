@@ -291,7 +291,8 @@ class OGCService:
     TypeError
         If ``base_url`` is missing for a service without a profile.
     ValidationError
-        If ``base_url`` is not exactly ``str`` (D-65).
+        If ``base_url`` is not exactly ``str`` (D-65), does not parse, or carries
+        userinfo (D-86).
     """
 
     profile: ClassVar[ServiceProfile | None] = None
@@ -304,6 +305,15 @@ class OGCService:
             base_url = self.profile.base_url
         # Error messages echo it, and a subclass can read another URL to urlsplit() (D-65).
         reject_non_str([base_url], "base_url")
+        try:
+            netloc = urlsplit(base_url).netloc
+        except ValueError:
+            msg = "base_url does not parse as a URL"
+            raise ValidationError(msg) from None
+        if "@" in netloc:
+            # Metadata calls would send it as Basic auth, and pickles and errors keep it.
+            msg = "base_url must not carry userinfo"
+            raise ValidationError(msg)
         self._base_url = base_url.rstrip("/")
         self._owns_transport = transport is None
         self._transport = Transport() if transport is None else transport

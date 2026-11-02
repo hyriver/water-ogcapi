@@ -1509,6 +1509,24 @@ def test_a_base_url_that_is_not_a_str_is_refused_at_construction(cls: type) -> N
     assert "SECRET" not in str(excinfo.value)
 
 
+@pytest.mark.parametrize("cls", [OGCService, water_ogcapi.OGCService])
+@pytest.mark.parametrize(
+    ("base_url", "error"),
+    [
+        ("https://u:PASSWD@example.com/api", "must not carry userinfo"),
+        ("https://u:PASSWD@[bad/api", "does not parse"),
+    ],
+    ids=["userinfo", "unparsable"],
+)
+def test_a_base_url_with_userinfo_is_refused_at_construction(
+    cls: type, base_url: str, error: str
+) -> None:
+    """D-86: queries already refuse it, and metadata calls would send it."""
+    with pytest.raises(ValidationError, match=error) as excinfo:
+        cls(base_url)
+    assert "PASSWD" not in str(excinfo.value)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [("base_url", LyingBase(f"{BASE}?api_key=SECRET")), ("collection", LooksLikeAccept("c"))],

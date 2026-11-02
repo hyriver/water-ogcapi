@@ -125,15 +125,17 @@ Layering rule for anything new:
 
 - **Status:** accepted. Since 2026-10-15, `redact_url()` lives in the leaf module
     `_redact.py`, so `ServiceError` masks its URL too; before, it relied on upstream
-    rejection.
+    rejection. D-86 adds the URL of `Response`, which keeps its response headers as
+    received.
 - **Decision:** Any type that carries request headers or params (`Page`, `QueryResult`,
     exceptions) redacts credentials in its constructor, keeping headers from an
     allowlist. Callers never have to remember.
 - **Why:** Otherwise every pickled, logged, or notebook-displayed result leaks the key.
 - **Rejected:** A header denylist, which fails open on any header nobody listed.
 - **Limits:** Header redaction covers the key only while it travels in a header. With
-    the `api_key` query-parameter form, the key lands verbatim in `Response.url` and in
-    every `ServiceError` message, so D-18 rejects that form.
+    the `api_key` query-parameter form, the key would reach `httpx2`'s request log line
+    and any URL a server echoes, so D-18 rejects that form; `redact_url()` masks it in
+    the package's own URL fields.
 
 ### D-05: Follow `next` links; offset fan-out only where verified
 
@@ -2304,6 +2306,34 @@ Layering rule for anything new:
 - **Rejected:** The three routes above for now; each stays open for 0.2.0.
 - **Limits:** Between a release and the next, the site describes `main`, which may hold
     changes the release does not.
+
+### D-86: A plain request keeps its query and drops its userinfo
+
+- **Status:** accepted.
+- **Date:** 2026-11-02.
+- **Decision:** `Response` redacts its `url` at construction, as `Page` does (D-04):
+    userinfo and fragment are dropped and `api_key` is masked. The rest of the query
+    stays as sent in `Response.url`, in each `ServiceError` that `Transport.request()`,
+    `Transport.get()`, and their `Client` twins raise, and in the `water_ogcapi` log
+    records of those calls. A caller puts a credential in a request header and fetches a
+    signed URL with `Transport.download()`, which names every URL by scheme, host, port,
+    and path (D-69). Chosen by the maintainer.
+- **Why:** Service queries and plain requests share `request()`, and D-24 needs the
+    query in every error so a failed page can be replayed. The caller wrote the query,
+    so the result returns only what they sent. Userinfo is a credential: httpx2 sends it
+    as an `Authorization` header, and no reader of `Response.url` needs it.
+- **Rejected:** Dropping a plain request's query, as `download()` does, which loses
+    D-24's replay and needs `request()` to tell a service query from a plain one.
+    Masking more names, such as `token`, `sig`, and `X-Amz-Signature`: a denylist that
+    fails open on every name nobody listed, the reason D-04 rejected one for headers,
+    and it would also mask service `Page` URLs and request identities.
+- **Limits:** Redaction covers the package's own URL fields. A credential a caller puts
+    in a query under any name other than `api_key` reaches the result and its pickles,
+    error messages, and every handler on the `water_ogcapi` logger. `httpx2`'s INFO
+    line, which a caller can turn back on (D-69), prints the URL with its userinfo and
+    query. Response headers, the body, and the reason phrase and HTTP library message in
+    an error are kept as received (D-29, D-68), so a server that echoes the request puts
+    it there.
 
 ## Lessons
 

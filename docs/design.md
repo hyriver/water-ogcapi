@@ -2486,6 +2486,17 @@ Layering rule for anything new:
     `test_params_changed_during_a_retry_wait_are_sent_as_checked`, and
     `test_a_request_stores_the_params_it_checked`.
 
+### L-14: A narrowed test run went live
+
+- **What happened:** only the pixi `test` task carried `-m 'not network'`. A run
+    narrowed to a few files called pytest through pixi directly, dropped the filter, and
+    sent the network-marked tests to the live services with the shell's key.
+- **Rule:** pytest's own `addopts` deselects network-marked tests, so every pytest call
+    runs offline; `test-network` (`-m network`) and `test-all` (`-m ''`) override it,
+    since the last `-m` wins.
+- **Check:** `pixi r -e test315 pytest --collect-only` deselects the network-marked
+    tests, `test-network` collects only them, and `test-all` deselects none.
+
 ## Open questions
 
 ### Q-01: How frame conversion ships

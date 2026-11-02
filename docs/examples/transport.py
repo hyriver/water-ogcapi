@@ -21,7 +21,7 @@
 # The service classes cover NWIS, FabricData, and GeoConnex. The transport under them,
 # the async `Transport` and its blocking `Client`, sends requests to any HTTP API: it
 # bounds how many run at once, retries transient failures, refuses redirects outside
-# downloads, and keeps credentials out of logs and errors. This notebook builds small
+# downloads, and keeps header credentials out of logs and errors. This notebook builds small
 # clients for three other USGS services, the way a package such as HyRiver builds on
 # water-ogcapi, and uses them on one basin, Difficult Run near Great Falls, Virginia:
 #

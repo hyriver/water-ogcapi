@@ -109,7 +109,7 @@ importing `water_ogcapi` sets `httpx2` to WARNING and `httpcore2` to INFO, and a
 logger at INFO or DEBUG shows neither by default
 ([D-69](design.md#d-69-transportdownload-streams-a-file-and-follows-redirects)). A level
 you set on either logger wins, whether before or after the import. To see the request
-lines again, accepting that a signed URL can appear in them:
+lines again, accepting that a signed URL and a URL's userinfo can appear in them:
 
 ```python
 logging.getLogger("httpx2").setLevel(logging.INFO)

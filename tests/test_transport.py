@@ -15,6 +15,7 @@ from typing import Any
 import httpx2
 import pytest
 
+from water_ogcapi import Client
 from water_ogcapi._logging import logger
 from water_ogcapi._transport import (
     MAX_DELTA_SECONDS,
@@ -29,6 +30,9 @@ from water_ogcapi._transport import (
 from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationError
 
 URL = "https://example.com/collections"
+# A signed query stays as sent; userinfo never comes back (D-86).
+SIGNED = "https://user:PASSWD@example.com/x?sig=SIGNED"
+SIGNED_AS_KEPT = "https://example.com/x?sig=SIGNED"
 
 
 @pytest.fixture
@@ -699,6 +703,30 @@ def test_failed_request_reports_the_url_as_sent(timeout: bool) -> None:
     assert excinfo.value.url == f"{URL}?cursor=%FF&limit=2", "replaying it repeats the request"
 
 
+@pytest.mark.parametrize("blocking", [False, True], ids=["Transport", "Client"])
+@pytest.mark.parametrize("method", ["get", "request"])
+def test_response_url_keeps_the_query_and_drops_userinfo(blocking: bool, method: str) -> None:
+    """D-86."""
+    mock, _ = responder(httpx2.Response(200, json={}))
+    transport = Transport(transport=mock)
+    args = ("GET", SIGNED) if method == "request" else (SIGNED,)
+    if blocking:
+        with Client(transport=transport) as client:
+            resp = getattr(client, method)(*args)
+    else:
+        resp = asyncio.run(getattr(transport, method)(*args))
+    assert resp.url == SIGNED_AS_KEPT
+
+
+def test_service_error_keeps_the_query_and_drops_userinfo() -> None:
+    """D-86."""
+    mock, _ = responder(httpx2.Response(404))
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(Transport(transport=mock).get(SIGNED))
+    assert excinfo.value.url == SIGNED_AS_KEPT
+    assert "PASSWD" not in str(excinfo.value)
+
+
 def test_concurrency_is_bounded() -> None:
     live = 0
     peak = 0
@@ -951,8 +979,8 @@ def test_http_date_retry_after_drives_the_retry_loop(no_sleep: list[float]) -> N
     assert no_sleep == [5.0]
 
 
-def test_log_records_drop_the_url_userinfo(no_sleep: list[float]) -> None:
-    """A retry and a success are logged with the URL as Page and errors show it."""
+def test_log_records_keep_the_query_and_drop_userinfo(no_sleep: list[float]) -> None:
+    """A retry and a success are logged with the URL as Page and errors show it (D-86)."""
     records: list[str] = []
 
     class Keep(logging.Handler):
@@ -963,11 +991,12 @@ def test_log_records_drop_the_url_userinfo(no_sleep: list[float]) -> None:
     handler = Keep(logging.DEBUG)
     logger.addHandler(handler)
     try:
-        asyncio.run(Transport(transport=mock).get("https://user:PASSWD@example.com/x"))
+        asyncio.run(Transport(transport=mock).get(SIGNED))
     finally:
         logger.removeHandler(handler)
     assert len(records) >= 2
     assert all("PASSWD" not in m for m in records)
+    assert all(SIGNED_AS_KEPT in m for m in records)
     assert no_sleep, "the 503 was retried"
 
 

@@ -326,7 +326,8 @@ class Response:
     Parameters
     ----------
     url : str
-        Final request URL, query string included.
+        Final request URL as sent, query included with ``api_key`` masked, without
+        userinfo or fragment (D-86).
     status : int
         HTTP status code. Always 2xx or 304; everything else raises instead.
     headers : mapping of str to str
@@ -336,6 +337,11 @@ class Response:
         Raw response body.
     attempts : int, optional
         Requests sent to get this response, retries included.
+
+    Raises
+    ------
+    ValidationError
+        If ``url`` is not exactly ``str`` (D-65).
     """
 
     url: str
@@ -343,6 +349,10 @@ class Response:
     headers: Mapping[str, str]
     content: bytes
     attempts: int = 1
+
+    def __post_init__(self) -> None:
+        reject_non_str([self.url], "a URL")
+        object.__setattr__(self, "url", redact_url(self.url))
 
     def json(self) -> Any:
         """Decode the body as JSON.
@@ -724,7 +734,9 @@ class Transport:
         method : str
             HTTP method, such as ``GET`` or ``POST``.
         url : str
-            Absolute URL to fetch.
+            Absolute URL to fetch. Its query stays in the result, errors, and log
+            records, so a credential goes in ``headers``, and a signed URL through
+            `download` (D-86).
         params : mapping of str to str, int, float, or bool, optional
             Query parameters, merged into any query already in ``url``. A name in both
             takes its value from ``params``. A ``bool`` goes out as ``true`` or

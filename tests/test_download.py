@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 import httpx2
 import pytest
 
-from water_ogcapi import _transport
+from water_ogcapi import __version__, _transport
 from water_ogcapi._logging import logger
 from water_ogcapi._transport import MAX_REDIRECTS, Transport
 from water_ogcapi.exceptions import RateLimitError, ServiceError
@@ -124,6 +124,19 @@ def test_the_transport_user_agent_follows_a_cross_origin_redirect(tmp_path: Path
     transport = Transport(transport=httpx2.MockTransport(handler), user_agent="hyriver/1.0")
     fetch(transport, tmp_path / "f")
     assert [r.headers["user-agent"] for r in seen] == ["hyriver/1.0", "hyriver/1.0"]
+
+
+def test_the_default_user_agent_follows_a_cross_origin_redirect(tmp_path: Path) -> None:
+    """D-88: an omitted ``user_agent`` sends water-ogcapi's on every hop."""
+    routes = {URL: redirect(SIGNED), SIGNED.partition("?")[0]: body(b"x")}
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return routes[str(request.url.copy_with(query=None))](request)
+
+    fetch(Transport(transport=httpx2.MockTransport(handler)), tmp_path / "f")
+    assert [r.headers["user-agent"] for r in seen] == [f"water-ogcapi/{__version__}"] * 2
 
 
 def test_a_call_s_user_agent_beats_the_transport_s_on_every_hop(tmp_path: Path) -> None:

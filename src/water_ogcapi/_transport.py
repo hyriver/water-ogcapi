@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.message import Message
 from email.utils import parsedate_to_datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn, Self
 from urllib.parse import parse_qsl, unquote, unquote_plus, urlencode, urlsplit
@@ -35,6 +36,13 @@ if TYPE_CHECKING:
     from water_ogcapi._governor import Governor
 
 __all__ = ["Download", "Response", "Transport"]
+
+try:
+    __version__ = version("water-ogcapi")
+except PackageNotFoundError:
+    __version__ = "0.0.0+unknown"
+# The User-Agent a transport sends unless its caller names another (D-88).
+USER_AGENT = f"water-ogcapi/{__version__}"
 
 RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 # TransportError subclasses that will not fix themselves, so retrying only burns
@@ -562,8 +570,8 @@ class Transport:
         Injected transport, for tests.
     user_agent : str, optional
         The ``User-Agent`` of every request, redirect hops included, so a server can
-        tell which package called it (D-78). httpx2's own, ``python-httpx2/<version>``,
-        when omitted. A ``User-Agent`` in a call's ``headers`` takes precedence.
+        tell which package called it (D-78). ``water-ogcapi/<version>`` when omitted
+        (D-88). A ``User-Agent`` in a call's ``headers`` takes precedence.
 
     Raises
     ------
@@ -604,7 +612,7 @@ class Transport:
         self._backoff = backoff
         self._http2 = http2
         self._transport = transport
-        self._user_agent = user_agent
+        self._user_agent = USER_AGENT if user_agent is None else user_agent
         self._loop: asyncio.AbstractEventLoop | None = None
         self._sem: asyncio.Semaphore | None = None
         self._client: httpx2.AsyncClient | None = None
@@ -630,8 +638,8 @@ class Transport:
         return self._backoff
 
     @property
-    def user_agent(self) -> str | None:
-        """The ``User-Agent`` sent with every request, or ``None`` for httpx2's."""
+    def user_agent(self) -> str:
+        """The ``User-Agent`` sent with every request."""
         return self._user_agent
 
     @property
@@ -655,7 +663,7 @@ class Transport:
             self._client = httpx2.AsyncClient(
                 timeout=self.timeout,
                 http2=self.http2,
-                headers=None if self.user_agent is None else {"User-Agent": self.user_agent},
+                headers={"User-Agent": self.user_agent},
                 follow_redirects=False,
                 # A jar that keeps nothing: a cookie would cross the services that share
                 # this transport, and a download's redirects, unchecked (D-69).

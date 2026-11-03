@@ -139,6 +139,28 @@ def test_the_default_user_agent_follows_a_cross_origin_redirect(tmp_path: Path) 
     assert [r.headers["user-agent"] for r in seen] == [f"water-ogcapi/{__version__}"] * 2
 
 
+def test_a_download_in_a_coding_httpx2_cannot_decode_raises(tmp_path: Path) -> None:
+    """D-89: the file would hold bytes in a coding the caller cannot read."""
+    transport, _ = serve({URL: body(b"x", **{"Content-Encoding": "compress"})})
+    with pytest.raises(ServiceError, match="cannot decode Content-Encoding compress"):
+        fetch(transport, tmp_path / "f", headers={"Accept-Encoding": "compress"})
+    assert not list(tmp_path.iterdir())
+
+
+def test_a_cross_origin_download_hides_the_coding_it_cannot_decode(tmp_path: Path) -> None:
+    """D-89 under D-69: past the first origin, server text stays out of the error."""
+    transport, _ = serve(
+        {
+            URL: redirect(SIGNED),
+            SIGNED.partition("?")[0]: body(b"x", **{"Content-Encoding": "SECRETSIG"}),
+        }
+    )
+    with pytest.raises(ServiceError, match="cannot decode the Content-Encoding from") as excinfo:
+        fetch(transport, tmp_path / "f")
+    assert "SECRETSIG" not in str(excinfo.value)
+    assert not list(tmp_path.iterdir())
+
+
 def test_a_call_s_user_agent_beats_the_transport_s_on_every_hop(tmp_path: Path) -> None:
     routes = {URL: redirect(SIGNED), SIGNED.partition("?")[0]: body(b"x")}
     seen: list[httpx2.Request] = []

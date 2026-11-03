@@ -2385,6 +2385,31 @@ Layering rule for anything new:
     water-ogcapi's agent, so its requests read as water-ogcapi's. One agent per
     transport (D-78).
 
+### D-89: A 2xx in a coding httpx2 cannot decode raises
+
+- **Status:** accepted; built in #182.
+- **Date:** 2026-11-03.
+- **Decision:** `Transport.request()`, its `Client` twin, and `download()` raise
+    `ServiceError` on a 2xx whose `Content-Encoding` lists a coding httpx2 does not
+    decode, named in the message, with no retry. The decodable codings are `identity`
+    and those in the `Accept-Encoding` httpx2's client sends by default, so the check
+    follows httpx2's optional brotli and zstd support. Each checks the response headers
+    before it reads the body, so a broken body is never retried and `download()` leaves
+    `path` with the old file. Once a download's chain has a query or has left the first
+    origin, the message leaves the coding out, since it is server text (D-69). A 304 is
+    never checked.
+- **Why:** httpx2 skips a coding it does not know, so the caller got the still-encoded
+    bytes as `Response.content`, or as the file, under a success status. Only a caller
+    who sets `Accept-Encoding` by hand meets one, since httpx2 asks only for codings it
+    decodes. Raising changes what that caller gets, which costs less before the first
+    final release.
+- **Rejected:** Returning the bytes as received with the coding left in the response
+    headers, which leaves every caller to check a header the status says nothing about.
+    For `download()`, writing the encoded file, which leaves a file whose bytes its name
+    does not describe.
+- **Limits:** A server that applies a coding it does not name, or names one it did not
+    apply, still passes. A body that fails to decode in a known coding raises as before.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

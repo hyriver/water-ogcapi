@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import gzip
 import json
 import logging
+import lzma
 import pickle
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from fractions import Fraction
@@ -241,6 +244,56 @@ def test_undecodable_body_is_typed_and_not_retried() -> None:
     with pytest.raises(ServiceError, match="decompress"):
         asyncio.run(Transport(transport=httpx2.MockTransport(handler)).get(URL))
     assert len(seen) == 1, "a corrupt body is not a connection problem"
+
+
+class _BrokenStream(httpx2.AsyncByteStream):
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        return self
+
+    async def __anext__(self) -> bytes:
+        raise httpx2.ReadError("connection reset")
+
+
+@pytest.mark.usefixtures("no_sleep")
+@pytest.mark.parametrize("blocking", [False, True], ids=["Transport", "Client"])
+@pytest.mark.parametrize(
+    ("coding", "body", "named"),
+    [
+        ("identity, Compress", b"x", "compress"),
+        # The outer coding is the one httpx2 lacks, so decoding gzip would fail first.
+        ("gzip, xz", lzma.compress(gzip.compress(b"ok")), "xz"),
+        ("compress", None, "compress"),
+    ],
+    ids=["unknown", "unknown-outer", "broken-body"],
+)
+def test_a_2xx_in_a_coding_httpx2_cannot_decode_raises(
+    blocking: bool, coding: str, body: bytes | None, named: str
+) -> None:
+    """D-89: raised from the headers, before the body is read or retried."""
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        stream = _BrokenStream() if body is None else httpx2.ByteStream(body)
+        return httpx2.Response(200, headers={"Content-Encoding": coding}, stream=stream)
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=2)
+    headers = {"Accept-Encoding": "compress"}
+    with pytest.raises(ServiceError, match=f"cannot decode Content-Encoding {named}") as excinfo:
+        if blocking:
+            with Client(transport=transport) as client:
+                client.request("GET", URL, headers=headers)
+        else:
+            asyncio.run(transport.request("GET", URL, headers=headers))
+    assert (excinfo.value.status, excinfo.value.attempts) == (200, 1)
+    assert len(seen) == 1
+
+
+def test_a_coding_httpx2_decodes_still_succeeds() -> None:
+    mock, _ = responder(
+        httpx2.Response(200, headers={"Content-Encoding": "gzip"}, content=gzip.compress(b"ok"))
+    )
+    assert asyncio.run(Transport(transport=mock).get(URL)).content == b"ok"
 
 
 @pytest.mark.parametrize(

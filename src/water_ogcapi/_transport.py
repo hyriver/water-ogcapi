@@ -442,9 +442,30 @@ def _raise_for(
     )
 
 
-def _finalize(resp: httpx2.Response, *, attempts: int, body: bytes | None) -> Response:
+def _undecodable(resp: httpx2.Response, client: httpx2.AsyncClient) -> str:
+    """Return the codings of ``resp`` that httpx2 leaves encoded, comma-joined."""
+    # httpx2 asks for exactly the codings it decodes and passes any other through.
+    decodable = {c.strip() for c in client.headers.get("accept-encoding", "").split(",")}
+    values = resp.headers.get_list("content-encoding", split_commas=True)
+    codings = (c.strip().lower() for c in values)
+    return ", ".join(c for c in codings if c not in {*decodable, "", "identity"})
+
+
+def _finalize(
+    resp: httpx2.Response, client: httpx2.AsyncClient, *, attempts: int, body: bytes | None
+) -> Response:
     """Convert a successful httpx2 response, or raise a typed error."""
     url = str(resp.url)
+    if resp.status_code < 300 and (coding := _undecodable(resp, client)):
+        msg = f"cannot decode Content-Encoding {coding}"
+        raise ServiceError(
+            msg,
+            url,
+            status=resp.status_code,
+            attempts=attempts,
+            method=resp.request.method,
+            request_body=body,
+        )
     if resp.status_code < 300 or resp.status_code == 304:
         logger.debug(
             "%s %s returned HTTP %d after %d attempt(s)",
@@ -776,8 +797,9 @@ class Transport:
             error carries the method and body of the request (D-38).
         ServiceError
             On any other status of 400 or above, on a redirect, on a malformed URL
-            or undecodable body, when retries are exhausted, or when ``aclose()``
-            ran while the call waited for a permit or a backoff.
+            or undecodable body, on a 2xx whose ``Content-Encoding`` httpx2 cannot
+            decode (D-89), when retries are exhausted, or when ``aclose()`` ran while
+            the call waited for a permit or a backoff.
         RuntimeError
             If called from an event loop other than the one this transport bound to.
         ValidationError
@@ -817,7 +839,16 @@ class Transport:
                         )
                     # httpx2 times each operation, so a body trickling in under the
                     # read timeout would otherwise hold the permit indefinitely.
-                    resp = await client.request(method, target, headers=headers, content=content)
+                    resp = await client.send(
+                        client.build_request(method, target, headers=headers, content=content),
+                        stream=True,
+                    )
+                    try:
+                        # Unread when httpx2 cannot decode it, so it raises unretried (D-89).
+                        if resp.status_code >= 300 or not _undecodable(resp, client):
+                            await resp.aread()
+                    finally:
+                        await resp.aclose()
             except TimeoutError:
                 failure = f"TimeoutError: attempt exceeded {self.timeout} s"
                 transient = True
@@ -831,7 +862,7 @@ class Transport:
                 pacer.observe(resp.status_code, resp.headers)
                 delay = None if final else self._retry_delay(resp, attempt)
                 if delay is None:
-                    return _finalize(resp, attempts=attempt + 1, body=content)
+                    return _finalize(resp, client, attempts=attempt + 1, body=content)
                 logger.log(
                     logging.WARNING if resp.status_code == 429 else logging.INFO,
                     "%s %s returned HTTP %d; retry %d of %d in %.1f s",
@@ -987,6 +1018,21 @@ class Transport:
                                 if target == first
                                 else f" from {_describe_location(str(target))}"
                             )
+                            if resp.status_code < 300 and (coding := _undecodable(resp, client)):
+                                # The coding is server text, which a signed host can fill.
+                                named_coding = (
+                                    "the Content-Encoding"
+                                    if quiet
+                                    else f"Content-Encoding {coding}"
+                                )
+                                msg = f"cannot decode {named_coding}{where}"
+                                raise ServiceError(
+                                    msg,
+                                    named,
+                                    status=resp.status_code,
+                                    attempts=attempt + 1,
+                                    method="GET",
+                                )
                             return await self._receive(
                                 resp,
                                 out,

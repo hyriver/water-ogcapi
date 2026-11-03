@@ -44,7 +44,8 @@ def main() -> None:
             continue
         code = "".join(f"# {page}:{line}\n{block}\n" for line, block in found)
         with tempfile.TemporaryDirectory() as folder:
-            script = Path(folder) / f"{page.stem.replace('-', '_')}.py"
+            # The prefix keeps a page such as logging.md from shadowing a module it imports.
+            script = Path(folder) / f"guide_{page.stem.replace('-', '_')}.py"
             script.write_text(code, encoding="utf-8")
             run = subprocess.run([sys.executable, str(script)], check=False)  # noqa: S603
         if run.returncode:

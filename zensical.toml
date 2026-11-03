@@ -5,7 +5,7 @@ site_url = "https://docs.hyriver.io/water-ogcapi/"
 repo_url = "https://github.com/hyriver/water-ogcapi"
 repo_name = "hyriver/water-ogcapi"
 
-# No nav key: the nav mirrors docs/, so a new example notebook appears without an edit.
+# docs/.nav.yml and docs/guide/.nav.yml order the nav (D-87).
 
 [project.theme]
 features = [
@@ -43,6 +43,13 @@ pymdownx.snippets.base_path = ["."]
 pymdownx.snippets.check_paths = true
 pymdownx.superfences = {}
 pymdownx.tasklist.custom_checkbox = true
+
+[project.plugins.awesome-nav]
+
+# 0.1.0rc1 links the old URLs from its README and configure_logger() docstring.
+[project.plugins.redirects.redirect_maps]
+"logging.md" = "guide/logging.md"
+"performance.md" = "guide/performance.md"
 
 [project.plugins.mkdocstrings.handlers.python]
 paths = ["src"]

@@ -297,7 +297,7 @@ Layering rule for anything new:
 - **Benchmarks:** cold start to first feature, round trips for a single-page result,
     requests spent per 100,000 features, peak memory against result size, and recovery
     after a 429 mid-pagination, all against mocks. `scripts/bench.py` measures them, and
-    [Performance](performance.md) records a run.
+    [Performance](guide/performance.md) records a run.
 
 - **Limits:** Fixtures stay green while upstream drifts, live tests stay out of CI, and
     FabricData failures turn into skips, so upstream drift is invisible to them; the
@@ -331,7 +331,7 @@ Layering rule for anything new:
 
 ### D-17: Docs pages come from their sources
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-87, which orders the nav from `.nav.yml` files.
 - **Date:** 2026-09-30.
 - **Decision:** A docs page whose text has a canonical source elsewhere includes that
     source: the home page includes `README.md`, the contributing page `AGENTS.md`, and
@@ -1348,8 +1348,8 @@ Layering rule for anything new:
     the governor as a public keyword (D-43). GeoConnex sends no rate-limit headers, so
     its requests start 1 s apart: at its default `limit` of 500 (D-41), a first
     validated query for 100,000 features sends 202 requests and takes at least 201 s
-    ([Performance](performance.md#requests-per-100000-features)), and a larger `limit`
-    cuts that.
+    ([Performance](guide/performance.md#requests-per-100000-features)), and a larger
+    `limit` cuts that.
 
 ### D-50: `_client.py` holds the service class, and response parsing lives beside its types
 
@@ -1715,9 +1715,9 @@ Layering rule for anything new:
     FabricData page's, and orjson would save under 1%. orjson also grows peak RSS more:
     31 MiB against 24 MiB per NWIS page, 3.6 against 2.6 to 2.7 MiB per FabricData page.
     Both decoders returned equal documents for all six pages.
-    [Performance](performance.md#decoding) has the table. Predicted before the run:
-    orjson two to three times faster, lower peak memory, decoding 1 to 4% of a page's
-    time, and a verdict to keep `json.loads`. The speedup and the verdict held; the
+    [Performance](guide/performance.md#decoding) has the table. Predicted before the
+    run: orjson two to three times faster, lower peak memory, decoding 1 to 4% of a
+    page's time, and a verdict to keep `json.loads`. The speedup and the verdict held; the
     share came in lower, and orjson's memory went the other way.
 - **Rejected:** An optional orjson extra, which makes a page carrying `NaN` parse or
     fail by environment (Q-09) for under 1% of wall time.
@@ -1912,7 +1912,7 @@ Layering rule for anything new:
 
 ### D-67: Guide pages are Markdown, and a script runs their examples
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-87, which sets the guide's nav order.
 - **Date:** 2026-10-29.
 - **Decision:** The user guide and the guides for other packages are Markdown pages in
     `docs/guide/`. `scripts/run_guides.py`, run by `pixi r -e dev guides`, writes each
@@ -2340,6 +2340,32 @@ Layering rule for anything new:
     query. Response headers, the body, and the reason phrase and HTTP library message in
     an error are kept as received (D-29, D-68), so a server that echoes the request puts
     it there.
+
+### D-87: `.nav.yml` files order the site nav
+
+- **Status:** accepted.
+- **Date:** 2026-11-02.
+- **Decision:** `zensical.toml` turns on Zensical's built-in awesome-nav support.
+    `docs/.nav.yml` orders the top level: Home, Guide, Examples, API reference, a
+    Development section with Contributing, Design decisions, Tracking USGS endpoints,
+    and Roadmap, then License last. `docs/guide/.nav.yml` sets the guide's reading
+    order, which now includes Logging and Performance, moved into `docs/guide/` with
+    redirects from their old URLs. Each file ends with a `glob: "*"` entry set to
+    `ignore_no_matches: true`, which adds every page the file does not list.
+    `docs/examples/` has no `.nav.yml`, so its notebooks stay alphabetical. Chosen by
+    the maintainer.
+- **Why:** The generated nav sorted pages by file name with folders last, so License sat
+    mid-list and Examples and Guide came after it, and no file name places a page after
+    a folder. The trailing glob answers D-17's objection to an explicit nav: an unlisted
+    page still reaches the nav, at the end of its section. The Development section is a
+    nav group over pages left at the top of `docs/`, so the design record's URL and its
+    `D-` anchors stay put.
+- **Rejected:** A `nav` key in `zensical.toml`, which drops an unlisted page from the
+    nav with no warning (D-17). Moving the Development pages into a folder, which
+    changes every design-record link. Renaming files to force an alphabetical order.
+- **Limits:** An unlisted top-level page lands before License, and an unlisted guide
+    page after the last listed one, until someone lists it. A glob with no match fails
+    the strict build unless it sets `ignore_no_matches`.
 
 ## Lessons
 

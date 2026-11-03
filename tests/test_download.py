@@ -281,7 +281,7 @@ def test_a_signed_url_passed_in_stays_out_of_the_result_errors_and_logs(tmp_path
 
 
 def test_a_download_logs_a_429_retry_as_a_warning(tmp_path: Path) -> None:
-    """docs/logging.md: a 429 the transport waits out logs at WARNING, as request() does."""
+    """docs/guide/logging.md: a 429 the transport waits out logs at WARNING, as request() does."""
     replies = iter([httpx2.Response(429, headers={"Retry-After": "0"}), httpx2.Response(200)])
     transport, _ = serve({URL: lambda _: next(replies)})
     levels: list[int] = []

@@ -15,7 +15,7 @@ from typing import Any
 import httpx2
 import pytest
 
-from water_ogcapi import Client
+from water_ogcapi import Client, __version__
 from water_ogcapi._logging import logger
 from water_ogcapi._transport import (
     MAX_DELTA_SECONDS,
@@ -1081,7 +1081,7 @@ def test_a_large_int_goes_out_whole() -> None:
 
 
 def test_a_user_agent_goes_on_every_request_unless_a_call_names_its_own() -> None:
-    """D-78; omitted, httpx2's default stands."""
+    """D-78; omitted, water-ogcapi's own goes (D-88)."""
     mock, seen = responder(httpx2.Response(200))
 
     async def calls() -> None:
@@ -1094,8 +1094,9 @@ def test_a_user_agent_goes_on_every_request_unless_a_call_names_its_own() -> Non
     asyncio.run(calls())
     agents = [r.headers["user-agent"] for r in seen]
     assert agents[:2] == ["hyriver/1.0", "mine"]
-    assert agents[2].startswith("python-httpx2/")
+    assert agents[2] == f"water-ogcapi/{__version__}"
     assert Transport(user_agent="hyriver/1.0").user_agent == "hyriver/1.0"
+    assert Transport().user_agent == f"water-ogcapi/{__version__}"
 
 
 @pytest.mark.parametrize("agent", ["café/1", "a\nb", b"bytes"])

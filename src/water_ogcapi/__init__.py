@@ -6,8 +6,6 @@ the async service classes (D-48, D-70).
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
-
 from water_ogcapi import aio, exceptions
 from water_ogcapi._client import ServiceProfile
 from water_ogcapi._governor import Governor
@@ -34,12 +32,7 @@ from water_ogcapi._results import (
     StopReason,
 )
 from water_ogcapi._sync import NWIS, Client, FabricData, GeoConnex, OGCService
-from water_ogcapi._transport import Download, Response, Transport
-
-try:
-    __version__ = version("water-ogcapi")
-except PackageNotFoundError:
-    __version__ = "0.0.0+unknown"
+from water_ogcapi._transport import Download, Response, Transport, __version__
 
 __all__ = [
     "CRS",

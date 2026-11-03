@@ -2189,7 +2189,7 @@ Layering rule for anything new:
 
 ### D-78: `Transport(user_agent=)` names the calling package
 
-- **Status:** accepted.
+- **Status:** accepted; amended by D-88.
 - **Date:** 2026-10-30.
 - **Decision:** `Transport` takes `user_agent=`, sent as the `User-Agent` of every
     request, redirect hops across origins included, since it holds no secret. A
@@ -2366,6 +2366,24 @@ Layering rule for anything new:
 - **Limits:** An unlisted top-level page lands before License, and an unlisted guide
     page after the last listed one, until someone lists it. A glob with no match fails
     the strict build unless it sets `ignore_no_matches`.
+
+### D-88: A transport sends a `water-ogcapi` `User-Agent` by default
+
+- **Status:** accepted; built in #181. Amends D-78.
+- **Date:** 2026-11-03.
+- **Decision:** An omitted `user_agent` sends `water-ogcapi/<version>`, the installed
+    distribution's version, or `0.0.0+unknown` without package metadata.
+    `Transport.user_agent` returns the agent sent and is never `None`. A `user_agent=`
+    value or a call's `User-Agent` header still wins, and the agent goes on every
+    redirect hop of a download, cross-origin ones included, as D-78 set.
+- **Why:** USGS's gateway saw this package's requests as httpx2's, so an operator could
+    not tell them from any other httpx2 caller. The change reaches every existing
+    caller, which costs less before the first final release than after.
+- **Rejected:** Keeping httpx2's `python-httpx2/<version>` (D-78's choice), which hides
+    the package from the operators who set its rate limits.
+- **Limits:** A package built on the transport that omits `user_agent=` sends
+    water-ogcapi's agent, so its requests read as water-ogcapi's. One agent per
+    transport (D-78).
 
 ## Lessons
 

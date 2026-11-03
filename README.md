@@ -103,8 +103,8 @@ asyncio.run(main())
 The [documentation](https://docs.hyriver.io/water-ogcapi/) has a
 [user guide](https://docs.hyriver.io/water-ogcapi/guide/), example notebooks for each
 service, the API reference, a
-[logging guide](https://docs.hyriver.io/water-ogcapi/logging/), and the design decisions
-behind the library.
+[logging guide](https://docs.hyriver.io/water-ogcapi/guide/logging/), and the design
+decisions behind the library.
 
 ## Roadmap
 

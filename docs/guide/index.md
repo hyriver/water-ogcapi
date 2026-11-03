@@ -18,8 +18,12 @@ Read the pages in this order:
 1. [Errors](errors.md): what each exception means and what it carries.
 1. [Blocking and async APIs](sync-and-async.md): the blocking classes and their async
     twins in `water_ogcapi.aio`.
+1. [Logging](logging.md): what the package logs, `configure_logger()`, and routing
+    records through an application's own handlers.
 1. [Dask and multiprocessing workers](workers.md): sending a service to worker
     processes.
+1. [Performance](performance.md): offline benchmarks of cold start, requests per query,
+    peak memory, 429 recovery, and decoding.
 
 For packages that use the same services,
 [`water-ogcapi` as the transport for `dataretrieval`](dataretrieval.md) shows where its

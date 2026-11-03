@@ -2,7 +2,7 @@
 
 Every items page repeats one NWIS daily-value feature from ``tests/fixtures/`` under
 distinct ids, and each page's bytes are built once and served from memory, so the
-numbers measure the client. ``docs/performance.md`` records a run.
+numbers measure the client. ``docs/guide/performance.md`` records a run.
 
 ``--fetch DIR`` saves real NWIS and FabricData pages from the live services, and
 ``--decode DIR`` compares ``json.loads`` with ``orjson.loads`` on them (Q-09).

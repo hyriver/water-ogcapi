@@ -1,7 +1,7 @@
 # Performance
 
 `scripts/bench.py` measures the five benchmarks that
-[D-14](design.md#d-14-testing-strategy) plans. It runs offline against
+[D-14](../design.md#d-14-testing-strategy) plans. It runs offline against
 `httpx2.MockTransport`: each items page repeats one NWIS daily-value feature from
 `tests/fixtures/` (about 470 bytes of JSON) under distinct ids, and the mock builds each
 page before any timer or trace starts and hands every response its own copy of the
@@ -41,9 +41,9 @@ order of magnitude.
 | `validate=False`                  | 1        |
 
 The check fetches the collection index and the collection's queryables
-([D-47](design.md#d-47-queries-are-checked-against-cached-metadata-before-the-first-page-request)),
+([D-47](../design.md#d-47-queries-are-checked-against-cached-metadata-before-the-first-page-request)),
 and the cache keeps both for an hour
-([D-07](design.md#d-07-in-memory-success-only-metadata-cache)).
+([D-07](../design.md#d-07-in-memory-success-only-metadata-cache)).
 
 ## Requests per 100,000 features
 
@@ -54,11 +54,11 @@ and the cache keeps both for an hour
 | GeoConnex  | 500       | 200   | 202      |
 
 Each service uses its profile's default page size
-([D-41](design.md#d-41-service-profiles-set-the-page-sizes)), and the two extra requests
-are the metadata check. The governor's waits move only when requests start, so this run
-skips them. GeoConnex sends no rate-limit headers, so its governor spaces requests one
-second apart
-([D-49](design.md#d-49-the-governor-paces-every-attempt-over-the-last-eighth-of-the-quota)),
+([D-41](../design.md#d-41-service-profiles-set-the-page-sizes)), and the two extra
+requests are the metadata check. The governor's waits move only when requests start, so
+this run skips them. GeoConnex sends no rate-limit headers, so its governor spaces
+requests one second apart
+([D-49](../design.md#d-49-the-governor-paces-every-attempt-over-the-last-eighth-of-the-quota)),
 and its 202 requests take at least 201 seconds. NWIS and FabricData with quota to spare
 add no wait.
 
@@ -98,14 +98,14 @@ run returned all 5,000 features with no id repeated.
 
 ## Decoding
 
-[Q-09](design.md#q-09-orjson-for-decoding-large-responses) asked whether orjson should
-decode pages. `--fetch` saves three real pages per service at the profile's page size,
-NWIS `continuous` for a year at the Potomac gage and FabricData `gagesii`, and records
-how long `iter_pages` took to return each, its own `json.loads` included. It sends six
-requests through the services, whose checks keep the key on NWIS's origin, and refuses
-to write a page that holds the key. `--decode` times `json.loads` and `orjson.loads` on
-each page (median of 20) and measures how much each grows a fresh process's peak RSS.
-Save the pages outside the repository:
+[Q-09](../design.md#q-09-orjson-for-decoding-large-responses) asked whether orjson
+should decode pages. `--fetch` saves three real pages per service at the profile's page
+size, NWIS `continuous` for a year at the Potomac gage and FabricData `gagesii`, and
+records how long `iter_pages` took to return each, its own `json.loads` included. It
+sends six requests through the services, whose checks keep the key on NWIS's origin, and
+refuses to write a page that holds the key. `--decode` times `json.loads` and
+`orjson.loads` on each page (median of 20) and measures how much each grows a fresh
+process's peak RSS. Save the pages outside the repository:
 
 ```bash
 pixi r -e dev python scripts/bench.py --fetch /tmp/water-ogcapi-pages
@@ -127,4 +127,4 @@ governor added, which can only lower the share.
 
 On these six pages orjson decoded twice as fast and grew peak RSS more, and every page
 took at least 70 times as long to come back as `json.loads` took to decode it, so pages
-keep `json.loads` ([D-61](design.md#d-61-pages-decode-with-jsonloads)).
+keep `json.loads` ([D-61](../design.md#d-61-pages-decode-with-jsonloads)).

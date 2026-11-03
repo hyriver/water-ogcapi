@@ -124,7 +124,7 @@ nb-execute = "jupyter nbconvert --to notebook --execute --inplace docs/examples/
 nb-run = { depends-on = [ "nb-sync", "nb-execute" ] }
 # One-time pairing of a new .ipynb with a py:percent script.
 nb-pair = "jupytext --set-formats 'ipynb,py:percent' docs/examples/*.ipynb"
-# The D-14 benchmarks, offline; docs/performance.md records a run.
+# The D-14 benchmarks, offline; docs/guide/performance.md records a run.
 bench = "python scripts/bench.py"
 # Run every python block of docs/guide/ in order. They call the live APIs.
 guides = "python scripts/run_guides.py"

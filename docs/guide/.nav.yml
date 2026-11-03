@@ -1,0 +1,14 @@
+nav:
+- index.md
+- setup.md
+- queries.md
+- pagination.md
+- errors.md
+- sync-and-async.md
+- logging.md
+- workers.md
+- performance.md
+- dataretrieval.md
+- pynhd.md
+- glob: '*'
+  ignore_no_matches: true

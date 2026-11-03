@@ -157,6 +157,9 @@ the site on every PR and deploys `main` to GitHub Pages.
 - Each notebook gets a card in `docs/examples/index.md` with a thumbnail in
     `docs/examples/images/`, following the existing card. The strict build fails if a
     card links to a notebook that does not exist.
+- `docs/.nav.yml` and `docs/guide/.nav.yml` order the site nav (D-87). A page neither
+    file lists still appears, at the end of its section, so list a new page where it
+    belongs.
 - Skills live in `.agents/skills/`. `.claude/skills` is a symlink to it for Claude Code,
     which does not read `.agents/`.
 - The ruleset on `main` names its required checks by job: the six

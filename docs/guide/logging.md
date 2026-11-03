@@ -4,7 +4,7 @@
 own handler, which prints WARNING and above to stderr, and it does not propagate to the
 root logger. A package that configures the root logger therefore neither receives these
 records nor changes how they print, and a notebook shows each record once.
-[D-20](design.md#d-20-package-logger-isolated-from-the-root-logger) records why.
+[D-20](../design.md#d-20-package-logger-isolated-from-the-root-logger) records why.
 
 ## What gets logged
 
@@ -23,7 +23,7 @@ No record carries request headers. The API key travels only in the `X-Api-Key` h
 so it never reaches a log. Over HTTP/2, the `hpack` library logs every header value at
 DEBUG, the key included, so the package raises the `hpack` logger to INFO at import. A
 caller who sets `hpack` to DEBUG gets the key in those records
-([D-20](design.md#d-20-package-logger-isolated-from-the-root-logger)).
+([D-20](../design.md#d-20-package-logger-isolated-from-the-root-logger)).
 
 ## Scripts and notebooks
 
@@ -107,9 +107,10 @@ At DEBUG, `httpcore2` writes every response header, a redirect's `Location` amon
 A download can follow a redirect to a signed URL whose query is a credential, so
 importing `water_ogcapi` sets `httpx2` to WARNING and `httpcore2` to INFO, and a root
 logger at INFO or DEBUG shows neither by default
-([D-69](design.md#d-69-transportdownload-streams-a-file-and-follows-redirects)). A level
-you set on either logger wins, whether before or after the import. To see the request
-lines again, accepting that a signed URL and a URL's userinfo can appear in them:
+([D-69](../design.md#d-69-transportdownload-streams-a-file-and-follows-redirects)). A
+level you set on either logger wins, whether before or after the import. To see the
+request lines again, accepting that a signed URL and a URL's userinfo can appear in
+them:
 
 ```python
 logging.getLogger("httpx2").setLevel(logging.INFO)

@@ -161,8 +161,8 @@ def _key(api_key: str | None) -> str | None:
 class NWIS(OGCService):
     """Async client for the USGS Water Data OGC API, which serves NWIS data (D-42).
 
-    Construction performs no HTTP. Pages hold 10,000 features unless ``params`` set a
-    ``limit``, and 50,000 at most (D-41).
+    Construction performs no HTTP. A page asks for up to 10,000 features unless
+    ``params`` set a ``limit``, and 50,000 at most (D-41).
 
     Parameters
     ----------
@@ -239,8 +239,8 @@ class NWIS(OGCService):
 class FabricData(OGCService):
     """Async client for the USGS FabricData service, which is sent no key (D-30).
 
-    Construction performs no HTTP. Pages hold 1,000 features unless ``params`` set a
-    smaller ``limit`` (D-41).
+    Construction performs no HTTP. A page asks for up to 1,000 features unless
+    ``params`` set a smaller ``limit`` (D-41).
 
     Parameters
     ----------
@@ -259,8 +259,8 @@ class GeoConnex(OGCService):
     """Async client for the GeoConnex reference features, which never get the USGS key.
 
     GeoConnex is not a USGS host, so the key never goes there (D-13). Construction
-    performs no HTTP. Pages hold 500 features unless ``params`` set a ``limit``, and
-    10,000 at most (D-41).
+    performs no HTTP. A page asks for up to 500 features unless ``params`` set a
+    ``limit``, and 10,000 at most (D-41).
 
     Parameters
     ----------

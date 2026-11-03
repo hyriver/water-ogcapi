@@ -1,7 +1,8 @@
 """Result types: one response document per `Page`, the aggregate in `QueryResult`.
 
-Each type redacts credentials in its constructor (docs/design.md D-04, D-29), so a
-pickled, logged, or displayed result never carries the API key.
+Each type redacts credentials in its constructor (docs/design.md D-04, D-29): URLs
+and ``params`` mask credential query parameters by name, and bodies stay as received,
+so a key a server echoes into a body or a URL path stays there (D-53, D-62).
 """
 
 from __future__ import annotations
@@ -312,8 +313,9 @@ class Page:
     Notes
     -----
     ``params`` and ``headers`` are read-only copies. ``body`` and ``content`` are the
-    server's document as received, so redaction does not reach them; the key stays
-    out of them because it never travels in a query (D-18).
+    server's document as received, so redaction does not reach them. A page whose
+    links carry a credential is refused (D-53), but a key a server echoes elsewhere
+    in the body stays there (D-29).
     """
 
     url: str

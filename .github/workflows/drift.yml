@@ -21,7 +21,7 @@ jobs:
         persist-credentials: false
     - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
       with:
-        pixi-version: v0.82.1  # Dependabot does not bump this; see D-55
+        pixi-version: v0.84.0  # Dependabot does not bump this; see D-55
         environments: test315
     - run: pixi run -e test315 test-network
       env:
@@ -37,7 +37,7 @@ jobs:
         persist-credentials: false
     - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
       with:
-        pixi-version: v0.82.1  # Dependabot does not bump this; see D-55
+        pixi-version: v0.84.0  # Dependabot does not bump this; see D-55
         environments: test315
     # Sends no key: the OpenAPI documents are public.
     - run: pixi run -e test315 drift

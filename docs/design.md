@@ -1496,7 +1496,7 @@ Layering rule for anything new:
 
 - **Status:** accepted.
 - **Date:** 2026-10-21.
-- **Decision:** Every `prefix-dev/setup-pixi` step passes `pixi-version`, now `v0.82.1`.
+- **Decision:** Every `prefix-dev/setup-pixi` step passes `pixi-version`, now `v0.84.0`.
     A pixi upgrade in CI is a one-line edit per step, made in its own PR.
 - **Why:** Without the input, setup-pixi installs the latest pixi on each run, so a
     release changes CI with no commit to show it. pixi 0.82.1 (2026-10-20) is a security
@@ -1507,7 +1507,9 @@ Layering rule for anything new:
     broken or compromised one.
 - **Limits:** Dependabot bumps the action's SHA and leaves `pixi-version` alone, so a
     later pixi security release needs a manual bump. Local environments follow whatever
-    pixi each contributor installs.
+    pixi each contributor installs. pixi 0.84.0 (2026-11-02) may treat a lock written by
+    an older release as out of date, so the pin, `pixi.lock`, and each contributor's
+    pixi move together.
 
 ### D-56: NWIS splits a query by calendar period or site list, and pieces run concurrently
 

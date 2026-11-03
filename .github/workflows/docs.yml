@@ -25,7 +25,7 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
       with:
-        pixi-version: v0.82.1  # Dependabot does not bump this; see D-55
+        pixi-version: v0.84.0  # Dependabot does not bump this; see D-55
         environments: docs
     # --strict fails the build on warnings such as broken links.
     - run: pixi run docs

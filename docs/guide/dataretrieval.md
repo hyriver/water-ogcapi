@@ -104,7 +104,7 @@ reads from the aggregated response.
 | `transport.pagination.paginate()` follows the `next` links     | `iter_pages()` follows them within the scheme, host, and port of the base URL, and refuses a repeated request |
 | `RetryPolicy`, set by `retries` and `stall_timeout`            | `Transport(max_retries=..., timeout=...)`, retrying transport errors and 429, 500, 502, 503, and 504          |
 | `FanOut` runs the chunks of a query split to fit a URL's bytes | `sites_per_piece` splits a site list, `split_datetime` an interval, and `ids` sends a list in a `POST` body   |
-| `concurrency` caps the chunks in flight                        | `Transport(max_concurrent=...)` caps the requests in flight, 4 by default                                     |
+| `concurrency` caps the chunks in flight                        | `Transport(max_per_origin=...)` caps the requests in flight to one host, 4 by default                         |
 | `ChunkInterrupted` and its `.call.resume()`                    | `PartialResultsError` and `collect(resume=...)`, or a page's `checkpoint`                                     |
 | `API_USGS_PAT`, sent only to the host that accepts it          | `USGS_API_KEY`, sent only by `NWIS`, in the `X-Api-Key` header                                                |
 

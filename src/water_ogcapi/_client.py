@@ -609,7 +609,7 @@ class OGCService:
     async def _run(self, start: Checkpoint) -> AsyncGenerator[Page]:
         """Yield each page of the pending requests, following ``next`` links (D-34, D-52).
 
-        Pending requests start in order, up to the transport's ``max_concurrent`` at
+        Pending requests start in order, up to the transport's ``max_per_origin`` at
         once, and each follows its ``next`` links to the end; pages come in the order
         their responses arrive (D-56). A ``next`` link starts once the caller asks for
         the page after the one that carried it, so an unsplit query sends nothing
@@ -629,7 +629,8 @@ class OGCService:
             fetch=self._page,
             refusal=self._refusal,
             following=self._next_request,
-            width=self._transport.max_concurrent,
+            # One origin, so the smaller bound; other callers of the transport can lower it.
+            width=min(self._transport.max_concurrent, self._transport.max_per_origin),
         )
         try:
             run.launch()
@@ -700,7 +701,7 @@ class OGCService:
         split_datetime : {'year', 'month'}, optional
             NWIS only (D-35, D-56): split the ``datetime`` interval in ``params`` at
             calendar boundaries in UTC into pieces that run concurrently, up to the
-            transport's ``max_concurrent`` at once, each following its own ``next``
+            transport's ``max_per_origin`` at once, each following its own ``next``
             links. The interval needs both ends, as dates or timestamps with an
             offset, and each piece ends one microsecond before the next begins. Every
             piece costs at least one request, so size pieces near one page.

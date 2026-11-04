@@ -59,7 +59,7 @@ def matching(request: httpx2.Request) -> list[tuple[str, str]]:
 
 
 def mock(
-    hook: Hook | None = None, *, max_concurrent: int = 4
+    hook: Hook | None = None, *, max_concurrent: int = 4, max_per_origin: int = 4
 ) -> tuple[Transport, list[httpx2.Request]]:
     """A transport paging ``matching`` rows, ``limit`` a page, by a cursor holding the offset.
 
@@ -95,13 +95,18 @@ def mock(
         return httpx2.Response(200, json=body)
 
     transport = Transport(
-        transport=httpx2.MockTransport(handler), max_retries=0, max_concurrent=max_concurrent
+        transport=httpx2.MockTransport(handler),
+        max_retries=0,
+        max_concurrent=max_concurrent,
+        max_per_origin=max_per_origin,
     )
     return transport, seen
 
 
-def nwis(hook: Hook | None = None, *, max_concurrent: int = 4) -> tuple[NWIS, list[httpx2.Request]]:
-    transport, seen = mock(hook, max_concurrent=max_concurrent)
+def nwis(
+    hook: Hook | None = None, *, max_concurrent: int = 4, max_per_origin: int = 4
+) -> tuple[NWIS, list[httpx2.Request]]:
+    transport, seen = mock(hook, max_concurrent=max_concurrent, max_per_origin=max_per_origin)
     return NWIS(api_key="", transport=transport), seen
 
 
@@ -248,11 +253,18 @@ async def pages(service: NWIS, **query: Any) -> list[Page] | PaginationError:
             return err
 
 
-def test_after_a_failure_no_new_piece_starts() -> None:
+@pytest.mark.parametrize(
+    "bounds",
+    [{"max_concurrent": 1}, {"max_concurrent": 16, "max_per_origin": 1}],
+    ids=["total", "origin"],
+)
+def test_after_a_failure_no_new_piece_starts(bounds: dict[str, int]) -> None:
+    """D-92: the launch width is the smaller bound, or queued pieces send after the failure."""
+
     async def fail(_: httpx2.Request, __: list[tuple[str, str]]) -> httpx2.Response:
         return httpx2.Response(503)
 
-    service, seen = nwis(fail, max_concurrent=1)
+    service, seen = nwis(fail, **bounds)
     sites = {"monitoring_location_id": "USGS-01,USGS-02,USGS-03"}
     err = asyncio.run(pages(service, params=sites, sites_per_piece=1))
     assert isinstance(err, PaginationError)

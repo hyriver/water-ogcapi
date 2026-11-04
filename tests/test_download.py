@@ -654,3 +654,90 @@ def test_the_client_passes_a_download_timeout_through(tmp_path: Path) -> None:
     with Client(transport=transport) as client:
         client.download(URL, tmp_path / "f", timeout=500.0)
     assert seen[0].extensions["timeout"]["read"] == 500.0
+
+
+class _Gated(httpx2.AsyncByteStream):
+    def __init__(self, gate: asyncio.Event) -> None:
+        self.gate = gate
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        await self.gate.wait()
+        yield b"x"
+
+
+def test_long_downloads_do_not_delay_a_request_to_another_origin(tmp_path: Path) -> None:
+    """D-92: four downloads fill their origin's bound and leave the total room."""
+
+    async def run() -> None:
+        gate = asyncio.Event()
+        seen: list[str] = []
+
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            seen.append(request.url.host)
+            if request.url.host == "files.example.test":
+                return httpx2.Response(200, stream=_Gated(gate))
+            return httpx2.Response(200, json={})
+
+        transport = Transport(transport=httpx2.MockTransport(handler))
+        files = [asyncio.create_task(transport.download(URL, tmp_path / str(n))) for n in range(5)]
+        async with asyncio.timeout(5):
+            while seen.count("files.example.test") < 4:  # noqa: ASYNC110
+                await asyncio.sleep(0)
+        await asyncio.wait_for(transport.get("https://api.example.test/x"), 5)
+        assert seen.count("files.example.test") == 4, "the fifth waits for its origin"
+        gate.set()
+        assert [f.size for f in await asyncio.gather(*files)] == [1] * 5
+        await transport.aclose()
+
+    asyncio.run(run())
+
+
+def test_a_redirect_chain_across_origins_completes_at_a_bound_of_one(tmp_path: Path) -> None:
+    """D-92: each hop gives its permits back first, so A to B to A cannot deadlock."""
+    other = "https://elsewhere.example.test/f"
+    back = "https://files.example.test/final"
+    routes = {URL: redirect(other), other: redirect(back), back: body(b"x")}
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return routes[str(request.url)](request)
+
+    transport = Transport(
+        transport=httpx2.MockTransport(handler), max_concurrent=1, max_per_origin=1
+    )
+
+    async def run() -> None:
+        await asyncio.wait_for(transport.download(URL, tmp_path / "f"), 5)
+        assert transport._sem is not None
+        assert transport._sem._value == 1
+        assert all(sem._value == 1 for sem in transport._origins.values())
+
+    asyncio.run(run())
+    assert (tmp_path / "f").read_bytes() == b"x"
+    assert len(seen) == 3
+
+
+def test_a_cancelled_download_returns_both_permits(tmp_path: Path) -> None:
+    async def run() -> None:
+        gate = asyncio.Event()
+        seen: list[httpx2.Request] = []
+
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            seen.append(request)
+            return httpx2.Response(200, stream=_Gated(gate))
+
+        transport = Transport(transport=httpx2.MockTransport(handler))
+        task = asyncio.create_task(transport.download(URL, tmp_path / "f"))
+        async with asyncio.timeout(5):
+            while not seen:  # noqa: ASYNC110
+                await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        assert transport._sem is not None
+        assert transport._sem._value == transport.max_concurrent
+        assert all(sem._value == transport.max_per_origin for sem in transport._origins.values())
+        await transport.aclose()
+
+    asyncio.run(run())
+    assert not list(tmp_path.iterdir())

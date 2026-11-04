@@ -29,7 +29,7 @@ A page from `iter_pages()` holds the decoded document in `body` and its bytes in
 NWIS can split one query into pieces that run concurrently, as the USGS efficiency
 guidance recommends for long records and long site lists. `split_datetime="year"` or
 `"month"` splits a closed `datetime` interval at calendar boundaries in UTC, and
-`sites_per_piece` splits a site list. The transport runs up to `max_concurrent` pieces
+`sites_per_piece` splits a site list. The transport runs up to `max_per_origin` pieces
 at once, 4 by default, and pages arrive in the order they finish:
 
 ```python
@@ -54,7 +54,7 @@ values for one site is 365 features, well under one page.
 `QueryResult.to_arrow()` needs every feature in Python beside the table it builds.
 `Page.to_arrow()` converts one page, so a loop over `iter_pages()` holds a few pages at
 a time: the page it last yielded and the next one, or for a split query up to
-`max_concurrent` pages in flight plus the last yielded. Each page types its columns on
+`max_per_origin` pages in flight plus the last yielded. Each page types its columns on
 its own, and `promote_options="permissive"` joins pages where a column is missing or
 null throughout. A column whose types cannot combine, such as an integer on one page and
 a string on another, still raises:

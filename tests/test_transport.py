@@ -77,14 +77,22 @@ def test_no_io_on_construction() -> None:
 
 @pytest.mark.parametrize(
     "kwargs",
-    [{"max_concurrent": 0}, {"max_concurrent": -1}, {"max_retries": -1}, {"backoff": -0.5}],
+    [
+        {"max_concurrent": 0},
+        {"max_concurrent": -1},
+        {"max_per_origin": 0},
+        {"max_retries": -1},
+        {"backoff": -0.5},
+    ],
 )
 def test_invalid_settings_are_rejected_at_construction(kwargs: dict[str, Any]) -> None:
     with pytest.raises(ValueError, match="must"):
         Transport(**kwargs)
 
 
-@pytest.mark.parametrize("name", ["timeout", "max_concurrent", "max_retries", "backoff", "http2"])
+@pytest.mark.parametrize(
+    "name", ["timeout", "max_concurrent", "max_per_origin", "max_retries", "backoff", "http2"]
+)
 def test_settings_are_read_only(name: str) -> None:
     """The client and semaphore capture settings on first use, so assignment would be ignored."""
     transport = Transport()
@@ -1311,3 +1319,142 @@ def test_a_call_timeout_must_be_positive_and_finite(value: float) -> None:
     with pytest.raises(ValidationError, match="timeout must be"):
         asyncio.run(transport.get(URL, timeout=value))
     assert seen == []
+
+
+class _Gated(httpx2.AsyncByteStream):
+    """A body that waits for ``gate``, so a response holds its permits until released."""
+
+    def __init__(self, gate: asyncio.Event) -> None:
+        self.gate = gate
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        await self.gate.wait()
+        yield b"{}"
+
+
+async def _until(check: Any) -> None:
+    async with asyncio.timeout(5):
+        while not check():  # noqa: ASYNC110
+            await asyncio.sleep(0)
+
+
+def _in_flight_mock() -> tuple[httpx2.MockTransport, dict[str, int]]:
+    """A mock recording its peak requests in flight, in all and by host."""
+    flying: dict[str, int] = {}
+    peaks: dict[str, int] = {"all": 0}
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        host = request.url.host
+        flying[host] = flying.get(host, 0) + 1
+        peaks[host] = max(peaks.get(host, 0), flying[host])
+        peaks["all"] = max(peaks["all"], sum(flying.values()))
+        await asyncio.sleep(0.01)
+        flying[host] -= 1
+        return httpx2.Response(200, json={})
+
+    return httpx2.MockTransport(handler), peaks
+
+
+def test_the_default_bounds_are_four_per_origin_and_sixteen_in_all() -> None:
+    assert (Transport().max_per_origin, Transport().max_concurrent) == (4, 16)
+
+
+def test_the_total_bound_holds_across_origins() -> None:
+    mock, peaks = _in_flight_mock()
+    transport = Transport(transport=mock, max_concurrent=2, max_per_origin=2)
+    urls = [f"https://{host}.test/x" for host in "abc" for _ in range(2)]
+
+    async def run() -> None:
+        await asyncio.gather(*(transport.get(url) for url in urls))
+
+    asyncio.run(run())
+    assert peaks["all"] == 2
+
+
+def test_the_origin_bound_holds_while_the_total_has_room() -> None:
+    """A default port names the same origin; another host gets its own bound."""
+    mock, peaks = _in_flight_mock()
+    transport = Transport(transport=mock, max_per_origin=1)
+    urls = ["https://a.test/x", "https://a.test:443/y", "https://b.test/x"]
+
+    async def run() -> None:
+        await asyncio.gather(*(transport.get(url) for url in urls))
+
+    asyncio.run(run())
+    assert (peaks["a.test"], peaks["b.test"], peaks["all"]) == (1, 1, 2)
+
+
+def test_requests_queued_for_a_busy_origin_leave_the_total_to_others() -> None:
+    """The origin permit comes first; taken second, the queue would hold the total."""
+
+    async def run() -> None:
+        gate = asyncio.Event()
+        seen: list[str] = []
+
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            seen.append(request.url.host)
+            if request.url.host == "busy.test":
+                return httpx2.Response(200, stream=_Gated(gate))
+            return httpx2.Response(200, json={})
+
+        transport = Transport(
+            transport=httpx2.MockTransport(handler), max_concurrent=2, max_per_origin=1
+        )
+        busy = [asyncio.create_task(transport.get("https://busy.test/x")) for _ in range(3)]
+        await _until(lambda: seen.count("busy.test") == 1)
+        await asyncio.wait_for(transport.get("https://free.test/x"), 5)
+        gate.set()
+        await asyncio.gather(*busy)
+        await transport.aclose()
+
+    asyncio.run(run())
+
+
+def test_a_cancelled_call_returns_both_permits() -> None:
+    """Mid-body, and while it waits for the total with its origin's permit in hand."""
+
+    async def run() -> None:
+        gate = asyncio.Event()
+        seen: list[httpx2.Request] = []
+
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            seen.append(request)
+            return httpx2.Response(200, stream=_Gated(gate))
+
+        transport = Transport(
+            transport=httpx2.MockTransport(handler), max_concurrent=1, max_per_origin=2
+        )
+        holder = asyncio.create_task(transport.get("https://a.test/x"))
+        await _until(lambda: seen)
+        waiter = asyncio.create_task(transport.get("https://b.test/x"))
+        await _until(lambda: transport._origins.get(("https", "b.test", None)) is not None)
+        origins = transport._origins
+        await _until(lambda: origins[("https", "b.test", None)]._value == 1)
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+        assert origins[("https", "b.test", None)]._value == 2
+        holder.cancel()
+        await asyncio.gather(holder, return_exceptions=True)
+        assert origins[("https", "a.test", None)]._value == 2
+        assert transport._sem is not None
+        assert transport._sem._value == 1
+        assert len(seen) == 1
+        await transport.aclose()
+
+    asyncio.run(run())
+
+
+def test_origin_bounds_live_with_the_binding() -> None:
+    """D-92: created on the owning loop, cleared by aclose(), and dropped from a pickle."""
+    mock, _ = responder(httpx2.Response(200, json={}))
+    transport = Transport(transport=mock)
+    assert transport._origins == {}
+
+    async def run() -> None:
+        await transport.get(URL)
+        assert ("https", "example.com", None) in transport._origins
+        assert transport.__getstate__()["_origins"] == {}
+        await transport.aclose()
+        assert transport._origins == {}
+
+    asyncio.run(run())

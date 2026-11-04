@@ -7,9 +7,9 @@
 A Python client for USGS water data services over OGC API Features. Its service classes
 block, for scripts and notebooks, and `water_ogcapi.aio` holds their async twins.
 
-**Status:** alpha. The async and sync query APIs and the metadata cache work on all
-three services, with the quota governor, page-level resume, and concurrent NWIS pieces.
-Report problems and missing features in
+**Status:** beta. The async and sync query APIs and the metadata cache work on all three
+services, with the quota governor, page-level resume, and concurrent NWIS pieces. Report
+problems and missing features in
 [GitHub issues](https://github.com/hyriver/water-ogcapi/issues).
 
 ## Features

@@ -12,11 +12,17 @@ import numbers
 from collections.abc import Collection, Iterator, Mapping
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 from water_ogcapi._redact import redact_url
 from water_ogcapi._results import ReadOnlyDict
-from water_ogcapi._transport import query_strings, reject_credentials, reject_non_str, sent_url
+from water_ogcapi._transport import (
+    query_strings,
+    reject_credentials,
+    reject_non_str,
+    reject_userinfo,
+    sent_url,
+)
 from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
@@ -69,10 +75,11 @@ class Request:
     Raises
     ------
     ValidationError
-        If ``method`` is not ``GET`` or ``POST``, ``url`` holds userinfo, ``url`` or
-        ``params`` carry a credential such as ``api_key``, ``headers`` holds another
-        header, or ``url`` or a name in ``params`` or ``headers`` is not exactly ``str``
-        (D-65). A credential is refused, since masking it would change the request.
+        If ``method`` is not ``GET`` or ``POST``, ``url`` holds userinfo or its authority
+        does not parse (D-90), ``url`` or ``params`` carry a credential such as
+        ``api_key``, ``headers`` holds another header, or ``url`` or a name in ``params``
+        or ``headers`` is not exactly ``str`` (D-65). A credential is refused, since
+        masking it would change the request.
 
     Notes
     -----
@@ -95,13 +102,7 @@ class Request:
         # stored copy is the one checked and the identity names the URL that goes out.
         params = query_strings(self.params) or {}
         reject_credentials(self.url, params)
-        try:
-            userinfo = urlsplit(self.url).netloc.rpartition("@")[0]
-        except ValueError:
-            userinfo = ""
-        if userinfo:
-            msg = "a request URL must not carry userinfo"
-            raise ValidationError(msg)
+        reject_userinfo(self.url, "a request URL")
         headers = dict(self.headers or {})
         reject_non_str(headers, "header names")
         if extra := sorted(name for name in headers if name.lower() not in REQUEST_HEADERS):

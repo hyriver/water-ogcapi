@@ -141,6 +141,18 @@ def reject_credentials(url: str, params: Mapping[str, str] | None) -> None:
         raise ValidationError(msg)
 
 
+def reject_userinfo(url: str, what: str) -> None:
+    """Refuse a URL that holds userinfo or whose authority does not parse (D-86, D-90)."""
+    try:
+        netloc = urlsplit(url).netloc
+    except ValueError:
+        msg = f"{what} does not parse as a URL"
+        raise ValidationError(msg) from None
+    if "@" in netloc:
+        msg = f"{what} must not carry userinfo"
+        raise ValidationError(msg)
+
+
 def query_strings(
     params: Mapping[str, str | int | float | bool] | None,
 ) -> dict[str, str] | None:

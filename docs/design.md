@@ -2412,6 +2412,23 @@ Layering rule for anything new:
 - **Limits:** A server that applies a coding it does not name, or names one it did not
     apply, still passes. A body that fails to decode in a known coding raises as before.
 
+### D-90: A URL whose authority does not parse is refused
+
+- **Status:** accepted; built in #183.
+- **Date:** 2026-11-04.
+- **Decision:** `Request`, at construction and on a pickle load, and the link check of
+    `parse_page()` and `OGCService.item()`, refuse a URL whose authority `urlsplit()`
+    cannot parse, as `OGCService(base_url=)` does (D-86). `reject_userinfo()` in
+    `_transport.py` holds the one check.
+- **Why:** Each read the `ValueError` as no userinfo, so `https://u:x@[bad/x` survived
+    in a `Request`, a checkpoint's pickle, and a page's links. httpx2 cannot send it, so
+    the userinfo stayed in the caller's own objects and pickles.
+- **Rejected:** Masking the URL: `redact_url()` turns it into `REDACTED`, which leaves a
+    `Request` that cannot be sent.
+- **Limits:** One such `href` fails its page, even a link the caller never reads. Only
+    what `urlsplit()` itself refuses counts: it reads a port lazily, so
+    `https://h:bad/x` passes these checks and httpx2 refuses it at send.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

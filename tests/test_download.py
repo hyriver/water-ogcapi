@@ -73,6 +73,21 @@ def test_a_body_streams_to_the_file(tmp_path: Path) -> None:
     assert seen[0].headers["accept-encoding"] == "identity"
 
 
+def test_a_hand_built_download_keeps_no_url_credential(tmp_path: Path) -> None:
+    """D-91: the transport names a URL without these, and a caller's can hold them."""
+    built = _transport.Download(
+        path=tmp_path / "f",
+        url="https://u:SECRET@example.test/f?api_key=SECRET&x=1",
+        status=200,
+        headers={},
+        size=0,
+        attempts=1,
+        redirects=0,
+    )
+    assert built.url == "https://example.test/f?api_key=REDACTED&x=1"
+    assert b"SECRET" not in pickle.dumps(built)
+
+
 def test_a_caller_accept_encoding_is_sent_alone(tmp_path: Path) -> None:
     transport, seen = serve({URL: body(b"x")})
     fetch(transport, tmp_path / "f", headers={"accept-encoding": "gzip"})

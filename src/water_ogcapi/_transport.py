@@ -561,6 +561,16 @@ class Download:
         Attempts made, retries included.
     redirects : int
         Redirects followed on the attempt that succeeded.
+
+    Raises
+    ------
+    ValidationError
+        If ``url`` is not exactly ``str`` (D-65).
+
+    Notes
+    -----
+    A hand-built ``url`` loses its userinfo and fragment and has ``api_key`` masked, as
+    `Response` does (D-91).
     """
 
     path: Path
@@ -570,6 +580,10 @@ class Download:
     size: int
     attempts: int
     redirects: int
+
+    def __post_init__(self) -> None:
+        reject_non_str([self.url], "a URL")
+        object.__setattr__(self, "url", redact_url(self.url))
 
 
 class Transport:

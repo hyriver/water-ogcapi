@@ -215,7 +215,8 @@ class Checkpoint:
     Raises
     ------
     ValidationError
-        If ``base_url`` or ``collection`` is not exactly ``str`` (D-65).
+        If ``base_url`` or ``collection`` is not exactly ``str`` (D-65), or ``base_url``
+        or a URL in ``held`` carries a credential or userinfo or does not parse (D-91).
     TypeError
         If ``pending`` holds anything but `Request` objects.
     ValueError
@@ -234,6 +235,8 @@ class Checkpoint:
         # Error messages echo both (D-65).
         reject_non_str([self.base_url], "base_url")
         reject_non_str([self.collection], "collection")
+        reject_credentials(self.base_url, None)
+        reject_userinfo(self.base_url, "base_url")
         pending = tuple(self.pending)
         # Runtime check for untyped callers, as Page.links has.
         if not all(isinstance(item, Request) for item in cast("tuple[object, ...]", pending)):
@@ -243,8 +246,15 @@ class Checkpoint:
             msg = "a checkpoint needs a pending request"
             raise ValueError(msg)
         object.__setattr__(self, "pending", pending)
-        if not isinstance(self.held, Held | frozenset):
-            object.__setattr__(self, "held", frozenset(self.held))
+        # A run's own Held only records requests that passed these checks, and a checkpoint
+        # per page must not read them again.
+        if not isinstance(self.held, Held):
+            held = frozenset(self.held)
+            for _, url, _ in held:
+                reject_non_str([url], "a held URL")
+                reject_credentials(url, None)
+                reject_userinfo(url, "a held URL")
+            object.__setattr__(self, "held", held)
 
     def __setstate__(self, state: list[object]) -> None:
         for field, value in zip(dataclasses.fields(self), state, strict=True):

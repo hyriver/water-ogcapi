@@ -128,6 +128,12 @@ class ServiceProfile:
         Seconds over which the service's ``X-RateLimit-Limit`` counts, read by its
         `Governor` (D-49). ``None``, the default, for a service that sends no
         ``X-RateLimit-*`` headers.
+
+    Raises
+    ------
+    ValidationError
+        If ``base_url`` is not exactly ``str`` (D-65), or carries a credential or userinfo
+        or does not parse (D-91).
     """
 
     base_url: str
@@ -135,6 +141,11 @@ class ServiceProfile:
     max_limit: int
     key_env: str | None = None
     rate_limit_window: float | None = None
+
+    def __post_init__(self) -> None:
+        reject_non_str([self.base_url], "base_url")
+        reject_credentials(self.base_url, None)
+        reject_userinfo(self.base_url, "base_url")
 
 
 class _Run:
@@ -291,8 +302,8 @@ class OGCService:
     TypeError
         If ``base_url`` is missing for a service without a profile.
     ValidationError
-        If ``base_url`` is not exactly ``str`` (D-65), does not parse, or carries
-        userinfo (D-86).
+        If ``base_url`` is not exactly ``str`` (D-65), does not parse, or carries userinfo
+        (D-86) or a credential such as ``api_key`` (D-91).
     """
 
     profile: ClassVar[ServiceProfile | None] = None
@@ -305,6 +316,7 @@ class OGCService:
             base_url = self.profile.base_url
         # Error messages echo it, and a subclass can read another URL to urlsplit() (D-65).
         reject_non_str([base_url], "base_url")
+        reject_credentials(base_url, None)
         # Metadata calls would send userinfo as Basic auth, and pickles and errors keep it.
         reject_userinfo(base_url, "base_url")
         self._base_url = base_url.rstrip("/")

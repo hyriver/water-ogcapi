@@ -2429,6 +2429,28 @@ Layering rule for anything new:
     what `urlsplit()` itself refuses counts: it reads a port lazily, so
     `https://h:bad/x` passes these checks and httpx2 refuses it at send.
 
+### D-91: Caller-built objects keep no URL credential
+
+- **Status:** accepted; built in #184. Amends D-04 and D-86.
+- **Date:** 2026-11-04.
+- **Decision:** `Download` redacts its `url` at construction, as `Response` does.
+    Objects that send a URL or match on it refuse one with `api_key`, userinfo, or an
+    authority that does not parse: `ServiceProfile`, `Checkpoint` (its `base_url` and
+    each URL in `held`), and `OGCService(base_url=)`. A checkpoint's checks run again on
+    a pickle load (D-65). A run's own `Held` skips them, since it only records requests
+    that passed `Request`'s checks.
+- **Why:** These objects kept a URL as given, so an `api_key` value or userinfo stayed
+    in the object and its pickle, while `Page`, `Response`, and the exceptions redact
+    theirs. The transport builds `Download.url` from scheme, host, port, and path, so
+    only hand-built objects carried one.
+- **Rejected:** Redacting where the URL is sent or matched: a masked `base_url` or
+    `held` entry reads as a different URL, so a resume refuses it, or sends a request
+    the checkpoint meant to hold, with no word of why.
+- **Limits:** `ServiceProfile` and `Download` check at construction only, so a pickle
+    written by hand can still hold one. Only `api_key` and userinfo count, as in D-86: a
+    credential under another name stays. Loading a `held` set costs one parse per
+    identity.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

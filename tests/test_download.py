@@ -741,3 +741,90 @@ def test_a_cancelled_download_returns_both_permits(tmp_path: Path) -> None:
 
     asyncio.run(run())
     assert not list(tmp_path.iterdir())
+
+
+def _echoing(request: httpx2.Request) -> httpx2.Response:
+    """A 400 whose body and reason phrase echo the query it was sent."""
+    query = request.url.query
+    return httpx2.Response(
+        400, content=b"bad parameter in " + query, extensions={"reason_phrase": b"Bad " + query}
+    )
+
+
+def test_a_public_query_keeps_the_server_s_message(tmp_path: Path) -> None:
+    """D-69: a caller who built the query reads which parameter was wrong."""
+    transport, _ = serve({URL: _echoing})
+    with pytest.raises(ServiceError) as excinfo:
+        fetch(transport, tmp_path / "f", params={"var": "tmax"}, public_query=True)
+    err = excinfo.value
+    assert err.response_body == b"bad parameter in var=tmax"
+    assert "var=tmax" in str(err)
+    assert (err.status, err.url) == (400, URL), "the URL is still named without its query"
+
+
+def test_a_public_query_keeps_a_library_message(tmp_path: Path) -> None:
+    def refuse(_: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("refused by proxy")
+
+    for kept, message in ((True, "refused by proxy"), (False, "ConnectError")):
+        transport, _ = serve({URL: refuse})
+        with pytest.raises(ServiceError, match=message) as excinfo:
+            fetch(transport, tmp_path / "f", params={"var": "tmax"}, public_query=kept)
+        assert ("refused by proxy" in str(excinfo.value)) is kept
+
+
+def test_a_signature_in_params_stays_out_of_the_error_and_logs(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """D-69: only ``api_key`` is refused by name, so quiet stays the default."""
+    records = _Records()
+    logger.addHandler(records)
+    caplog.set_level(logging.DEBUG)
+    try:
+        transport, _ = serve({URL: _echoing})
+        with pytest.raises(ServiceError) as excinfo:
+            fetch(transport, tmp_path / "f", params={"X-Amz-Signature": "SECRETSIG"})
+    finally:
+        logger.removeHandler(records)
+    err = excinfo.value
+    assert err.response_body is None
+    assert err.status == 400
+    assert "SECRETSIG" not in str(err)
+    assert b"SECRETSIG" not in pickle.dumps(err)
+    assert not any("SECRETSIG" in message for message in records.messages)
+
+
+@pytest.mark.parametrize(
+    "hop",
+    ["https://files.example.test/next?X-Amz-Signature=SECRETSIG", "https://other.test/next"],
+    ids=["same-origin-with-query", "cross-origin"],
+)
+def test_a_public_query_goes_quiet_after_a_redirect(tmp_path: Path, hop: str) -> None:
+    """D-69: the caller spoke for the first URL's query, and nothing a server sent."""
+    transport, seen = serve({URL: redirect(hop), hop.partition("?")[0]: _echoing})
+    with pytest.raises(ServiceError) as excinfo:
+        fetch(transport, tmp_path / "f", params={"var": "tmax"}, public_query=True)
+    err = excinfo.value
+    assert len(seen) == 2
+    assert err.response_body is None
+    assert "SECRETSIG" not in str(err)
+    assert b"SECRETSIG" not in pickle.dumps(err)
+
+
+def test_a_public_query_stays_kept_after_a_redirect_with_no_query(tmp_path: Path) -> None:
+    hop = "https://files.example.test/next"
+
+    def reply(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(400, content=b"nope")
+
+    transport, _ = serve({URL: redirect(hop), hop: reply})
+    with pytest.raises(ServiceError) as excinfo:
+        fetch(transport, tmp_path / "f", params={"var": "tmax"}, public_query=True)
+    assert excinfo.value.response_body == b"nope"
+
+
+def test_the_client_passes_public_query_through(tmp_path: Path) -> None:
+    transport, _ = serve({URL: _echoing})
+    with Client(transport=transport) as client, pytest.raises(ServiceError) as excinfo:
+        client.download(URL, tmp_path / "f", params={"var": "tmax"}, public_query=True)
+    assert excinfo.value.response_body == b"bad parameter in var=tmax"

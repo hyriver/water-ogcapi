@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import codecs
+import contextlib
 import http.cookiejar
 import json
 import logging
@@ -31,7 +32,7 @@ from water_ogcapi._redact import CREDENTIAL_PARAMS, redact_url
 from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import AsyncGenerator, Callable, Iterable, Mapping
 
     from water_ogcapi._governor import Governor
 
@@ -773,6 +774,21 @@ class Transport:
         # ever meets origins without bound.
         return self._origins.setdefault(_origin(url), asyncio.Semaphore(self.max_per_origin))
 
+    @contextlib.asynccontextmanager
+    async def _permits(
+        self, url: httpx2.URL, sem: asyncio.Semaphore, pacer: Governor | _Unpaced
+    ) -> AsyncGenerator[None]:
+        """Hold ``url``'s origin permit, then a paced slot, then a total permit (D-49, D-92).
+
+        A slot is booked once the request can nearly go. Booked before the origin's queue,
+        every gathered call would clear the governor at once, and no reading or 429 would
+        reach the calls still queued.
+        """
+        async with self._origin_permit(url):
+            await pacer.wait()
+            async with sem:
+                yield
+
     def _delay(self, attempt: int) -> float:
         """Exponential backoff for a zero-based attempt number."""
         # Clamp the exponent: 2**1024 overflows float conversion, while any exponent
@@ -814,6 +830,7 @@ class Transport:
         sem: asyncio.Semaphore,
         target: httpx2.URL,
         *,
+        pacer: Governor | _Unpaced,
         method: str,
         headers: dict[str, str],
         content: bytes | None,
@@ -827,7 +844,7 @@ class Transport:
         """
         resp: httpx2.Response | None = None
         try:
-            async with self._origin_permit(target), sem, asyncio.timeout(seconds):
+            async with self._permits(target, sem, pacer), asyncio.timeout(seconds):
                 if self._client is not client or client.is_closed:
                     # aclose() ran while this call waited for a permit or a backoff, or is
                     # still closing; httpx2 would raise a bare RuntimeError.
@@ -974,13 +991,12 @@ class Transport:
         for attempt in range(retries + 1):
             final = attempt == retries
             status: int | None = None
-            # Outside the permit, so a paced wait never blocks another service.
-            await pacer.wait()
             try:
                 resp = await self._attempt(
                     client,
                     sem,
                     target,
+                    pacer=pacer,
                     method=method,
                     headers=headers,
                     content=content,
@@ -1148,11 +1164,9 @@ class Transport:
         target, hop_headers, redirects = first, headers, 0
         try:
             while True:
-                # Each hop waits for the governor outside the permit, as request() does.
-                await pacer.wait()
                 redirect: _RedirectedError | None = None
                 try:
-                    async with self._origin_permit(target), sem:
+                    async with self._permits(target, sem, pacer):
                         if self._client is not client or client.is_closed:
                             msg = "transport closed while the request waited"
                             raise ServiceError(msg, named, attempts=attempt, method="GET")

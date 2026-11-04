@@ -8,6 +8,7 @@ import os
 import pickle
 import stat
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -891,3 +892,71 @@ def test_the_client_passes_a_check_through(tmp_path: Path) -> None:
             URL, tmp_path / "f", check=lambda part, _: checked.append(part.read_bytes())
         )
     assert checked == [b"x"]
+
+
+STAMP = 1445412480.0
+LAST_MODIFIED = {"Last-Modified": "Wed, 21 Oct 2015 07:28:00 GMT"}
+
+
+def test_remote_time_sets_the_file_time_before_the_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-69: the file never exists with the local write time, even if the process stops."""
+    transport, _ = serve({URL: body(b"x", **LAST_MODIFIED)})
+    at_rename: list[float] = []
+    rename = Path.replace
+
+    def spy(self: Path, target: Path) -> Path:
+        at_rename.append(self.stat().st_mtime)
+        return rename(self, target)
+
+    monkeypatch.setattr(Path, "replace", spy)
+    fetch(transport, tmp_path / "f", remote_time=True)
+    assert at_rename == [STAMP]
+    assert (tmp_path / "f").stat().st_mtime == STAMP
+
+
+@pytest.mark.parametrize(
+    ("headers", "kwargs"),
+    [
+        ({}, {"remote_time": True}),
+        ({"Last-Modified": "not a date"}, {"remote_time": True}),
+        (LAST_MODIFIED, {}),
+    ],
+    ids=["missing", "unparsable", "off"],
+)
+def test_the_file_keeps_the_local_time(
+    tmp_path: Path, headers: dict[str, str], kwargs: dict[str, Any]
+) -> None:
+    transport, _ = serve({URL: body(b"x", **headers)})
+    fetch(transport, tmp_path / "f", **kwargs)
+    assert abs((tmp_path / "f").stat().st_mtime - time.time()) < 60
+
+
+def test_a_time_the_file_system_refuses_still_delivers_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(*_: object) -> None:
+        raise OSError(22, "Invalid argument")
+
+    monkeypatch.setattr(_transport.os, "utime", refuse)
+    transport, _ = serve({URL: body(b"x", **LAST_MODIFIED)})
+    assert fetch(transport, tmp_path / "f", remote_time=True).status == 200
+    assert (tmp_path / "f").read_bytes() == b"x"
+
+
+def test_a_304_leaves_the_file_time_untouched(tmp_path: Path) -> None:
+    path = tmp_path / "f"
+    path.write_bytes(b"old")
+    os.utime(path, (1000.0, 1000.0))
+    transport, _ = serve({URL: lambda _: httpx2.Response(304, headers=LAST_MODIFIED)})
+    assert fetch(transport, path, remote_time=True).status == 304
+    assert path.stat().st_mtime == 1000.0
+    assert path.read_bytes() == b"old"
+
+
+def test_the_client_passes_remote_time_through(tmp_path: Path) -> None:
+    transport, _ = serve({URL: body(b"x", **LAST_MODIFIED)})
+    with Client(transport=transport) as client:
+        client.download(URL, tmp_path / "f", remote_time=True)
+    assert (tmp_path / "f").stat().st_mtime == STAMP

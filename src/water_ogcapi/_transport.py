@@ -544,6 +544,19 @@ def _create_part(target: Path) -> tuple[BinaryIO, Path]:
         return os.fdopen(handle, "wb"), part
 
 
+def _set_remote_time(part: Path, last_modified: str | None) -> None:
+    """Set the times of ``part`` from ``last_modified``, when it parses (D-69)."""
+    when = _http_date(last_modified)
+    if when is None:
+        return
+    try:
+        stamp = when.timestamp()
+        os.utime(part, (stamp, stamp))
+    except (OSError, OverflowError, ValueError) as exc:
+        # The server's text picks the time, and the whole file is already here.
+        logger.debug("left the local file time: %s", type(exc).__name__)
+
+
 @dataclass(frozen=True, slots=True)
 class Download:
     """A file `Transport.download` wrote, and the response that filled it (D-69).
@@ -1230,6 +1243,7 @@ class Transport:
         timeout: float | None = None,  # noqa: ASYNC109
         public_query: bool = False,
         check: Callable[[Path, Mapping[str, str]], object] | None = None,
+        remote_time: bool = False,
     ) -> Download:
         """Stream a ``GET`` response to a file, following redirects (D-69).
 
@@ -1278,6 +1292,11 @@ class Transport:
             exception it raises propagates as raised, unretried, with the ``.part`` removed
             and ``path`` keeping its old file, which stops a 200 holding an error document
             from replacing a good file. A 304 skips it.
+        remote_time : bool, optional
+            Give the file the time in the response's ``Last-Modified`` before the rename,
+            as ``curl -R`` does, so it never exists with the local write time, defaults to
+            ``False``. A missing or unparsable header, or a time the file system refuses,
+            leaves the local time.
 
         Returns
         -------
@@ -1347,6 +1366,8 @@ class Transport:
                 # Outside the budget's scope, so a TimeoutError of its own stays its own.
                 if check is not None:
                     check(part, kept)
+                if remote_time:
+                    _set_remote_time(part, kept.get("last-modified"))
                 part.replace(target)
             return Download(
                 path=target,

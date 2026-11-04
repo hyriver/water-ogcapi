@@ -254,6 +254,98 @@ class _BrokenStream(httpx2.AsyncByteStream):
         raise httpx2.ReadError("connection reset")
 
 
+class _StalledStream(httpx2.AsyncByteStream):
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield b"partial"
+        await asyncio.Event().wait()
+
+
+class _ObservingPacer:
+    def __init__(self) -> None:
+        self.statuses: list[int] = []
+
+    async def wait(self) -> None:
+        return None
+
+    def observe(self, status: int, _headers: Any) -> None:
+        self.statuses.append(status)
+
+
+def _unreadable(status: int, **headers: str) -> httpx2.Response:
+    return httpx2.Response(status, headers=headers, stream=_BrokenStream())
+
+
+def _undecodable_body(status: int, **headers: str) -> httpx2.Response:
+    class Junk(httpx2.AsyncByteStream):
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            yield b"not gzip"
+
+    return httpx2.Response(status, headers={"Content-Encoding": "gzip", **headers}, stream=Junk())
+
+
+@pytest.mark.parametrize("build", [_unreadable, _undecodable_body], ids=["read", "decode"])
+def test_a_429_whose_body_fails_keeps_its_wait_and_counts(build: Any) -> None:
+    """A body failure read as a transport error: retried at once, no status, no wait (D-49)."""
+    mock, seen = responder(build(429, **{"Retry-After": "120", "X-RateLimit-Remaining": "7"}))
+    pacer = _ObservingPacer()
+    transport = Transport(transport=mock)
+    with pytest.raises(RateLimitError) as excinfo:
+        asyncio.run(transport.get(URL, governor=pacer))  # pyright: ignore[reportArgumentType]
+    err = excinfo.value
+    assert (err.retry_after, err.remaining, err.status) == (120.0, 7, 429)
+    assert err.response_body is None
+    assert len(seen) == 1
+    assert pacer.statuses == [429]
+
+
+def test_a_4xx_whose_body_fails_is_not_sent_again(no_sleep: list[float]) -> None:
+    mock, seen = responder(_unreadable(400))
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(Transport(transport=mock).get(URL))
+    assert (excinfo.value.status, excinfo.value.response_body) == (400, None)
+    assert len(seen) == 1
+    assert no_sleep == []
+
+
+def test_a_503_whose_body_fails_waits_as_it_asks(no_sleep: list[float]) -> None:
+    mock, seen = responder(_unreadable(503, **{"Retry-After": "7"}), httpx2.Response(200, json={}))
+    assert asyncio.run(Transport(transport=mock).get(URL)).status == 200
+    assert len(seen) == 2
+    assert no_sleep == [7.0]
+
+
+def test_a_final_5xx_whose_body_fails_raises_its_status(no_sleep: list[float]) -> None:
+    mock, seen = responder(_unreadable(500), _unreadable(500), _unreadable(500))
+    with pytest.raises(ServiceError) as excinfo:
+        asyncio.run(Transport(transport=mock, max_retries=2).get(URL))
+    assert (excinfo.value.status, excinfo.value.attempts) == (500, 3)
+    assert len(seen) == 3
+    assert len(no_sleep) == 2
+
+
+def test_a_429_whose_body_outlasts_the_deadline_keeps_its_wait() -> None:
+    """The attempt's deadline falls during the read, outside httpx2's own errors."""
+    reply = httpx2.Response(429, headers={"Retry-After": "120"}, stream=_StalledStream())
+    mock, seen = responder(reply)
+    with pytest.raises(RateLimitError) as excinfo:
+        asyncio.run(Transport(transport=mock, timeout=0.01).get(URL))
+    assert (excinfo.value.retry_after, excinfo.value.response_body) == (120.0, None)
+    assert len(seen) == 1
+
+
+def test_a_2xx_whose_body_outlasts_the_deadline_stays_a_transport_error(
+    no_sleep: list[float],
+) -> None:
+    def stalled(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, stream=_StalledStream())
+
+    mock = httpx2.MockTransport(stalled)
+    with pytest.raises(ServiceError, match="attempt exceeded") as excinfo:
+        asyncio.run(Transport(transport=mock, timeout=0.01, max_retries=1).get(URL))
+    assert excinfo.value.status is None
+    assert len(no_sleep) == 1
+
+
 @pytest.mark.usefixtures("no_sleep")
 @pytest.mark.parametrize("blocking", [False, True], ids=["Transport", "Client"])
 @pytest.mark.parametrize(

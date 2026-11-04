@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import urlsplit
 
 from water_ogcapi._metadata import json_object, parse_link
 from water_ogcapi._results import Page, Pagination
-from water_ogcapi._transport import reject_credentials
+from water_ogcapi._transport import reject_credentials, reject_userinfo
 from water_ogcapi.exceptions import ServiceError, ValidationError
 
 if TYPE_CHECKING:
@@ -45,15 +44,16 @@ def _broken_next(link: object) -> bool:
 
 
 def _carries_credential(href: str) -> bool:
-    """Whether ``href`` holds a credential in its query, fragment, or userinfo."""
+    """Whether ``href`` holds a credential in its query, fragment, or userinfo.
+
+    An authority that does not parse counts, since it can hide userinfo (D-90).
+    """
     try:
         reject_credentials(href, None)
+        reject_userinfo(href, "a link")
     except ValidationError:
         return True
-    try:
-        return "@" in urlsplit(href).netloc
-    except ValueError:
-        return False
+    return False
 
 
 def credential_link(links: object) -> bool:
@@ -91,8 +91,8 @@ def parse_page(
         If the body is not a FeatureCollection with a ``features`` list, or its
         ``links`` member is not a list or holds a ``next`` link without a string
         ``href``. Either would otherwise read as the last page (D-34). Also if a link
-        of the document or of a feature carries a credential, since ``body`` and
-        ``content`` would keep it (D-53).
+        of the document or of a feature carries a credential or its authority does not
+        parse, since ``body`` and ``content`` would keep it (D-53, D-90).
     """
     body = json_object(resp, method=method, request_body=request_body)
     features = body.get("features")
@@ -108,7 +108,7 @@ def parse_page(
             request_body=request_body,
         )
     if credential_link(links) or any(map(credential_link, _feature_links(features))):
-        msg = "response has a link that carries a credential"
+        msg = "response has a link that carries a credential or does not parse"
         raise ServiceError(
             msg,
             resp.url,

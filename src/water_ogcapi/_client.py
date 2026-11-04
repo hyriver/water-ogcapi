@@ -32,7 +32,6 @@ from water_ogcapi._paging import (
     summarize,
 )
 from water_ogcapi._query import Checkpoint, Held, Request, items_request, path_segment
-from water_ogcapi._redact import REDACTED
 from water_ogcapi._results import Page, QueryResult, crs_of
 from water_ogcapi._transport import (
     Transport,
@@ -40,6 +39,7 @@ from water_ogcapi._transport import (
     query_strings,
     reject_credentials,
     reject_non_str,
+    reject_userinfo,
 )
 from water_ogcapi.exceptions import (
     PaginationError,
@@ -305,15 +305,8 @@ class OGCService:
             base_url = self.profile.base_url
         # Error messages echo it, and a subclass can read another URL to urlsplit() (D-65).
         reject_non_str([base_url], "base_url")
-        try:
-            netloc = urlsplit(base_url).netloc
-        except ValueError:
-            msg = "base_url does not parse as a URL"
-            raise ValidationError(msg) from None
-        if "@" in netloc:
-            # Metadata calls would send it as Basic auth, and pickles and errors keep it.
-            msg = "base_url must not carry userinfo"
-            raise ValidationError(msg)
+        # Metadata calls would send userinfo as Basic auth, and pickles and errors keep it.
+        reject_userinfo(base_url, "base_url")
         self._base_url = base_url.rstrip("/")
         self._owns_transport = transport is None
         self._transport = Transport() if transport is None else transport
@@ -580,9 +573,7 @@ class OGCService:
         if href is None:
             return None, None
         # RFC 8288 allows a relative reference; the origin check needs it absolute.
-        # Link redacts an unparsable href to REDACTED, which must not resolve to a path.
-        if href != REDACTED:
-            href = urljoin(page.url, href)
+        href = urljoin(page.url, href)
         following = Request(
             url=href, method=request.method, body=request.body, headers=request.headers
         )
@@ -979,7 +970,7 @@ class OGCService:
             raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
         if credential_link(links):
             # body and content would keep it (D-29).
-            msg = "response has a link that carries a credential"
+            msg = "response has a link that carries a credential or does not parse"
             raise ServiceError(msg, resp.url, status=resp.status, attempts=resp.attempts)
         return Page(
             url=resp.url,

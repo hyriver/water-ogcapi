@@ -379,7 +379,7 @@ def test_an_unparsable_next_link_sends_nothing() -> None:
     first = {**hu02()[0], "links": [{"rel": "next", "href": "https://["}]}
     transport, seen = serve(first)
     pages, err = traverse(OGCService(GEOCONNEX, transport=transport), "hu02")
-    assert len(pages) == 1
+    assert pages == [], "its page would keep the href in body and content (D-90)"
     assert err is not None
     assert len(seen) == 1
 
@@ -587,7 +587,12 @@ def test_a_page_whose_feature_link_or_userinfo_carries_a_credential_fails() -> N
         **doc,
         "links": [*doc["links"], {"rel": "alternate", "href": "https://u:SECRET@x.test/a"}],
     }
-    for reply in ({**doc, "features": [feature]}, userinfo):
+    # D-90: an authority that does not parse can hide userinfo from the check.
+    unparsable = {
+        **doc,
+        "links": [*doc["links"], {"rel": "alternate", "href": "https://u:SECRET@[bad/a"}],
+    }
+    for reply in ({**doc, "features": [feature]}, userinfo, unparsable):
         transport, _ = serve(reply)
         _, err = collected(OGCService(GEOCONNEX, transport=transport))
         assert type(err) is PaginationError
@@ -1527,6 +1532,13 @@ def test_a_base_url_with_userinfo_is_refused_at_construction(
     assert "PASSWD" not in str(excinfo.value)
 
 
+def test_a_request_refuses_a_url_whose_authority_does_not_parse() -> None:
+    """D-90: the ``ValueError`` of ``urlsplit()`` hid the userinfo from the check."""
+    with pytest.raises(ValidationError, match="does not parse") as excinfo:
+        Request(url="https://u:SECRET@[bad/x")
+    assert "SECRET" not in str(excinfo.value)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [("base_url", LyingBase(f"{BASE}?api_key=SECRET")), ("collection", LooksLikeAccept("c"))],
@@ -1547,6 +1559,7 @@ def test_a_checkpoint_refuses_a_string_that_is_not_a_str(field: str, value: str)
     ("field", "value"),
     [
         ("url", OffOrigin("https://evil.example:bad/x?api_key=SECRET")),
+        ("url", "https://u:SECRET@[bad/x"),
         ("params", {"api_key": "SECRET"}),
         ("headers", {"X-Api-Key": "SECRET"}),
     ],

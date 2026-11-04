@@ -12,11 +12,13 @@ from water_ogcapi import (
     CRS,
     Checkpoint,
     Collections,
+    Download,
     Link,
     Page,
     Pagination,
     QueryResult,
     Request,
+    Response,
     Schema,
     ServiceProfile,
 )
@@ -53,6 +55,8 @@ PICKLED_PATHS = {
     ("water_ogcapi._results", "Pagination"),
     ("water_ogcapi._results", "QueryResult"),
     ("water_ogcapi._results", "ReadOnlyDict"),
+    ("water_ogcapi._transport", "Download"),
+    ("water_ogcapi._transport", "Response"),
     ("water_ogcapi.exceptions", "PaginationError"),
     ("water_ogcapi.exceptions", "PartialResultsError"),
     ("water_ogcapi.exceptions", "RateLimitError"),
@@ -112,6 +116,8 @@ def everything_pickled() -> list[object]:
         ValidationError("limit takes an integer from 1 to 50000"),
         WaterOGCAPIError("failed"),
         ServiceProfile(base_url=URL, default_limit=10, max_limit=50, rate_limit_window=60.0),
+        Response(url=URL, status=200, headers={}, content=b""),
+        Download(path=Path("f"), url=URL, status=200, headers={}, size=0, attempts=1, redirects=0),
     ]
 
 

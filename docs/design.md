@@ -2621,8 +2621,9 @@ Layering rule for anything new:
 ### L-08: Connection limits do not bound HTTP/2 concurrency
 
 - One HTTP/2 connection multiplexes many streams, so `httpx2.Limits(max_connections=)`
-    does not cap requests in flight. `Transport` uses an explicit semaphore, held only
-    while a request is in flight and never across a backoff wait.
+    does not cap requests in flight. `Transport` uses an explicit semaphore, held while
+    a request waits for its paced slot (D-49) and is in flight, and never across a
+    backoff wait.
 - **Check:** `test_concurrency_is_bounded` and `test_backoff_does_not_hold_a_permit`.
 
 ### L-09: Redaction held for the error and failed one attribute away

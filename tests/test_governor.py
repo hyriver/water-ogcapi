@@ -317,7 +317,9 @@ async def _let_the_others_run() -> None:
     await turn
 
 
-def _gathered_starts(clock: list[float], call: Callable[..., Any], n: int) -> list[float]:
+def _gathered_starts(
+    clock: list[float], call: Callable[..., Any], n: int, **bounds: int
+) -> list[float]:
     """Return the clock at each send of ``n`` gathered calls, the first answered 429."""
     sent: list[float] = []
 
@@ -328,7 +330,11 @@ def _gathered_starts(clock: list[float], call: Callable[..., Any], n: int) -> li
             return httpx2.Response(429, headers={"retry-after": "30"})
         return httpx2.Response(200, json={})
 
-    transport = Transport(transport=httpx2.MockTransport(handler), max_per_origin=1, max_retries=0)
+    transport = Transport(
+        transport=httpx2.MockTransport(handler),
+        max_retries=0,
+        **{"max_per_origin": 1, **bounds},
+    )
     governor = Governor(None, interval=0.0)
 
     async def run() -> None:
@@ -342,6 +348,25 @@ def _gathered_starts(clock: list[float], call: Callable[..., Any], n: int) -> li
 def test_a_429_holds_requests_queued_at_the_origin_permit(clock: list[float]) -> None:
     """D-49: booked before the queue, 40 gathered calls went out inside 0.06 s of the hold."""
     sent = _gathered_starts(clock, lambda t, g, _: t.get(URL, governor=g), 4)
+    assert sent == [0.0, 30.0, 30.0, 30.0]
+
+
+@pytest.mark.parametrize(
+    "target",
+    [lambda _: URL, lambda i: f"https://host{i}.example.com/"],
+    ids=["one-origin", "a-governor-across-origins"],
+)
+def test_a_429_holds_requests_queued_at_the_total_permit(
+    clock: list[float], target: Callable[[int], str]
+) -> None:
+    """D-49: booked between the permits, the queue sent on one reading once the total freed."""
+    sent = _gathered_starts(
+        clock,
+        lambda t, g, i: t.get(target(i), governor=g),
+        4,
+        max_concurrent=1,
+        max_per_origin=4,
+    )
     assert sent == [0.0, 30.0, 30.0, 30.0]
 
 

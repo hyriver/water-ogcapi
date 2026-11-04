@@ -1293,7 +1293,7 @@ Layering rule for anything new:
 - **Decision:** Every `OGCService` builds a `Governor` from its profile's
     `rate_limit_window` and passes it to `Transport.request()`, which awaits `wait()`
     before every attempt, retries included, once the attempt holds its origin's permit
-    and before the total's (D-92), and calls `observe()` on every response, a refused
+    and a total permit (D-92), and calls `observe()` on every response, a refused
     redirect included. With `remaining` of `limit` left, a start waits this many seconds
     after the previous one, from 0 at an eighth of the quota (`RAMP`) up to 60
     (`MAX_SLEEP`), and 60 at zero:
@@ -1320,22 +1320,24 @@ Layering rule for anything new:
     planned. A slot booked before the origin's queue left every gathered call past the
     governor at once, with no ramp or hold reaching it: of 40 gathered `item()` calls
     whose first got a 429 with `Retry-After: 30`, all 40 went out in 0.06 s against a
-    mock, and 4 do with the slot inside the permit. No service sends a reset header.
-    Under a rolling window, spacing of `window / remaining` cannot run the count out,
-    and subtracting `8 * window / limit` leaves the first seven eighths unpaced with no
-    jump where the ramp starts: on a default NWIS key, 7.2 s at 100 left, 43 s at 50,
-    and the cap from 41. At a steady rate the ramp settles at 89% of the quota. Against
-    a mock rolling quota of 1,000 an hour, a 2,500-page traversal sent 992 and 954
-    requests in its first two hours, with no 429. A default NWIS key reports 1000 on
-    `/items` and 4000 on metadata (D-30), and a metadata reading must not relax a low
-    items one. A CDN hit carries the cached response's counts (D-30). The 1 s default
-    keeps a host with no documented limit under 3,600 requests an hour, and D-06 promises
-    it to every service without the headers. The 60 s cap keeps a long query moving at
-    one request a minute, and if the count still runs out, the transport's 429 handling
-    takes over. A 429's `Retry-After` is the server's own wait, which its zero count
-    would stretch to 60 s. The maintainer chose the transport hook, the 1 s default, the
-    cap, the ramp, pacing a service without a profile, and the single profile field,
-    after advice from Codex, Gemini, and Fable.
+    mock, and 4 do with the slot inside the permit. A slot booked between the two
+    permits let calls waiting for the total send on one reading once it freed: at
+    `max_concurrent=1`, 4 calls sent within 40 ms of a `Retry-After: 1`. No service
+    sends a reset header. Under a rolling window, spacing of `window / remaining` cannot
+    run the count out, and subtracting `8 * window / limit` leaves the first seven
+    eighths unpaced with no jump where the ramp starts: on a default NWIS key, 7.2 s at
+    100 left, 43 s at 50, and the cap from 41. At a steady rate the ramp settles at 89%
+    of the quota. Against a mock rolling quota of 1,000 an hour, a 2,500-page traversal
+    sent 992 and 954 requests in its first two hours, with no 429. A default NWIS key
+    reports 1000 on `/items` and 4000 on metadata (D-30), and a metadata reading must not
+    relax a low items one. A CDN hit carries the cached response's counts (D-30). The 1
+    s default keeps a host with no documented limit under 3,600 requests an hour, and
+    D-06 promises it to every service without the headers. The 60 s cap keeps a long
+    query moving at one request a minute, and if the count still runs out, the
+    transport's 429 handling takes over. A 429's `Retry-After` is the server's own wait,
+    which its zero count would stretch to 60 s. The maintainer chose the transport hook,
+    the 1 s default, the cap, the ramp, pacing a service without a profile, and the
+    single profile field, after advice from Codex, Gemini, and Fable.
 
 - **Rejected:** The governor in `OGCService._send()`, which leaves the transport as it
     was but reads only the final response and leaves retries unpaced. State in
@@ -1352,21 +1354,22 @@ Layering rule for anything new:
     `Remaining` lags a burst by seconds (D-30), and the first seven eighths go unpaced,
     so concurrent requests can start on a stale reading near the ramp. Up to
     `max_per_origin` requests can start on one reading. A paced wait holds its origin's
-    permit, so a service on the same origin with its own governor, such as FabricData
-    and NLDI on one host, waits behind it, up to 60 s at a time. A slower response with
-    a higher count replaces a newer, lower reading. A raised limit keeps the old limit's
-    reading live for a full window. Below about 41 left on a default NWIS key, the cap
-    keeps the spacing short of what the rolling window needs. FabricData's 60 s window
-    rests on one probe. A 2xx whose headers arrive and whose body fails to read is not
-    read. A 4xx or 5xx whose body fails to read, by a timeout or a read or decoding
-    error, is read, and keeps its status and headers for the retry decision and the
-    raised error, with no `response_body`: its `Retry-After` was otherwise lost to the
-    transport's backoff, and a 400 sent again (#193). `request()` and `get()` take the
-    governor as a public keyword (D-43). GeoConnex sends no rate-limit headers, so its
-    requests start 1 s apart: at its default `limit` of 500 (D-41), a first validated
-    query for 100,000 features sends 202 requests and takes at least 201 s
-    ([Performance](guide/performance.md#requests-per-100000-features)), and a larger
-    `limit` cuts that.
+    permit and a total permit, so a service on the same origin with its own governor,
+    such as FabricData and NLDI on one host, waits behind it, up to 60 s at a time, and
+    at `max_concurrent` no higher than `max_per_origin` so does every other host. A
+    slower response with a higher count replaces a newer, lower reading. A raised limit
+    keeps the old limit's reading live for a full window. Below about 41 left on a
+    default NWIS key, the cap keeps the spacing short of what the rolling window needs.
+    FabricData's 60 s window rests on one probe. A 2xx whose headers arrive and whose
+    body fails to read is not read. A 4xx or 5xx whose body fails to read, by a timeout
+    or a read or decoding error, is read, and keeps its status and headers for the retry
+    decision and the raised error, with no `response_body`: its `Retry-After` was
+    otherwise lost to the transport's backoff, and a 400 sent again (#193). `request()`
+    and `get()` take the governor as a public keyword (D-43). GeoConnex sends no
+    rate-limit headers, so its requests start 1 s apart: at its default `limit` of 500
+    (D-41), a first validated query for 100,000 features sends 202 requests and takes at
+    least 201 s ([Performance](guide/performance.md#requests-per-100000-features)), and
+    a larger `limit` cuts that.
 
 ### D-50: `_client.py` holds the service class, and response parsing lives beside its types
 
@@ -2505,12 +2508,12 @@ Layering rule for anything new:
 - **Decision:** `Transport(max_per_origin=4)` bounds requests in flight to one scheme,
     host, and port, and `Transport(max_concurrent=16)` bounds them across all hosts, as
     the default, before 0.1.0. Both apply, and either may be the larger, so one host
-    gets the smaller. A request takes its origin's permit, its governor's slot (D-49),
-    then the total's permit, and holds both permits to the end of its body. A download
+    gets the smaller. A request takes its origin's permit, then the total's, then its
+    governor's slot (D-49), and holds both permits to the end of its body. A download
     gives both back before each redirect, so a hop never holds two. The origin map
     belongs to the binding: `_bind()` creates it, `aclose()` clears it, and
-    `__getstate__()` drops it. NWIS fan-out launches
-    `min(max_concurrent, max_per_origin)` pieces, since they all go to one origin.
+    `__getstate__()` drops it. NWIS fan-out launches `min(max_concurrent, max_per_origin)`
+    pieces, since they all go to one origin.
 - **Why:** One semaphore bounded every request, and a download holds its permit for the
     whole file, so four long downloads on a shared transport left an NWIS request
     waiting with no bound. A transport shared across hosts meets this whenever a caller

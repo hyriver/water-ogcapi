@@ -94,8 +94,8 @@ class Governor:
             now = time.monotonic()
             start = max(self._hold, self._last + self._spacing(now))
             if start <= now:
-                # The transport calls this holding its origin's permit, so up to
-                # max_per_origin requests can start on one reading.
+                # The transport calls this holding its permits, so up to max_per_origin
+                # requests can start on one reading.
                 self._last = now
                 return
             delay = start - now

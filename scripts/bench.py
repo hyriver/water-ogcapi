@@ -1,4 +1,4 @@
-"""Measure the five D-14 benchmarks offline, against ``httpx2.MockTransport``.
+"""Measure the five D-14 benchmarks and D-66's two routes to Arrow, against a mock.
 
 Every items page repeats one NWIS daily-value feature from ``tests/fixtures/`` under
 distinct ids, and each page's bytes are built once and served from memory, so the
@@ -283,6 +283,66 @@ def peak_memory() -> list[str]:
     return rows
 
 
+def arrow_memory() -> list[str]:
+    """Trace both routes to a table for an unsplit query of 100,000 features (D-66)."""
+
+    async def imports() -> int:
+        async with NWIS(transport=Server(1).transport()) as service:
+            result = await service.collect(COLLECTION, params=QUERY, validate=False)
+            tracemalloc.start()
+            result.to_arrow()
+            held, _ = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+        return held
+
+    # Traced apart, or a process's first conversion charges them to whichever route runs first.
+    imported = asyncio.run(imports())
+    import pyarrow as pa
+
+    async def whole(service: OGCService) -> pa.Table:
+        result = await service.collect(COLLECTION, params=QUERY, validate=False)
+        return result.to_arrow()
+
+    async def by_page(service: OGCService) -> pa.Table:
+        pages = service.iter_pages(COLLECTION, params=QUERY, validate=False)
+        tables = [page.to_arrow() async for page in pages]
+        return pa.concat_tables(tables, promote_options="permissive")
+
+    async def run(server: Server, route: Any) -> tuple[int, int, int, int]:
+        async with NWIS(transport=server.transport()) as service:
+            # The first request builds the HTTP client, which the trace leaves out.
+            await service.collections()
+            default = pa.default_memory_pool()
+            pool = pa.proxy_memory_pool(default)
+            pa.set_memory_pool(pool)
+            tracemalloc.start()
+            try:
+                table = await route(service)
+                held, peak = tracemalloc.get_traced_memory()
+            finally:
+                tracemalloc.stop()
+                pa.set_memory_pool(default)
+        assert table.num_rows == server.total
+        return peak, held, pool.max_memory(), table.nbytes
+
+    server = Server(100_000)
+    # Build the pages first so the trace holds only what the client allocates.
+    asyncio.run(run(server, whole))
+    built = server.built
+    rows = [f"| First `to_arrow()` in a process, imports only | - | {imported / MIB:.1f} | - | - |"]
+    for name, route in (
+        ("`collect().to_arrow()`", whole),
+        ("`Page.to_arrow()` per page, `concat_tables`", by_page),
+    ):
+        peak, held, pooled, size = asyncio.run(run(server, route))
+        assert server.built == built
+        rows.append(
+            f"| {name} | {peak / MIB:.1f} | {held / MIB:.1f} | {pooled / MIB:.1f} "
+            f"| {size / MIB:.1f} |"
+        )
+    return rows
+
+
 def recovery(runs: int) -> list[str]:
     """Time a 5,000-feature query whose third page first gets a 429 with ``Retry-After: 1``."""
 
@@ -444,6 +504,11 @@ def main() -> None:
                 "Peak memory",
                 "| Features | `keep_pages` | Peak MiB | Held MiB | Peak KiB per feature |",
                 peak_memory(),
+            ),
+            (
+                "Converting 100,000 features to Arrow",
+                "| Route | Peak MiB | Held MiB | Arrow pool peak MiB | Table MiB |",
+                arrow_memory(),
             ),
             (
                 "Recovery from a 429",

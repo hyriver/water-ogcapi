@@ -960,3 +960,54 @@ def test_the_client_passes_remote_time_through(tmp_path: Path) -> None:
     with Client(transport=transport) as client:
         client.download(URL, tmp_path / "f", remote_time=True)
     assert (tmp_path / "f").stat().st_mtime == STAMP
+
+
+def test_an_async_check_is_awaited(tmp_path: Path) -> None:
+    """D-69: unawaited, it never ran, and an error document replaced the good file."""
+    path = tmp_path / "f"
+    path.write_bytes(b"good")
+    transport, _ = serve({URL: body(b"<error/>")})
+
+    async def refuse(part: Path, _: Any) -> None:
+        raise ValueError(await asyncio.to_thread(part.read_text))
+
+    with pytest.raises(ValueError, match="error"):
+        fetch(transport, path, check=refuse)
+    assert path.read_bytes() == b"good"
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_a_passing_async_check_lets_the_rename_go(tmp_path: Path) -> None:
+    path = tmp_path / "f"
+    path.write_bytes(b"old")
+    transport, _ = serve({URL: body(b"new")})
+    read: list[bytes] = []
+
+    async def record(part: Path, _: Any) -> None:
+        read.append(await asyncio.to_thread(part.read_bytes))
+
+    assert fetch(transport, path, check=record).size == 3
+    assert read == [b"new"]
+    assert path.read_bytes() == b"new"
+
+
+def test_a_cancelled_async_check_removes_the_part(tmp_path: Path) -> None:
+    path = tmp_path / "f"
+    path.write_bytes(b"old")
+    transport, _ = serve({URL: body(b"new")})
+
+    async def run() -> None:
+        started = asyncio.Event()
+
+        async def stall(_: Path, __: Any) -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        task = asyncio.create_task(transport.download(URL, path, check=stall))
+        await asyncio.wait_for(started.wait(), 5)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(run())
+    assert path.read_bytes() == b"old"
+    assert list(tmp_path.iterdir()) == [path]

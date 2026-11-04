@@ -828,3 +828,66 @@ def test_the_client_passes_public_query_through(tmp_path: Path) -> None:
     with Client(transport=transport) as client, pytest.raises(ServiceError) as excinfo:
         client.download(URL, tmp_path / "f", params={"var": "tmax"}, public_query=True)
     assert excinfo.value.response_body == b"bad parameter in var=tmax"
+
+
+def test_a_failing_check_keeps_the_existing_file(tmp_path: Path) -> None:
+    """D-69: a 200 holding an error document does not replace a good file."""
+    path = tmp_path / "f"
+    path.write_bytes(b"good")
+    transport, seen = serve({URL: body(b'{"error": "busy"}')})
+
+    def refuse(part: Path, _: Any) -> None:
+        raise ValueError(part.read_text())
+
+    with pytest.raises(ValueError, match="busy"):
+        fetch(transport, path, check=refuse)
+    assert path.read_bytes() == b"good"
+    assert list(tmp_path.iterdir()) == [path], "the .part is gone"
+    assert len(seen) == 1, "a check's failure is not retried"
+
+
+def test_a_passing_check_reads_the_part_before_the_rename(tmp_path: Path) -> None:
+    path = tmp_path / "f"
+    path.write_bytes(b"old")
+    transport, _ = serve({URL: body(b"new", **{"Content-Type": "image/tiff"})})
+    read: list[tuple[bytes, bytes, str]] = []
+
+    def record(part: Path, headers: Any) -> None:
+        read.append((part.read_bytes(), path.read_bytes(), headers["content-type"]))
+
+    result = fetch(transport, path, check=record)
+    assert read == [(b"new", b"old", "image/tiff")]
+    assert path.read_bytes() == b"new"
+    assert (result.status, result.size) == (200, 3)
+
+
+def test_a_304_skips_the_check(tmp_path: Path) -> None:
+    path = tmp_path / "f"
+    path.write_bytes(b"old")
+    transport, _ = serve({URL: lambda _: httpx2.Response(304)})
+    checked: list[Path] = []
+    result = fetch(transport, path, check=lambda part, _: checked.append(part))
+    assert checked == []
+    assert result.status == 304
+    assert path.read_bytes() == b"old"
+
+
+def test_a_check_s_timeout_error_stays_its_own(tmp_path: Path) -> None:
+    transport, _ = serve({URL: body(b"x")})
+
+    def refuse(_: Path, __: Any) -> None:
+        raise TimeoutError("the check gave up")
+
+    with pytest.raises(TimeoutError, match="the check gave up"):
+        fetch(transport, tmp_path / "f", check=refuse)
+    assert not list(tmp_path.iterdir())
+
+
+def test_the_client_passes_a_check_through(tmp_path: Path) -> None:
+    transport, _ = serve({URL: body(b"x")})
+    checked: list[bytes] = []
+    with Client(transport=transport) as client:
+        client.download(
+            URL, tmp_path / "f", check=lambda part, _: checked.append(part.read_bytes())
+        )
+    assert checked == [b"x"]

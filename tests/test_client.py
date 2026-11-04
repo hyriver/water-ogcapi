@@ -1532,6 +1532,46 @@ def test_a_base_url_with_userinfo_is_refused_at_construction(
     assert "PASSWD" not in str(excinfo.value)
 
 
+CARRYING_URLS = [
+    (f"{BASE}?api_key=SECRET", "X-Api-Key"),
+    ("https://u:SECRET@example.com/api", "must not carry userinfo"),
+    ("https://u:SECRET@[bad/api", "does not parse"),
+]
+
+
+@pytest.mark.parametrize("cls", [OGCService, water_ogcapi.OGCService])
+@pytest.mark.parametrize(("url", "error"), CARRYING_URLS)
+def test_a_base_url_carrying_a_credential_is_refused(cls: type, url: str, error: str) -> None:
+    """D-91: pickles and refusals would keep it."""
+    with pytest.raises(ValidationError, match=error) as excinfo:
+        cls(url)
+    assert "SECRET" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(("url", "error"), CARRYING_URLS)
+def test_a_profile_carrying_a_credential_is_refused(url: str, error: str) -> None:
+    with pytest.raises(ValidationError, match=error) as excinfo:
+        ServiceProfile(base_url=url, default_limit=10, max_limit=50)
+    assert "SECRET" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(("url", "error"), CARRYING_URLS)
+@pytest.mark.parametrize("field", ["base_url", "held"])
+def test_a_checkpoint_carrying_a_credential_is_refused(url: str, error: str, field: str) -> None:
+    """D-91: at construction, and again on a pickle load."""
+    identity = ("GET", url, None)
+    fields: dict[str, Any] = {"base_url": url} if field == "base_url" else {"held": {identity}}
+    request = Request(url=f"{BASE}/collections/c/items")
+    with pytest.raises(ValidationError, match=error) as excinfo:
+        Checkpoint(**{"base_url": BASE, "collection": "c", "pending": (request,), **fields})
+    assert "SECRET" not in str(excinfo.value)
+    checkpoint = Checkpoint(base_url=BASE, collection="c", pending=(request,))
+    object.__setattr__(checkpoint, field, url if field == "base_url" else frozenset({identity}))
+    with pytest.raises(ValidationError, match=error) as excinfo:
+        pickle.loads(pickle.dumps(checkpoint))
+    assert "SECRET" not in str(excinfo.value)
+
+
 def test_a_request_refuses_a_url_whose_authority_does_not_parse() -> None:
     """D-90: the ``ValueError`` of ``urlsplit()`` hid the userinfo from the check."""
     with pytest.raises(ValidationError, match="does not parse") as excinfo:

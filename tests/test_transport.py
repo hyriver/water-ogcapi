@@ -1486,3 +1486,81 @@ def test_a_429_is_read_while_its_body_is_still_coming() -> None:
         await transport.aclose()
 
     asyncio.run(run())
+
+
+class _StuckPacer:
+    """A governor whose wait lasts until released, as a paced wait does."""
+
+    def __init__(self) -> None:
+        self.waiting = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def wait(self) -> None:
+        self.waiting.set()
+        await self.release.wait()
+
+    def observe(self, _status: int, _headers: Any) -> None:
+        return None
+
+
+def test_a_call_cancelled_during_its_paced_wait_returns_both_permits() -> None:
+    """D-49: the wait holds both permits and books no slot, so a cancel leaves neither held."""
+    mock, seen = responder(httpx2.Response(200, json={}))
+
+    async def run() -> None:
+        pacer = _StuckPacer()
+        transport = Transport(transport=mock, max_concurrent=2, max_per_origin=2)
+        call = asyncio.create_task(transport.get(URL, governor=pacer))
+        await asyncio.wait_for(pacer.waiting.wait(), 5)
+        origin = transport._origins[("https", "example.com", None)]
+        assert (origin._value, transport._sem._value) == (1, 1)
+        call.cancel()
+        await asyncio.gather(call, return_exceptions=True)
+        assert (origin._value, transport._sem._value) == (2, 2)
+        await transport.aclose()
+
+    asyncio.run(run())
+    assert seen == []
+
+
+def test_aclose_during_a_paced_wait_sends_nothing() -> None:
+    mock, seen = responder(httpx2.Response(200, json={}))
+
+    async def run() -> None:
+        pacer = _StuckPacer()
+        transport = Transport(transport=mock)
+        call = asyncio.create_task(transport.get(URL, governor=pacer))
+        await asyncio.wait_for(pacer.waiting.wait(), 5)
+        await transport.aclose()
+        pacer.release.set()
+        with pytest.raises(ServiceError, match="transport closed") as excinfo:
+            await call
+        assert excinfo.value.attempts == 0
+
+    asyncio.run(run())
+    assert seen == []
+
+
+def test_a_paced_wait_at_a_total_of_one_holds_back_another_host() -> None:
+    """D-49 states this cost: at ``max_concurrent=1`` the paced call holds the only permit."""
+    sent: list[str] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        sent.append(request.url.host)
+        return httpx2.Response(200, json={})
+
+    async def run() -> None:
+        pacer = _StuckPacer()
+        transport = Transport(transport=httpx2.MockTransport(handler), max_concurrent=1)
+        paced = asyncio.create_task(transport.get("https://a.test/x", governor=pacer))
+        await asyncio.wait_for(pacer.waiting.wait(), 5)
+        other = asyncio.create_task(transport.get("https://b.test/x"))
+        await asyncio.sleep(0.01)
+        assert sent == []
+        assert not other.done()
+        pacer.release.set()
+        await asyncio.gather(paced, other)
+        await transport.aclose()
+
+    asyncio.run(run())
+    assert sent == ["a.test", "b.test"]

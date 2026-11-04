@@ -648,8 +648,8 @@ class Transport:
     max_concurrent : int, optional
         Requests in flight at once across every host, defaults to 16 (D-92). An explicit
         semaphore, not a connection-pool limit: over HTTP/2 a single connection
-        multiplexes many streams, so pool size does not bound concurrency. Held only
-        while a request is in flight, never across a backoff wait.
+        multiplexes many streams, so pool size does not bound concurrency. Held while a
+        request waits for its paced slot and is in flight, never across a backoff wait.
     max_per_origin : int, optional
         Requests in flight at once to one scheme, host, and port, defaults to 4, so long
         downloads from one host leave room for the others. Both bounds apply, so one

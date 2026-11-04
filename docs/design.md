@@ -1992,12 +1992,18 @@ Layering rule for anything new:
     name every URL by scheme, host, port, and path only. Once any URL of the chain has a
     query, or the chain has left the first origin, an error names a failed request by
     its exception type and a response by its status, with no `response_body`, library
-    message, or reason phrase, any of which can quote a signed URL. The returned
-    `Download` keeps the response headers in `DOWNLOAD_HEADERS` (`etag`,
-    `last-modified`, `content-type`, and a few more). The transport's client keeps no
-    cookies, for every request. `_logging.py` sets the `httpx2` logger to `WARNING` and
-    `httpcore2` to `INFO` unless the caller set their levels first. `request()` and the
-    service classes still refuse every redirect. Chosen by the maintainer.
+    message, or reason phrase, any of which can quote a signed URL. `public_query=True`
+    states that the first URL's query holds no credential, so an error from the first
+    origin keeps its body, reason phrase, and library message (D-68), until a redirect
+    reaches a URL with a query or another origin, which goes quiet whatever the keyword
+    says. It is off by default: `reject_credentials()` refuses only `api_key` by name,
+    so a signature in `params`, such as `X-Amz-Signature`, stays out of the error, its
+    pickle, and log records only while the default holds (#196). The returned `Download`
+    keeps the response headers in `DOWNLOAD_HEADERS` (`etag`, `last-modified`,
+    `content-type`, and a few more). The transport's client keeps no cookies, for every
+    request. `_logging.py` sets the `httpx2` logger to `WARNING` and `httpcore2` to
+    `INFO` unless the caller set their levels first. `request()` and the service classes
+    still refuse every redirect. Chosen by the maintainer.
 - **Why:** HyRiver's file hosts need both. HydroShare answers a file URL with 301, then
     302 on the same host, then 302 to a signed `storage.googleapis.com` URL, and answers
     `HEAD` with 405 (probed 2026-10-29); the CAMELS attributes file is 69 MB, which a

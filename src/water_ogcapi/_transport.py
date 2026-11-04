@@ -1120,6 +1120,7 @@ class Transport:
         attempt: int,
         retries: int,
         seconds: float,
+        public_query: bool,
     ) -> tuple[int, dict[str, str], int, int] | float:
         """Run one download attempt; return the result, or the delay before a retry.
 
@@ -1128,8 +1129,9 @@ class Transport:
         """
         final = attempt == retries
         # Quiet once any URL of the chain has a query or the chain has left the first
-        # origin: from then on a server's text can echo a signature.
-        named, quiet = _bare(first), bool(first.query)
+        # origin: from then on a server's text can echo a signature. public_query speaks
+        # for the first URL's query only.
+        named, quiet = _bare(first), bool(first.query) and not public_query
         target, hop_headers, redirects = first, headers, 0
         try:
             while True:
@@ -1226,6 +1228,7 @@ class Transport:
         total: float | None = 3600.0,
         max_retries: int | None = None,
         timeout: float | None = None,  # noqa: ASYNC109
+        public_query: bool = False,
     ) -> Download:
         """Stream a ``GET`` response to a file, following redirects (D-69).
 
@@ -1261,6 +1264,13 @@ class Transport:
             httpx2's limit on each connect, read, write, and pool wait of this call, the
             transport's ``timeout`` when omitted (D-19). It sets no deadline on an attempt:
             ``total`` bounds the call.
+        public_query : bool, optional
+            States that the query of ``url`` and ``params`` holds no credential, so an
+            error from the first origin keeps its body, reason phrase, and library message
+            as `request` errors do (D-68), defaults to ``False``. Leave it off for a signed
+            URL: a server's text can echo the signature into the error, its pickle, and
+            log records. A redirect to a URL with a query, or to another origin, goes quiet
+            whatever this says. The result and errors still name the URL without its query.
 
         Returns
         -------
@@ -1311,6 +1321,7 @@ class Transport:
                         attempt=attempt,
                         retries=retries,
                         seconds=seconds,
+                        public_query=public_query,
                     )
                     if not isinstance(outcome, tuple):
                         await asyncio.sleep(outcome)

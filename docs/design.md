@@ -2003,12 +2003,17 @@ Layering rule for anything new:
     `.part` is removed, `path` keeps its old file, and the exception propagates
     unretried, since ArcGIS REST and MRLC's WCS answer some failures with a 200 whose
     body is an error document, and a caller staging the file itself would repeat the
-    `O_EXCL` and symlink handling above (#197). The returned `Download` keeps the response
-    headers in `DOWNLOAD_HEADERS` (`etag`, `last-modified`, `content-type`, and a few
-    more). The transport's client keeps no cookies, for every request. `_logging.py` sets
-    the `httpx2` logger to `WARNING` and `httpcore2` to `INFO` unless the caller set
-    their levels first. `request()` and the service classes still refuse every redirect.
-    Chosen by the maintainer.
+    `O_EXCL` and symlink handling above (#197). `remote_time=True` sets the `.part`'s
+    times from a `Last-Modified` that parses, before the rename, as `curl -R` does; a
+    missing or unparsable header, or a time the file system refuses, leaves the local
+    time. A caller resetting the time after the call leaves a window in which a stopped
+    process keeps a time later than the server's, and a newer version whose
+    `Last-Modified` falls between the two then gets a 304 (#198). The returned
+    `Download` keeps the response headers in `DOWNLOAD_HEADERS` (`etag`,
+    `last-modified`, `content-type`, and a few more). The transport's client keeps no
+    cookies, for every request. `_logging.py` sets the `httpx2` logger to `WARNING` and
+    `httpcore2` to `INFO` unless the caller set their levels first. `request()` and the
+    service classes still refuse every redirect. Chosen by the maintainer.
 - **Why:** HyRiver's file hosts need both. HydroShare answers a file URL with 301, then
     302 on the same host, then 302 to a signed `storage.googleapis.com` URL, and answers
     `HEAD` with 405 (probed 2026-10-29); the CAMELS attributes file is 69 MB, which a

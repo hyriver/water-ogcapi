@@ -759,6 +759,15 @@ class Transport:
             raise ValidationError(msg)
         return override
 
+    def _timeout_of(self, override: float | None) -> float:
+        """Return the timeout of one call: ``override``, or the transport's."""
+        if override is None:
+            return self.timeout
+        if not (override > 0 and math.isfinite(override)):
+            msg = f"timeout must be a positive, finite number of seconds, got {override}"
+            raise ValidationError(msg)
+        return override
+
     async def _attempt(
         self,
         client: httpx2.AsyncClient,
@@ -769,6 +778,7 @@ class Transport:
         headers: dict[str, str],
         content: bytes | None,
         made: int,
+        seconds: float,
     ) -> httpx2.Response:
         """Send one attempt under a permit and read its body.
 
@@ -777,7 +787,7 @@ class Transport:
         """
         resp: httpx2.Response | None = None
         try:
-            async with sem, asyncio.timeout(self.timeout):
+            async with sem, asyncio.timeout(seconds):
                 if self._client is not client or client.is_closed:
                     # aclose() ran while this call waited for a permit or a backoff, or is
                     # still closing; httpx2 would raise a bare RuntimeError.
@@ -788,7 +798,9 @@ class Transport:
                 # httpx2 times each operation, so a body trickling in under the read timeout
                 # would otherwise hold the permit indefinitely.
                 resp = await client.send(
-                    client.build_request(method, target, headers=headers, content=content),
+                    client.build_request(
+                        method, target, headers=headers, content=content, timeout=seconds
+                    ),
                     stream=True,
                 )
                 try:
@@ -814,10 +826,17 @@ class Transport:
         headers: Mapping[str, str] | None = None,
         governor: Governor | None = None,
         max_retries: int | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> Response:
         """Send a ``GET`` through `request`, which documents the parameters and errors."""
         return await self.request(
-            "GET", url, params=params, headers=headers, governor=governor, max_retries=max_retries
+            "GET",
+            url,
+            params=params,
+            headers=headers,
+            governor=governor,
+            max_retries=max_retries,
+            timeout=timeout,
         )
 
     async def request(
@@ -830,6 +849,7 @@ class Transport:
         content: bytes | None = None,
         governor: Governor | None = None,
         max_retries: int | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> Response:
         """Send a request, retrying transient failures.
 
@@ -860,6 +880,10 @@ class Transport:
             Retries after the first attempt for this call, the transport's
             ``max_retries`` when omitted (D-74). ``0`` sends one attempt, for a request
             that must not be replayed or a failure the caller handles itself.
+        timeout : float, optional
+            Seconds each attempt of this call may take, and httpx2's limit on each
+            connect, read, write, and pool wait, the transport's ``timeout`` when omitted
+            (D-19). A call cannot turn the timeout off.
 
         Returns
         -------
@@ -883,11 +907,13 @@ class Transport:
         ValidationError
             If ``params`` carries a credential such as ``api_key``, ``url`` or a
             parameter or header name or header value is not exactly ``str`` (D-65), a
-            header value is not printable ASCII, or ``max_retries`` is negative. The
-            message names the header, never its value. Also if a ``params`` value is
-            of another type, or a non-finite float.
+            header value is not printable ASCII, ``max_retries`` is negative, or
+            ``timeout`` is not a positive, finite number. The message names the header,
+            never its value. Also if a ``params`` value is of another type, or a
+            non-finite float.
         """
         retries = self._retries(max_retries)
+        seconds = self._timeout_of(timeout)
         # Copies, so every attempt sends the params and headers that passed the checks.
         query = query_strings(params)
         reject_credentials(url, query)
@@ -919,9 +945,10 @@ class Transport:
                     headers=headers,
                     content=content,
                     made=attempt,
+                    seconds=seconds,
                 )
             except TimeoutError:
-                failure = f"TimeoutError: attempt exceeded {self.timeout} s"
+                failure = f"TimeoutError: attempt exceeded {seconds} s"
                 transient = True
             except _RedirectedError as redirect:
                 pacer.observe(redirect.status, redirect.headers)
@@ -1065,6 +1092,7 @@ class Transport:
         pacer: Governor | _Unpaced,
         attempt: int,
         retries: int,
+        seconds: float,
     ) -> tuple[int, dict[str, str], int, int] | float:
         """Run one download attempt; return the result, or the delay before a retry.
 
@@ -1086,7 +1114,9 @@ class Transport:
                         if self._client is not client or client.is_closed:
                             msg = "transport closed while the request waited"
                             raise ServiceError(msg, named, attempts=attempt, method="GET")
-                        async with client.stream("GET", target, headers=hop_headers) as resp:
+                        async with client.stream(
+                            "GET", target, headers=hop_headers, timeout=seconds
+                        ) as resp:
                             pacer.observe(resp.status_code, resp.headers)
                             where = (
                                 ""
@@ -1168,6 +1198,7 @@ class Transport:
         governor: Governor | None = None,
         total: float | None = 3600.0,
         max_retries: int | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> Download:
         """Stream a ``GET`` response to a file, following redirects (D-69).
 
@@ -1177,8 +1208,8 @@ class Transport:
         folders are created. Every attempt starts the file over, and a 304, the answer
         to an ``If-None-Match`` or ``If-Modified-Since`` in ``headers``, leaves ``path``
         as it was. ``Accept-Encoding: identity`` is sent unless ``headers`` names an
-        encoding, so the file holds the bytes the server stores. The transport's
-        ``timeout`` applies to each read of the body.
+        encoding, so the file holds the bytes the server stores. The call's ``timeout``
+        applies to each connect and each read of the body, on every redirect hop.
 
         Up to ``MAX_REDIRECTS`` redirects are followed, each paced by ``governor`` and
         sent under its own concurrency permit. Once one leaves the scheme, host, and
@@ -1199,6 +1230,10 @@ class Transport:
         total : float or None, optional
             Seconds the whole call may take, retries, redirects, and waits included,
             defaults to 3600. ``None`` bounds only each read.
+        timeout : float, optional
+            httpx2's limit on each connect, read, write, and pool wait of this call, the
+            transport's ``timeout`` when omitted (D-19). It sets no deadline on an attempt:
+            ``total`` bounds the call.
 
         Returns
         -------
@@ -1214,6 +1249,7 @@ class Transport:
             As for `request`.
         """
         retries = self._retries(max_retries)
+        seconds = self._timeout_of(timeout)
         query = query_strings(params)
         reject_credentials(url, query)
         headers = dict(headers or {})
@@ -1247,6 +1283,7 @@ class Transport:
                         pacer=pacer,
                         attempt=attempt,
                         retries=retries,
+                        seconds=seconds,
                     )
                     if not isinstance(outcome, tuple):
                         await asyncio.sleep(outcome)

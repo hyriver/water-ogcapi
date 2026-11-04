@@ -386,11 +386,18 @@ Layering rule for anything new:
     reading the last body byte, with `asyncio.timeout`. httpx2 applies the same value to
     each connect, read, write, and pool wait. A timed-out attempt is transient and
     retried. Waiting for a concurrency permit is not bounded; a caller that needs a
-    deadline wraps the call.
+    deadline wraps the call. `request()`, `get()`, `download()`, and their `Client`
+    twins take `timeout=`, which sets both limits for that call only, every redirect hop
+    of a download included, and defaults to the transport's. A value that is not
+    positive and finite raises `ValidationError`. `download()`'s `total` stays as it was
+    (D-69).
 - **Why:** httpx2 times each operation, so a server sending a body chunk every 29 s
-    under `timeout=30` held a permit indefinitely.
+    under `timeout=30` held a permit indefinitely. A slow service, such as a THREDDS
+    NCSS subset the server builds before its first byte, needs longer than a shared
+    transport should allow NWIS; a second transport splits the connection pool and the
+    concurrency bound, the route D-74 rejected for retries.
 - **Limits:** One call can take up to `(max_retries + 1) * timeout` plus the backoff
-    waits.
+    waits. A call cannot turn its timeout off.
 
 ### D-20: Package logger isolated from the root logger
 

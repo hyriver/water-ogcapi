@@ -182,6 +182,17 @@ def test_the_root_classes_block_and_the_aio_classes_await(name: str) -> None:
     assert inspect.iscoroutinefunction(getattr(aio, name).collect)
 
 
+@pytest.mark.parametrize("name", ["NWIS", "FabricData", "GeoConnex"])
+def test_a_blocking_service_reads_its_twin_s_profile(name: str) -> None:
+    profile = getattr(water_ogcapi, name)().profile
+    assert profile is not None
+    assert profile is getattr(aio, name).profile
+
+
+def test_a_blocking_service_without_a_profile_reads_none() -> None:
+    assert water_ogcapi.OGCService(BASE).profile is None
+
+
 def test_a_plain_import_binds_aio_and_exceptions() -> None:
     # A fresh interpreter: this one imported both submodules already.
     code = "import water_ogcapi as w; w.aio.NWIS; w.exceptions.ServiceError"

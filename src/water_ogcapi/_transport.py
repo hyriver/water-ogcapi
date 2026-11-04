@@ -10,6 +10,7 @@ import asyncio
 import codecs
 import contextlib
 import http.cookiejar
+import inspect
 import json
 import logging
 import math
@@ -556,6 +557,21 @@ def _set_remote_time(part: Path, last_modified: str | None) -> None:
     except (OSError, OverflowError, ValueError) as exc:
         # The server's text picks the time, and the whole file is already here.
         logger.debug("left the local file time: %s", type(exc).__name__)
+
+
+async def _finish_part(
+    part: Path,
+    kept: Mapping[str, str],
+    check: Callable[[Path, Mapping[str, str]], object] | None,
+    *,
+    remote_time: bool,
+) -> None:
+    """Run the caller's check on the finished ``part``, then set its time (D-69)."""
+    checked = None if check is None else check(part, kept)
+    if inspect.isawaitable(checked):
+        await checked
+    if remote_time:
+        _set_remote_time(part, kept.get("last-modified"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1302,10 +1318,11 @@ class Transport:
             whatever this says. The result and errors still name the URL without its query.
         check : callable, optional
             Called with the path of the finished ``.part`` file and the headers
-            `Download` keeps, before the rename, on the event loop, so keep it short. An
-            exception it raises propagates as raised, unretried, with the ``.part`` removed
-            and ``path`` keeping its old file, which stops a 200 holding an error document
-            from replacing a good file. A 304 skips it.
+            `Download` keeps, before the rename, and awaited if it returns an awaitable. A
+            plain function runs on the event loop, so keep it short. An exception it raises
+            propagates as raised, unretried, with the ``.part`` removed and ``path`` keeping
+            its old file, which stops a 200 holding an error document from replacing a good
+            file. ``total`` does not bound it. A 304 skips it.
         remote_time : bool, optional
             Give the file the time in the response's ``Last-Modified`` before the rename,
             as ``curl -R`` does, so it never exists with the local write time, defaults to
@@ -1377,11 +1394,8 @@ class Transport:
             # Closed first: Windows does not rename a file that is still open.
             out.close()
             if status != 304:
-                # Outside the budget's scope, so a TimeoutError of its own stays its own.
-                if check is not None:
-                    check(part, kept)
-                if remote_time:
-                    _set_remote_time(part, kept.get("last-modified"))
+                # Outside the budget's scope, so a check's TimeoutError stays its own.
+                await _finish_part(part, kept, check, remote_time=remote_time)
                 part.replace(target)
             return Download(
                 path=target,

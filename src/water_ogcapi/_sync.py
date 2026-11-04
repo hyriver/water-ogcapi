@@ -1,7 +1,9 @@
 """The blocking classes that `water_ogcapi` exports (D-08, D-46, D-48, D-70).
 
 Each class has the name, constructor, and methods of its async twin in
-`water_ogcapi.aio`. A method blocks until the async method of the same name returns, and
+`water_ogcapi.aio`, except that a blocking `OGCService` always takes a ``base_url``: a
+service with its own `ServiceProfile` subclasses the async class. A method blocks until
+the async method of the same name returns, and
 `iter_pages` returns an iterator that fetches one page per step. Every call runs on one
 background event loop, so it works where a loop is already running, as in Jupyter.
 
@@ -191,6 +193,11 @@ class OGCService:
     def base_url(self) -> str:
         """The landing page URL, without a trailing slash."""
         return self._service.base_url
+
+    @property
+    def profile(self) -> _client.ServiceProfile | None:
+        """The service's page sizes, key convention, and rate-limit window (D-41)."""
+        return self._service.profile
 
     def refresh(self) -> None:
         """Drop every cached metadata document, so the next call fetches it again."""

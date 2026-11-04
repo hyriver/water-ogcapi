@@ -360,7 +360,7 @@ class Page:
         `QueryResult.to_arrow` converts a result, under the CRS this page's
         ``Content-Crs`` header and request give. A large query converted page by page
         from `iter_pages` holds the page it last yielded beside the pages in flight:
-        two pages for an unsplit query, up to the transport's ``max_concurrent`` plus
+        two pages for an unsplit query, up to the transport's ``max_per_origin`` plus
         one for a split one. Each
         page types its columns on its own, and ``pyarrow.concat_tables(tables,
         promote_options="permissive")`` joins pages whose columns differ, filling a

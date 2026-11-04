@@ -95,7 +95,7 @@ class Governor:
             start = max(self._hold, self._last + self._spacing(now))
             if start <= now:
                 # shortcut: a caller that then waits for a transport permit starts late,
-                # so up to max_concurrent requests can start together; book at dispatch
+                # so up to max_per_origin requests can start together; book at dispatch
                 # if that matters.
                 self._last = now
                 return

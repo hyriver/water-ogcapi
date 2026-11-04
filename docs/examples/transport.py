@@ -106,7 +106,7 @@ for path, found in zip(paths, nldi.features(paths), strict=True):
 #
 # An ArcGIS query takes two steps: one request for the object ids inside a box, then the
 # features in chunks of ids. Each request is a form `POST`, sent with `content=` and its
-# `Content-Type`, and the chunks run concurrently, `max_concurrent` at a time (4 by
+# `Content-Type`, and the chunks run concurrently, `max_per_origin` at a time (4 by
 # default). Two ArcGIS habits shape the client:
 #
 # - Most failures come back as `{"error": ...}` with HTTP 200, so the client reads the body.

@@ -608,10 +608,14 @@ class Transport:
         write, and pool wait. A timed-out attempt is retried. Waiting for a
         concurrency permit is not bounded.
     max_concurrent : int, optional
-        Requests in flight at once, defaults to 4. An explicit semaphore, not a
-        connection-pool limit: over HTTP/2 a single connection multiplexes many
-        streams, so pool size does not bound concurrency. Held only while a
-        request is in flight, never across a backoff wait.
+        Requests in flight at once across every host, defaults to 16 (D-92). An explicit
+        semaphore, not a connection-pool limit: over HTTP/2 a single connection
+        multiplexes many streams, so pool size does not bound concurrency. Held only
+        while a request is in flight, never across a backoff wait.
+    max_per_origin : int, optional
+        Requests in flight at once to one scheme, host, and port, defaults to 4, so long
+        downloads from one host leave room for the others. Both bounds apply, so one
+        host gets the smaller of the two.
     max_retries : int, optional
         Retries after the first attempt, defaults to 3.
     backoff : float, optional
@@ -628,7 +632,8 @@ class Transport:
     Raises
     ------
     ValidationError
-        If ``max_concurrent`` is below 1, ``max_retries`` or ``backoff`` is negative,
+        If ``max_concurrent`` or ``max_per_origin`` is below 1, ``max_retries`` or
+        ``backoff`` is negative,
         or ``user_agent`` is not a printable ASCII ``str``. A zero-permit semaphore
         would block every request forever.
     """
@@ -637,7 +642,8 @@ class Transport:
         self,
         *,
         timeout: float = 30.0,
-        max_concurrent: int = 4,
+        max_concurrent: int = 16,
+        max_per_origin: int = 4,
         max_retries: int = 3,
         backoff: float = 0.5,
         http2: bool = True,
@@ -650,6 +656,9 @@ class Transport:
         if max_concurrent < 1:
             msg = f"max_concurrent must be at least 1, got {max_concurrent}"
             raise ValidationError(msg)
+        if max_per_origin < 1:
+            msg = f"max_per_origin must be at least 1, got {max_per_origin}"
+            raise ValidationError(msg)
         if max_retries < 0:
             msg = f"max_retries must not be negative, got {max_retries}"
             raise ValidationError(msg)
@@ -660,6 +669,7 @@ class Transport:
         # first request, so a later assignment would silently change nothing.
         self._timeout = timeout
         self._max_concurrent = max_concurrent
+        self._max_per_origin = max_per_origin
         self._max_retries = max_retries
         self._backoff = backoff
         self._http2 = http2
@@ -667,6 +677,7 @@ class Transport:
         self._user_agent = USER_AGENT if user_agent is None else user_agent
         self._loop: asyncio.AbstractEventLoop | None = None
         self._sem: asyncio.Semaphore | None = None
+        self._origins: dict[tuple[str, str, int | None], asyncio.Semaphore] = {}
         self._client: httpx2.AsyncClient | None = None
 
     @property
@@ -676,8 +687,13 @@ class Transport:
 
     @property
     def max_concurrent(self) -> int:
-        """Requests in flight at once."""
+        """Requests in flight at once across every host."""
         return self._max_concurrent
+
+    @property
+    def max_per_origin(self) -> int:
+        """Requests in flight at once to one scheme, host, and port."""
+        return self._max_per_origin
 
     @property
     def max_retries(self) -> int:
@@ -710,6 +726,7 @@ class Transport:
         if self._client is None or self._sem is None:
             self._loop = loop
             self._sem = asyncio.Semaphore(self.max_concurrent)
+            self._origins = {}
             # follow_redirects stays off: httpx2 strips `Authorization` across
             # hosts but not our `X-Api-Key` header, so a redirect would leak it.
             self._client = httpx2.AsyncClient(
@@ -732,6 +749,16 @@ class Transport:
             )
             raise RuntimeError(msg)
         return self._client, self._sem
+
+    def _origin_permit(self, url: httpx2.URL) -> asyncio.Semaphore:
+        """Return the bound of ``url``'s origin, taken before the total's (D-92).
+
+        Taking the total first would let requests queued for one busy origin hold every
+        total permit.
+        """
+        # shortcut: an origin's entry stays until aclose(); evict idle ones if a transport
+        # ever meets origins without bound.
+        return self._origins.setdefault(_origin(url), asyncio.Semaphore(self.max_per_origin))
 
     def _delay(self, attempt: int) -> float:
         """Exponential backoff for a zero-based attempt number."""
@@ -787,7 +814,7 @@ class Transport:
         """
         resp: httpx2.Response | None = None
         try:
-            async with sem, asyncio.timeout(seconds):
+            async with self._origin_permit(target), sem, asyncio.timeout(seconds):
                 if self._client is not client or client.is_closed:
                     # aclose() ran while this call waited for a permit or a backoff, or is
                     # still closing; httpx2 would raise a bare RuntimeError.
@@ -996,7 +1023,7 @@ class Transport:
                 delay,
             )
             # shortcut: no jitter, so the retries of NWIS pieces (D-56) that fail together
-            # stay in lockstep, at most max_concurrent of them; add it if that load matters.
+            # stay in lockstep, at most max_per_origin of them; add it if that load matters.
             await asyncio.sleep(delay)
         # Unreachable: the last attempt returns or raises. Keeps the return type total.
         raise AssertionError  # pragma: no cover
@@ -1110,7 +1137,7 @@ class Transport:
                 await pacer.wait()
                 redirect: _RedirectedError | None = None
                 try:
-                    async with sem:
+                    async with self._origin_permit(target), sem:
                         if self._client is not client or client.is_closed:
                             msg = "transport closed while the request waited"
                             raise ServiceError(msg, named, attempts=attempt, method="GET")
@@ -1328,6 +1355,7 @@ class Transport:
         finally:
             self._client = None
             self._sem = None
+            self._origins = {}
             self._loop = None
 
     async def __aenter__(self) -> Self:
@@ -1337,5 +1365,5 @@ class Transport:
         await self.aclose()
 
     def __getstate__(self) -> dict[str, Any]:
-        # The client and semaphore belong to this process's loop; a load binds anew (D-64).
-        return {**self.__dict__, "_loop": None, "_sem": None, "_client": None}
+        # The client and semaphores belong to this process's loop; a load binds anew (D-64).
+        return {**self.__dict__, "_loop": None, "_sem": None, "_origins": {}, "_client": None}

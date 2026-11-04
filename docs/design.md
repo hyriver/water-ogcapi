@@ -2462,6 +2462,44 @@ Layering rule for anything new:
     credential under another name stays. Loading a `held` set costs one parse per
     identity.
 
+### D-92: Requests in flight are bounded per origin and in total
+
+- **Status:** accepted; built in #195. Amends D-49, D-56, and D-66, whose
+    `max_concurrent` now reads as the width below.
+- **Date:** 2026-11-04.
+- **Decision:** `Transport(max_per_origin=4)` bounds requests in flight to one scheme,
+    host, and port, and `Transport(max_concurrent=16)` bounds them across all hosts, as
+    the default, before 0.1.0. Both apply, and either may be the larger, so one host
+    gets the smaller. A request takes its origin's permit, then the total's, and holds
+    both to the end of its body. A download gives both back before each redirect, so a
+    hop never holds two. The origin map belongs to the binding: `_bind()` creates it,
+    `aclose()` clears it, and `__getstate__()` drops it. NWIS fan-out launches
+    `min(max_concurrent, max_per_origin)` pieces, since they all go to one origin.
+- **Why:** One semaphore bounded every request, and a download holds its permit for the
+    whole file, so four long downloads on a shared transport left an NWIS request
+    waiting with no bound. A transport shared across hosts meets this whenever a caller
+    gathers calls to several. An origin bound alone multiplies requests by the number of
+    hosts. The origin permit comes first, or requests queued for one busy origin hold
+    every total permit and starve the others. A launch wider than the bound would queue
+    pieces that still send after a failure stops the query. Codex advised this shape
+    over making `max_concurrent` the per-origin bound; the maintainer's pair in
+    async-retriever was `limit` and `limit_per_host`, and `max_concurrent` keeps reading
+    as the most in flight.
+- **Rejected:** `max_concurrent` as the per-origin bound with a new total, which keeps
+    `Transport(max_concurrent=8)` giving 8 on one host, but makes the name false across
+    hosts. Today's single bound by default with per-origin bounds as an opt-in, which
+    keeps the starvation for everyone who does not opt in. A separate pool for
+    downloads, which leaves a slow `request()` host blocking the others. Evicting idle
+    origins, which needs a holder count to avoid two semaphores for one origin, for a
+    transport meeting origins without bound that nobody has.
+- **Limits:** `Transport(max_concurrent=8)` alone gives one host 4; a caller raising one
+    host's width sets both. Four saturated origins fill the default total, and permit
+    waits stay unbounded (D-19), so `download(total=None)` can hold a permit
+    indefinitely. Requests to one origin still compete, a download and an API call
+    included. A download opens its `.part` file before it waits, so a large gather can
+    run out of file descriptors first. Sixteen is a budget of four busy origins, not a
+    measurement. The origin map keeps an entry per origin until `aclose()`.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

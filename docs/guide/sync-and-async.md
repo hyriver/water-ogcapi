@@ -58,16 +58,17 @@ asyncio.run(main())
 
 One service shares its transport, quota pacing, and metadata cache across every query it
 runs, so the three queries above draw on one pacing schedule. The transport runs up to
-`max_concurrent` requests at once, 4 by default.
+`max_per_origin` requests at once to one host, 4 by default, and up to `max_concurrent`
+across all hosts, 16 by default.
 
 ## Transports
 
 `Transport` holds the HTTP client and its settings: `timeout` per attempt (30 seconds),
-`max_concurrent`, `max_retries`, and `backoff`. One `request()`, `get()`, or
-`download()` call can set its own `timeout=` and `max_retries=`. A service builds a
-transport unless given one. A transport binds to the event loop of its first request, so
-share one only among blocking services, which all run on the background loop, or only
-among async services on one loop:
+`max_concurrent`, `max_per_origin`, `max_retries`, and `backoff`. One `request()`,
+`get()`, or `download()` call can set its own `timeout=` and `max_retries=`. A service
+builds a transport unless given one. A transport binds to the event loop of its first
+request, so share one only among blocking services, which all run on the background
+loop, or only among async services on one loop:
 
 ```python
 from water_ogcapi import FabricData, Transport

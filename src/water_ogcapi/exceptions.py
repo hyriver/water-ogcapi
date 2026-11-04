@@ -60,7 +60,8 @@ class ServiceError(WaterOGCAPIError):
     response_body : bytes, optional
         The body of the 4xx or 5xx response, its first 64 KiB as the server sent them
         (D-68), so a server's reason for refusing a request reaches the caller. ``None``
-        when no error response arrived. ``str()`` leaves it out.
+        when no error response arrived or its body failed to read. ``str()`` leaves it
+        out.
     """
 
     def __init__(

@@ -29,7 +29,7 @@
 # - 3DHP hydrography, an ArcGIS FeatureServer;
 # - 3DEP elevation, an ArcGIS ImageServer that returns a GeoTIFF.
 #
-# One `Transport` serves all three, so they share its connections and its concurrency
+# One `Transport` serves all three, so they share its connections and its total concurrency
 # bound. `user_agent` names the calling package in every request.
 
 # %%

@@ -826,8 +826,7 @@ Layering rule for anything new:
     package on PyPI. A PyPI pending publisher reserves no name, so until the release
     candidate uploads, another account can register `water-ogcapi` and invalidate it.
     While a release candidate is the only version, `pip install water-ogcapi` and uv
-    install it, since both take a pre-release when no final version exists; the README
-    says it is not usable yet.
+    install it, since both take a pre-release when no final version exists.
 
 ### D-33: Metadata types keep every member the server sent
 
@@ -1961,8 +1960,9 @@ Layering rule for anything new:
 - **Date:** 2026-10-29.
 - **Decision:** `ServiceError` and `RateLimitError` take a `response_body`: the first 64
     KiB (`MAX_ERROR_BODY`) of a 4xx or 5xx response as the server sent it. A transport
-    error, a redirect, and a request refused before sending leave it `None`. `str()`
-    leaves it out, and it pickles with the error (D-51). Chosen by the maintainer.
+    error, a redirect, a request refused before sending, and an error whose body failed
+    to read (D-49) leave it `None`. `str()` leaves it out, and it pickles with the error
+    (D-51). Chosen by the maintainer.
 - **Why:** ArcGIS REST, NLDI, and pygeoapi servers put the reason for a refusal in the
     body, such as an ArcGIS `{"error": {"message": "Invalid where clause"}}` on a 400,
     and `_finalize()` dropped it, so a caller saw only the status line.
@@ -2050,9 +2050,12 @@ Layering rule for anything new:
     included. Frame locals of any transport error still hold the request headers, which
     a debugger or a frame-dumping tool shows. The rename and the cleanup go by name, so
     someone who can write the folder and swaps the `.part` entry during the call gets
-    their entry renamed to `path` and the downloaded bytes are lost; nothing is written
-    through it. A download URL with userinfo whose server redirects within its own host
-    is refused, since the joined target keeps the userinfo; this fails closed.
+    their entry renamed to `path` and the downloaded bytes are lost; no body is written
+    through it, though `remote_time` sets the times of whatever the entry names. A
+    download URL with userinfo whose server redirects within its own host is refused,
+    since the joined target keeps the userinfo; this fails closed. A quiet error and the
+    log records name a redirect target by scheme, host, and path, so a token a server
+    puts in that path stays in them.
 
 ### D-70: `Client` is the blocking HTTP class, and `Transport` stays the async engine
 

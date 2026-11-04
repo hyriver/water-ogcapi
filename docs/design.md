@@ -1464,10 +1464,15 @@ Layering rule for anything new:
     `next` link (D-24), and nothing detects either; an expired cursor fails as a page
     failure with the held pages kept. Pieces run one after another; #14 adds the
     concurrency, and its checkpoints must list every chain in flight. `held` grows by
-    one identity a page and is never trimmed. The whole-project review of 2026-10-21
-    (Codex, Fable) found that the first refusal rule, no checkpoint after any request
-    with attempts 0, dropped the unsent pieces and a retryable closed-transport failure,
-    and that a copied `held` per page used 330 MiB for 4,000 kept pages.
+    one identity a page and is never trimmed. Each page's checkpoint copies its
+    `pending` tuple, so a caller keeping every page of a query split into N one-page
+    pieces holds N(N-1)/2 references: 15 MiB of tuples at 2,000 pieces (measured) and
+    381 MiB at 10,000. That cost stays, stated in the guide, since a shared persistent
+    queue adds machinery for a rare case and `collect()` drops page checkpoints (#174).
+    The whole-project review of 2026-10-21 (Codex, Fable) found that the first refusal
+    rule, no checkpoint after any request with attempts 0, dropped the unsent pieces and
+    a retryable closed-transport failure, and that a copied `held` per page used 330 MiB
+    for 4,000 kept pages.
 
 ### D-53: A response whose link carries a credential fails before it is kept
 

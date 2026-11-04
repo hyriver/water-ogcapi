@@ -49,6 +49,14 @@ print(len(daily.geojson["features"]), "days in", daily.pagination.page_count, "p
 Each piece costs at least one request, so size pieces near one page: a year of daily
 values for one site is 365 features, well under one page.
 
+Each page from `iter_pages()` carries a `Checkpoint` whose `pending` tuple lists every
+request still left. A loop that keeps only the latest page pays for one tuple at a time,
+and `collect()` keeps no page's checkpoint, so it pays only for copying them. A loop
+that keeps every page of a query split into N one-page pieces holds about N²/2
+references to requests: the tuples alone take 15 MiB at 2,000 pieces and 381 MiB at
+10,000. To keep such pages, drop each checkpoint you no longer need with
+`dataclasses.replace(page, checkpoint=None)`.
+
 ## Converting page by page
 
 `QueryResult.to_arrow()` needs every feature in Python beside the table it builds.

@@ -2477,7 +2477,8 @@ Layering rule for anything new:
     `Request` that cannot be sent.
 - **Limits:** One such `href` fails its page, even a link the caller never reads. Only
     what `urlsplit()` itself refuses counts: it reads a port lazily, so
-    `https://h:bad/x` passes these checks and httpx2 refuses it at send.
+    `https://h:bad/x` passes these checks, and httpx2 refuses it at send with an error
+    that quotes the port.
 
 ### D-91: Caller-built objects keep no URL credential
 

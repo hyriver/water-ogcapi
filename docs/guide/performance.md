@@ -1,12 +1,12 @@
 # Performance
 
 `scripts/bench.py` measures the five benchmarks that
-[D-14](../design.md#d-14-testing-strategy) plans. It runs offline against
-`httpx2.MockTransport`: each items page repeats one NWIS daily-value feature from
-`tests/fixtures/` (about 470 bytes of JSON) under distinct ids, and the mock builds each
-page before any timer or trace starts and hands every response its own copy of the
-bytes. The numbers therefore measure the client and leave out the network. Reproduce
-them with:
+[D-14](../design.md#d-14-testing-strategy) plans and the two routes to Arrow. It runs
+offline against `httpx2.MockTransport`: each items page repeats one NWIS daily-value
+feature from `tests/fixtures/` (about 470 bytes of JSON) under distinct ids, and the
+mock builds each page before any timer or trace starts and hands every response its own
+copy of the bytes. The numbers therefore measure the client and leave out the network.
+Reproduce them with:
 
 ```bash
 pixi r -e dev bench
@@ -81,6 +81,26 @@ Memory grows linearly with the result, at about 1.4 KiB held per feature of this
 `keep_pages=True` adds each page's bytes, about 0.45 KiB per feature. Peak per feature
 drops at 100,000 because one page in flight is a tenth of the result there and the whole
 result at 10,000 or fewer.
+
+## Converting 100,000 features to Arrow
+
+`tracemalloc` traces the Python heap, and a proxy memory pool reads Arrow's own peak,
+while an unsplit query in pages of 10,000 becomes one table
+([D-66](../design.md#d-66-a-page-converts-to-arrow-on-its-own)). A first conversion runs
+apart from both routes, so its imports count against neither. Three runs on Python
+3.15.2 gave the same numbers to one decimal.
+
+| Route                                         | Peak MiB | Held MiB | Arrow pool peak MiB | Table MiB |
+| --------------------------------------------- | -------- | -------- | ------------------- | --------- |
+| First `to_arrow()` in a process, imports only | -        | 39.2     | -                   | -         |
+| `collect().to_arrow()`                        | 179.8    | 0.2      | 20.0                | 17.9      |
+| `Page.to_arrow()` per page, `concat_tables`   | 40.2     | 0.0      | 18.2                | 17.9      |
+
+The first conversion in a process imports pyarrow, shapely, and pyproj, and those 39 MiB
+stay for the life of the process. Beyond that, a query converted page by page peaks at
+less than a quarter of the Python heap of one converted whole, since it never holds
+every feature in Python beside the table. Held counts the Python heap once the route
+returns, with the table still alive: Arrow's buffers sit in its own pool.
 
 ## Recovery from a 429
 

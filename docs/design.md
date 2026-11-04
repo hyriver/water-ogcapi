@@ -1891,10 +1891,12 @@ Layering rule for anything new:
     `_arrow.to_table(features, crs)`. Chosen by the maintainer.
 - **Why:** `QueryResult.to_arrow()` needs the whole aggregate in Python beside the
     table. On the D-14 harness's server, an unsplit query of 100,000 NWIS features in
-    pages of 10,000 peaked at 212 MiB of traced Python heap through
-    `collect().to_arrow()` and 70 MiB through `Page.to_arrow()` on each page from
+    pages of 10,000 peaked at 180 MiB of traced Python heap through
+    `collect().to_arrow()` and 40 MiB through `Page.to_arrow()` on each page from
     `iter_pages()` joined by `concat_tables`, with Arrow's pool at 20 and 18 MiB for an
-    18 MiB table (measured once, deterministic).
+    18 MiB table (`pixi r -e dev bench`; three runs agreed to one decimal). The first
+    conversion in a process adds 39 MiB for importing pyarrow, shapely, and pyproj,
+    which the first measurement of this entry, 212 and 70 MiB, included.
 - **Rejected:** Documenting `iter_pages()` with `Page.json()` alone, which leaves each
     caller to rebuild the `id`, geometry, and CRS rules. A Parquet writer in the
     package, which picks a file format for the caller and breaks when a column's type

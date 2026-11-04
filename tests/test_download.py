@@ -266,6 +266,26 @@ class _CutShort(httpx2.AsyncByteStream):
         raise httpx2.ReadError("connection reset")
 
 
+def test_a_download_error_whose_body_fails_keeps_its_status(tmp_path: Path) -> None:
+    """D-49: a 429's wait survives, with no ``response_body``."""
+    transport, seen = serve(
+        {URL: lambda _: httpx2.Response(429, headers={"Retry-After": "120"}, stream=_CutShort())}
+    )
+    with pytest.raises(RateLimitError) as excinfo:
+        fetch(transport, tmp_path / "f")
+    assert (excinfo.value.retry_after, excinfo.value.response_body) == (120.0, None)
+    assert len(seen) == 1
+    assert not list(tmp_path.iterdir())
+
+
+def test_a_download_4xx_whose_body_fails_is_not_sent_again(tmp_path: Path) -> None:
+    transport, seen = serve({URL: lambda _: httpx2.Response(400, stream=_CutShort())})
+    with pytest.raises(ServiceError) as excinfo:
+        fetch(transport, tmp_path / "f")
+    assert (excinfo.value.status, excinfo.value.response_body) == (400, None)
+    assert len(seen) == 1
+
+
 def test_a_retry_starts_the_file_over(tmp_path: Path) -> None:
     replies = iter(
         [httpx2.Response(200, stream=_CutShort()), httpx2.Response(200, content=b"whole")]

@@ -1343,11 +1343,15 @@ Layering rule for anything new:
     can start together. A slower response with a higher count replaces a newer, lower
     reading. A raised limit keeps the old limit's reading live for a full window. Below
     about 41 left on a default NWIS key, the cap keeps the spacing short of what the
-    rolling window needs. FabricData's 60 s window rests on one probe. A response whose
-    headers arrive and whose body times out is not read. `request()` and `get()` take
-    the governor as a public keyword (D-43). GeoConnex sends no rate-limit headers, so
-    its requests start 1 s apart: at its default `limit` of 500 (D-41), a first
-    validated query for 100,000 features sends 202 requests and takes at least 201 s
+    rolling window needs. FabricData's 60 s window rests on one probe. A 2xx whose
+    headers arrive and whose body fails to read is not read. A 4xx or 5xx whose body
+    fails to read, by a timeout or a read or decoding error, is read, and keeps its
+    status and headers for the retry decision and the raised error, with no
+    `response_body`: its `Retry-After` was otherwise lost to the transport's backoff, and
+    a 400 sent again (#193). `request()` and `get()` take the governor as a public
+    keyword (D-43). GeoConnex sends no rate-limit headers, so its requests start 1 s
+    apart: at its default `limit` of 500 (D-41), a first validated query for 100,000
+    features sends 202 requests and takes at least 201 s
     ([Performance](guide/performance.md#requests-per-100000-features)), and a larger
     `limit` cuts that.
 

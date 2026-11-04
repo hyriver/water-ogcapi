@@ -493,7 +493,12 @@ def _finalize(
             content=resp.content,
             attempts=attempts,
         )
-    _raise_for(resp, resp.content, url=url, attempts=attempts, body=body)
+    try:
+        content = resp.content
+    except httpx2.ResponseNotRead:
+        # An error whose body failed to read (D-49).
+        content = None
+    _raise_for(resp, content, url=url, attempts=attempts, body=body)
 
 
 def _origin(url: httpx2.URL) -> tuple[str, str, int | None]:
@@ -754,6 +759,53 @@ class Transport:
             raise ValidationError(msg)
         return override
 
+    async def _attempt(
+        self,
+        client: httpx2.AsyncClient,
+        sem: asyncio.Semaphore,
+        target: httpx2.URL,
+        *,
+        method: str,
+        headers: dict[str, str],
+        content: bytes | None,
+        made: int,
+    ) -> httpx2.Response:
+        """Send one attempt under a permit and read its body.
+
+        A 4xx or 5xx comes back even if its body failed to read, since its status and
+        headers stand without it (D-49); any other failure raises.
+        """
+        resp: httpx2.Response | None = None
+        try:
+            async with sem, asyncio.timeout(self.timeout):
+                if self._client is not client or client.is_closed:
+                    # aclose() ran while this call waited for a permit or a backoff, or is
+                    # still closing; httpx2 would raise a bare RuntimeError.
+                    msg = "transport closed while the request waited"
+                    raise ServiceError(
+                        msg, str(target), attempts=made, method=method, request_body=content
+                    )
+                # httpx2 times each operation, so a body trickling in under the read timeout
+                # would otherwise hold the permit indefinitely.
+                resp = await client.send(
+                    client.build_request(method, target, headers=headers, content=content),
+                    stream=True,
+                )
+                try:
+                    # Unread when httpx2 cannot decode it, so it raises unretried (D-89).
+                    if resp.status_code >= 300 or not _undecodable(resp, client):
+                        await resp.aread()
+                except httpx2.HTTPError:
+                    if resp.status_code < 400:
+                        raise
+                finally:
+                    await resp.aclose()
+        except TimeoutError:
+            # The deadline can also fall while an error's body is read.
+            if resp is None or resp.status_code < 400:
+                raise
+        return resp
+
     async def get(
         self,
         url: str,
@@ -844,37 +896,30 @@ class Transport:
         method = method.upper()
         client, sem = self._bind()
         pacer = _UNPACED if governor is None else governor
+        failure = ""
+        try:
+            target = _merge_query(url, query) if query else httpx2.URL(url)
+        except httpx2.InvalidURL as exc:
+            target, failure = None, _describe(exc)
+        if target is None:
+            raise ServiceError(failure, url, attempts=1, method=method, request_body=content)
         # Every error names the request as sent, query included (docs/design.md D-24).
-        sent = url
+        sent = str(target)
         for attempt in range(retries + 1):
             final = attempt == retries
             status: int | None = None
             # Outside the permit, so a paced wait never blocks another service.
             await pacer.wait()
             try:
-                async with sem, asyncio.timeout(self.timeout):
-                    # Parsed inside the try so a malformed URL raises a typed ServiceError.
-                    target = _merge_query(url, query) if query else httpx2.URL(url)
-                    sent = str(target)
-                    if self._client is not client or client.is_closed:
-                        # aclose() ran while this call waited for a permit or a backoff,
-                        # or is still closing; httpx2 would raise a bare RuntimeError.
-                        msg = "transport closed while the request waited"
-                        raise ServiceError(
-                            msg, sent, attempts=attempt, method=method, request_body=content
-                        )
-                    # httpx2 times each operation, so a body trickling in under the
-                    # read timeout would otherwise hold the permit indefinitely.
-                    resp = await client.send(
-                        client.build_request(method, target, headers=headers, content=content),
-                        stream=True,
-                    )
-                    try:
-                        # Unread when httpx2 cannot decode it, so it raises unretried (D-89).
-                        if resp.status_code >= 300 or not _undecodable(resp, client):
-                            await resp.aread()
-                    finally:
-                        await resp.aclose()
+                resp = await self._attempt(
+                    client,
+                    sem,
+                    target,
+                    method=method,
+                    headers=headers,
+                    content=content,
+                    made=attempt,
+                )
             except TimeoutError:
                 failure = f"TimeoutError: attempt exceeded {self.timeout} s"
                 transient = True
@@ -964,13 +1009,17 @@ class Transport:
                 attempt + 1,
             )
             return resp.status_code, kept, size, redirects
-        content = None
+        content: bytes | None = None
         if not quiet:
             content = b""
-            async for chunk in resp.aiter_bytes():
-                content += chunk
-                if len(content) >= MAX_ERROR_BODY:
-                    break
+            try:
+                async for chunk in resp.aiter_bytes():
+                    content += chunk
+                    if len(content) >= MAX_ERROR_BODY:
+                        break
+            except httpx2.HTTPError:
+                # An error's status and headers stand without its body (D-49).
+                content = None
         delay = None if attempt == retries else self._retry_delay(resp, attempt)
         if delay is None:
             _raise_for(

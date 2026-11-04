@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Any
 import httpx2
 import pytest
 
-from water_ogcapi import __version__, _transport
+from water_ogcapi import Client, __version__, _transport
 from water_ogcapi._logging import logger
 from water_ogcapi._transport import MAX_REDIRECTS, Transport
-from water_ogcapi.exceptions import RateLimitError, ServiceError
+from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -618,3 +618,39 @@ def test_a_failed_close_still_removes_the_file(
     with pytest.raises(OSError, match="No space left"):
         fetch(transport, tmp_path / "f")
     assert not list(tmp_path.iterdir())
+
+
+def test_a_call_timeout_reaches_every_hop_of_a_download(tmp_path: Path) -> None:
+    """D-19: httpx2's limits follow the redirects, the cross-origin one included."""
+    transport, seen = serve(
+        {URL: redirect("https://elsewhere.test/f"), "https://elsewhere.test/f": body(b"x")}
+    )
+
+    async def both() -> None:
+        await transport.download(URL, tmp_path / "f", timeout=500.0)
+        await transport.download(URL, tmp_path / "g")
+
+    asyncio.run(both())
+    limits = [request.extensions["timeout"]["read"] for request in seen]
+    assert limits == [500.0, 500.0, transport.timeout, transport.timeout]
+
+
+def test_a_call_timeout_leaves_the_total_budget_alone(tmp_path: Path) -> None:
+    transport, _ = serve({URL: lambda _: httpx2.Response(200, stream=_Trickle())})
+    with pytest.raises(ServiceError, match=r"total budget of 0\.1 s"):
+        fetch(transport, tmp_path / "f", total=0.1, timeout=500.0)
+
+
+def test_a_download_refuses_a_timeout_that_is_not_positive(tmp_path: Path) -> None:
+    transport, seen = serve({URL: body(b"x")})
+    with pytest.raises(ValidationError, match="timeout must be"):
+        fetch(transport, tmp_path / "f", timeout=0)
+    assert seen == []
+    assert not list(tmp_path.iterdir())
+
+
+def test_the_client_passes_a_download_timeout_through(tmp_path: Path) -> None:
+    transport, seen = serve({URL: body(b"x")})
+    with Client(transport=transport) as client:
+        client.download(URL, tmp_path / "f", timeout=500.0)
+    assert seen[0].extensions["timeout"]["read"] == 500.0

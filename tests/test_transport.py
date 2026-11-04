@@ -1261,3 +1261,53 @@ def test_a_user_agent_survives_pickling_and_a_rebind() -> None:
     restored = pickle.loads(pickle.dumps(transport))
     # A second asyncio.run() is a new loop, so the restored copy binds a new client.
     assert asyncio.run(restored.get(URL)).json()["agent"] == "hyriver/1.0"
+
+
+def _slow(seconds: float) -> tuple[httpx2.MockTransport, list[httpx2.Request]]:
+    """A mock that takes ``seconds`` to answer, and records what was asked."""
+    seen: list[httpx2.Request] = []
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        await asyncio.sleep(seconds)
+        return httpx2.Response(200, json={})
+
+    return httpx2.MockTransport(handler), seen
+
+
+@pytest.mark.parametrize("method", ["get", "request"])
+def test_a_call_outlasts_the_transport_timeout_with_its_own(method: str) -> None:
+    """D-19: the call's value sets the deadline and httpx2's limits, for that call only."""
+    mock, seen = _slow(0.05)
+    transport = Transport(transport=mock, timeout=0.01, max_retries=0)
+    args = (URL,) if method == "get" else ("GET", URL)
+
+    async def run() -> None:
+        call = getattr(transport, method)
+        assert (await call(*args, timeout=5.0)).status == 200
+        with pytest.raises(ServiceError, match=r"attempt exceeded 0\.01 s"):
+            await call(*args)
+        with pytest.raises(ServiceError, match=r"attempt exceeded 0\.02 s"):
+            await call(*args, timeout=0.02)
+
+    asyncio.run(run())
+    limits = [request.extensions["timeout"] for request in seen]
+    assert limits[0] == dict.fromkeys(("connect", "read", "write", "pool"), 5.0)
+    assert limits[1] == dict.fromkeys(("connect", "read", "write", "pool"), 0.01)
+
+
+def test_the_client_passes_a_call_timeout_through() -> None:
+    mock, seen = _slow(0.05)
+    with Client(transport=Transport(transport=mock, timeout=0.01, max_retries=0)) as client:
+        assert client.get(URL, timeout=5.0).status == 200
+        assert client.request("GET", URL, timeout=5.0).status == 200
+    assert [request.extensions["timeout"]["read"] for request in seen] == [5.0, 5.0]
+
+
+@pytest.mark.parametrize("value", [0, -1.0, float("nan"), float("inf")])
+def test_a_call_timeout_must_be_positive_and_finite(value: float) -> None:
+    mock, seen = _slow(0)
+    transport = Transport(transport=mock)
+    with pytest.raises(ValidationError, match="timeout must be"):
+        asyncio.run(transport.get(URL, timeout=value))
+    assert seen == []

@@ -1011,3 +1011,15 @@ def test_a_cancelled_async_check_removes_the_part(tmp_path: Path) -> None:
     asyncio.run(run())
     assert path.read_bytes() == b"old"
     assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.parametrize("total", [0, -1.0, float("nan"), float("inf")])
+def test_a_download_refuses_a_total_that_is_not_positive_and_finite(
+    tmp_path: Path, total: float
+) -> None:
+    """D-19: refused before the parent folder or the ``.part`` exists."""
+    transport, seen = serve({URL: body(b"x")})
+    with pytest.raises(ValidationError, match="total must be"):
+        fetch(transport, tmp_path / "sub" / "f", total=total)
+    assert seen == []
+    assert not list(tmp_path.iterdir())

@@ -197,6 +197,14 @@ def _reject_unsendable_headers(headers: Mapping[str, str]) -> None:
             raise ValidationError(msg)
 
 
+def _positive_seconds(value: float, name: str) -> float:
+    """Return ``value``, refusing one that would end every attempt or set no limit (D-19)."""
+    if not (value > 0 and math.isfinite(value)):
+        msg = f"{name} must be a positive, finite number of seconds, got {value}"
+        raise ValidationError(msg)
+    return value
+
+
 def _merge_query(url: str, params: Mapping[str, str]) -> httpx2.URL:
     """Append ``params`` to the query in ``url``, keeping its other entries byte for byte.
 
@@ -662,9 +670,9 @@ class Transport:
     Raises
     ------
     ValidationError
-        If ``max_concurrent`` or ``max_per_origin`` is below 1, ``max_retries`` or
-        ``backoff`` is negative,
-        or ``user_agent`` is not a printable ASCII ``str``. A zero-permit semaphore
+        If ``max_concurrent`` or ``max_per_origin`` is below 1, ``max_retries`` is
+        negative, ``timeout`` is not positive and finite, ``backoff`` is negative or not
+        finite, or ``user_agent`` is not a printable ASCII ``str``. A zero-permit semaphore
         would block every request forever.
     """
 
@@ -692,9 +700,10 @@ class Transport:
         if max_retries < 0:
             msg = f"max_retries must not be negative, got {max_retries}"
             raise ValidationError(msg)
-        if backoff < 0:
-            msg = f"backoff must not be negative, got {backoff}"
+        if not (backoff >= 0 and math.isfinite(backoff)):
+            msg = f"backoff must be a finite number of seconds, not negative, got {backoff}"
             raise ValidationError(msg)
+        _positive_seconds(timeout, "timeout")
         # Read-only through properties: the client and semaphore capture these on the
         # first request, so a later assignment would silently change nothing.
         self._timeout = timeout
@@ -831,12 +840,7 @@ class Transport:
 
     def _timeout_of(self, override: float | None) -> float:
         """Return the timeout of one call: ``override``, or the transport's."""
-        if override is None:
-            return self.timeout
-        if not (override > 0 and math.isfinite(override)):
-            msg = f"timeout must be a positive, finite number of seconds, got {override}"
-            raise ValidationError(msg)
-        return override
+        return self.timeout if override is None else _positive_seconds(override, "timeout")
 
     async def _attempt(
         self,
@@ -1339,10 +1343,12 @@ class Transport:
             As `request` does, and also for a refused redirect, more than
             ``MAX_REDIRECTS`` redirects, or a call that outlasted ``total``.
         ValidationError
-            As for `request`.
+            As for `request`, and if ``total`` is not positive and finite.
         """
         retries = self._retries(max_retries)
         seconds = self._timeout_of(timeout)
+        if total is not None:
+            _positive_seconds(total, "total")
         query = query_strings(params)
         reject_credentials(url, query)
         headers = dict(headers or {})

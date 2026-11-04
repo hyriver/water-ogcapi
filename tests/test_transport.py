@@ -83,6 +83,12 @@ def test_no_io_on_construction() -> None:
         {"max_per_origin": 0},
         {"max_retries": -1},
         {"backoff": -0.5},
+        {"backoff": float("nan")},
+        {"backoff": float("inf")},
+        {"timeout": 0},
+        {"timeout": -1.0},
+        {"timeout": float("nan")},
+        {"timeout": float("inf")},
     ],
 )
 def test_invalid_settings_are_rejected_at_construction(kwargs: dict[str, Any]) -> None:

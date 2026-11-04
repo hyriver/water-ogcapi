@@ -1293,10 +1293,11 @@ Layering rule for anything new:
 - **Decision:** Every `OGCService` builds a `Governor` from its profile's
     `rate_limit_window` and passes it to `Transport.request()`, which awaits `wait()`
     before every attempt, retries included, once the attempt holds its origin's permit
-    and a total permit (D-92), and calls `observe()` on every response, a refused
-    redirect included. With `remaining` of `limit` left, a start waits this many seconds
-    after the previous one, from 0 at an eighth of the quota (`RAMP`) up to 60
-    (`MAX_SLEEP`), and 60 at zero:
+    and a total permit (D-92), and calls `observe()` as every response's headers arrive,
+    a refused redirect included, so a 429's hold applies while its body is still coming.
+    With `remaining` of `limit` left, a start waits this many seconds after the previous
+    one, from 0 at an eighth of the quota (`RAMP`) up to 60 (`MAX_SLEEP`), and 60 at
+    zero:
 
     ```text
     window / remaining - 8 * window / limit
@@ -1360,9 +1361,8 @@ Layering rule for anything new:
     slower response with a higher count replaces a newer, lower reading. A raised limit
     keeps the old limit's reading live for a full window. Below about 41 left on a
     default NWIS key, the cap keeps the spacing short of what the rolling window needs.
-    FabricData's 60 s window rests on one probe. A 2xx whose headers arrive and whose
-    body fails to read is not read. A 4xx or 5xx whose body fails to read, by a timeout
-    or a read or decoding error, is read, and keeps its status and headers for the retry
+    FabricData's 60 s window rests on one probe. A 4xx or 5xx whose body fails to read,
+    by a timeout or a read or decoding error, keeps its status and headers for the retry
     decision and the raised error, with no `response_body`: its `Retry-After` was
     otherwise lost to the transport's backoff, and a 400 sent again (#193). `request()`
     and `get()` take the governor as a public keyword (D-43). GeoConnex sends no

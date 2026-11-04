@@ -874,6 +874,8 @@ class Transport:
                     ),
                     stream=True,
                 )
+                # Read on arrival, so a 429's hold applies while its body is still coming.
+                pacer.observe(resp.status_code, resp.headers)
                 try:
                     # Unread when httpx2 cannot decode it, so it raises unretried (D-89).
                     if resp.status_code >= 300 or not _undecodable(resp, client):
@@ -1027,7 +1029,6 @@ class Transport:
             except (httpx2.HTTPError, httpx2.InvalidURL) as exc:
                 failure, transient = _describe(exc), _is_transient(exc)
             else:
-                pacer.observe(resp.status_code, resp.headers)
                 delay = None if final else self._retry_delay(resp, attempt)
                 if delay is None:
                     return _finalize(resp, client, attempts=attempt + 1, body=content)

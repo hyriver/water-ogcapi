@@ -1458,3 +1458,25 @@ def test_origin_bounds_live_with_the_binding() -> None:
         assert transport._origins == {}
 
     asyncio.run(run())
+
+
+def test_a_429_is_read_while_its_body_is_still_coming() -> None:
+    """D-49: read after the body, a stalled 429 let ten more requests out with no hold set."""
+
+    async def run() -> None:
+        gate = asyncio.Event()
+        pacer = _ObservingPacer()
+
+        def handler(_: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(429, headers={"Retry-After": "30"}, stream=_Gated(gate))
+
+        transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
+        call = asyncio.create_task(transport.get(URL, governor=pacer))
+        await _until(lambda: pacer.statuses)
+        assert not call.done()
+        gate.set()
+        await asyncio.gather(call, return_exceptions=True)
+        assert pacer.statuses == [429], "read once"
+        await transport.aclose()
+
+    asyncio.run(run())

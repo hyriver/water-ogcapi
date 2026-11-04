@@ -794,16 +794,14 @@ class Transport:
     async def _permits(
         self, url: httpx2.URL, sem: asyncio.Semaphore, pacer: Governor | _Unpaced
     ) -> AsyncGenerator[None]:
-        """Hold ``url``'s origin permit, then a paced slot, then a total permit (D-49, D-92).
+        """Hold ``url``'s origin permit and a total permit, then book a slot (D-49, D-92).
 
-        A slot is booked once the request can nearly go. Booked before the origin's queue,
-        every gathered call would clear the governor at once, and no reading or 429 would
-        reach the calls still queued.
+        Booked before either queue, every waiting call would clear the governor at once,
+        and no reading or 429 would reach it.
         """
-        async with self._origin_permit(url):
+        async with self._origin_permit(url), sem:
             await pacer.wait()
-            async with sem:
-                yield
+            yield
 
     def _delay(self, attempt: int) -> float:
         """Exponential backoff for a zero-based attempt number."""

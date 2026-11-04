@@ -103,9 +103,9 @@ out.
 `collect()` returns a `QueryResult`:
 
 - `geojson`: the FeatureCollection of every page, nothing coerced.
-- `pagination`: `number_matched` as the server reported it, `number_returned`,
-    `page_count`, `completeness` (`complete`, `limited`, or `unknown`), and the `checks`
-    behind it.
+- `pagination`: `number_matched` as the server reported it, summed over a split query's
+    pieces, `number_returned`, `page_count`, `completeness` (`complete`, `limited`, or
+    `unknown`), and the `checks` behind it.
 - `crs`: the coordinate reference system of the geometries and the evidence for it, the
     `Content-Crs` header or the CRS84 default.
 - `pages`: one `Page` per response, with its URL as sent, status, kept headers, links,

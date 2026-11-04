@@ -395,9 +395,10 @@ class Pagination:
     Parameters
     ----------
     number_matched : int or None
-        The ``numberMatched`` every page reported and agreed on, ``None`` when a
-        page left it out or pages disagreed. Pages that report it beside pages that
-        do not leave the result ``unknown``.
+        The ``numberMatched`` every page reported and agreed on, or the sum of each
+        piece's for a split query (D-93), ``None`` when a page left it out or the pages
+        of one traversal disagreed. Pages that report it beside pages that do not leave
+        the result ``unknown``.
     number_returned : int
         Features received across all pages.
     page_count : int

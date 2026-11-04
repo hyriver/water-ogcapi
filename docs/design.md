@@ -1605,14 +1605,14 @@ Layering rule for anything new:
 - **Limits:** A time between a piece's end and the next start would need a precision
     finer than the microsecond, which NWIS bounds cannot express. A piece need not be
     near one page: a year of 5-minute `continuous` values is about 105,000 rows, so
-    `"month"` suits them. Feature order varies between runs. `summarize()` reads the
-    pieces as one traversal (D-44), and with no `numberMatched` on NWIS only
-    `end_of_links` and D-57's `unique_ids` apply. A long `monitoring_location_id` list
-    can still exceed the GET URL cap near 8 KB; `ids` sends it in a POST body. Pieces
-    run against a collection that may change between them (D-35). A blocking iterator's
-    `close()`, like dropping it, leaves its async generator to the loop's finalizer, so
-    its pieces are cancelled after `close()` returns, and later still when a held
-    traceback keeps a dropped iterator alive (D-46).
+    `"month"` suits them. Feature order varies between runs. With no `numberMatched` on
+    NWIS, only `end_of_links` and D-57's `unique_ids` apply (D-93). A long
+    `monitoring_location_id` list can still exceed the GET URL cap near 8 KB; `ids`
+    sends it in a POST body. Pieces run against a collection that may change between
+    them (D-35). A blocking iterator's `close()`, like dropping it, leaves its async
+    generator to the loop's finalizer, so its pieces are cancelled after `close()`
+    returns, and later still when a held traceback keeps a dropped iterator alive
+    (D-46).
 
 ### D-57: A repeated feature id reads `unknown`
 
@@ -2540,6 +2540,31 @@ Layering rule for anything new:
     included. A download opens its `.part` file before it waits, so a large gather can
     run out of file descriptors first. Sixteen is a budget of four busy origins, not a
     measurement. The origin map keeps an entry per origin until `aclose()`.
+
+### D-93: A split query's count sums its pieces
+
+- **Status:** accepted. Amends D-36, and answers the limits of D-44 and D-56 on
+    `numberMatched` across pieces.
+- **Date:** 2026-11-04.
+- **Decision:** When a traversal has more than one chain, `summarize()` sets
+    `Pagination.number_matched` to the sum of `numberMatched` over each chain's first
+    page, and the count check compares that sum with the features received. A chain's
+    first page is the one with `params`, since a `next` link carries its query in its
+    URL, and a `QueryResult` keeps its pages' `params`, so a resume still tells the
+    pieces apart. Pieces reporting different counts no longer read `unknown` for that
+    alone. A page that leaves the count out still does. The maintainer asked for the fix
+    after the final review; this shape is the implementer's.
+- **Why:** Each piece reports only its own matches, so read as one traversal the check
+    was wrong both ways. Two pieces of 10 cut to 5 each with no `next` link agreed on 10
+    against 10 features and read `complete`, and two whole pieces of 9 read `unknown`.
+    NWIS, the only service that splits, reports no count today, so this holds for the
+    day it does.
+- **Rejected:** Dropping the count check for a split query, which gives up a check that
+    costs nothing. A piece id on `Page` or `Checkpoint`, which adds a public field and a
+    pickled one for what `params` already says.
+- **Limits:** Pages of different chains interleave, so a count that changes within one
+    piece is seen only through the sum. A hand-built `Request` with no `params` reads as
+    a `next` link.
 
 ## Lessons
 

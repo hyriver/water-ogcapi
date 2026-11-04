@@ -563,3 +563,95 @@ def test_a_failure_done_before_its_callback_ran_stops_new_pieces() -> None:
         return [p.get("monitoring_location_id") for p in first_params(seen)]
 
     assert asyncio.run(run()) == ["USGS-01", "USGS-02"]
+
+
+def counted(
+    sizes: dict[str, int] | None = None, claimed: dict[str, int | None] | None = None
+) -> Hook:
+    """Page each site's rows, cut to ``sizes``, reporting ``claimed`` or the true count."""
+
+    async def hook(request: httpx2.Request, rows: list[tuple[str, str]]) -> httpx2.Response:
+        params = request.url.params
+        site = params["monitoring_location_id"]
+        rows = rows[: (sizes or {}).get(site, len(rows))]
+        start = int(params.get("cursor", "0"))
+        size = int(params["limit"])
+        sent = rows[start : start + size]
+        body: dict[str, Any] = {
+            "type": "FeatureCollection",
+            "numberReturned": len(sent),
+            "features": [
+                {"type": "Feature", "id": f"{s}/{t}", "geometry": None, "properties": {}}
+                for s, t in sent
+            ],
+            "links": [],
+        }
+        count = (claimed or {}).get(site, len(rows))
+        if count is not None:
+            body["numberMatched"] = count
+        if start + size < len(rows):
+            href = httpx2.URL(ITEMS, params={**params, "cursor": str(start + size)})
+            body["links"] = [{"rel": "next", "type": "application/geo+json", "href": str(href)}]
+        return httpx2.Response(200, json=body)
+
+    return hook
+
+
+TWO_SITES = {"monitoring_location_id": "USGS-01,USGS-02", "limit": "4"}
+
+
+def test_a_split_query_sums_each_piece_s_count() -> None:
+    """D-93: chains interleave, and each piece reports only its own matches."""
+    result = collect(nwis(counted())[0], params=TWO_SITES, sites_per_piece=1)
+    assert isinstance(result, QueryResult)
+    assert result.pagination.page_count == 6
+    assert result.pagination.number_matched == 18
+    assert result.pagination.completeness == "complete"
+    assert "count" in result.pagination.checks
+
+
+def test_a_split_query_whose_pieces_differ_reads_complete() -> None:
+    sizes = {"USGS-01": 9, "USGS-02": 4}
+    result = collect(nwis(counted(sizes))[0], params=TWO_SITES, sites_per_piece=1)
+    assert isinstance(result, QueryResult)
+    assert result.pagination.number_matched == 13
+    assert result.pagination.completeness == "complete"
+
+
+def test_a_cut_split_query_whose_sum_matches_one_piece_reads_unknown() -> None:
+    """D-93: read as one traversal, two pieces of 10 cut to 5 each read ``complete``."""
+    sizes = {"USGS-01": 5, "USGS-02": 5}
+    claimed: dict[str, int | None] = {"USGS-01": 10, "USGS-02": 10}
+    result = collect(nwis(counted(sizes, claimed))[0], params=TWO_SITES, sites_per_piece=1)
+    assert isinstance(result, QueryResult)
+    assert result.pagination.number_returned == 10
+    assert result.pagination.number_matched == 20
+    assert result.pagination.completeness == "unknown"
+    assert "count" not in result.pagination.checks
+
+
+def test_a_split_query_with_a_piece_that_reports_no_count_reads_unknown() -> None:
+    claimed: dict[str, int | None] = {"USGS-02": None}
+    result = collect(nwis(counted(claimed=claimed))[0], params=TWO_SITES, sites_per_piece=1)
+    assert isinstance(result, QueryResult)
+    assert result.pagination.number_matched is None
+    assert result.pagination.completeness == "unknown"
+
+
+def test_a_resumed_split_query_sums_the_pieces_of_both_runs() -> None:
+    """The held pages keep their params, so a resume still tells the pieces apart."""
+    counting = counted()
+
+    async def fail_second(
+        request: httpx2.Request, rows: list[tuple[str, str]]
+    ) -> httpx2.Response | None:
+        if request.url.params.get("monitoring_location_id") == "USGS-02":
+            return httpx2.Response(503)
+        return await counting(request, rows)
+
+    err = collect(nwis(fail_second)[0], params=TWO_SITES, sites_per_piece=1)
+    assert isinstance(err, PartialResultsError)
+    result = collect(nwis(counting)[0], resume=err.result)
+    assert isinstance(result, QueryResult)
+    assert result.pagination.number_matched == 18
+    assert result.pagination.completeness == "complete"

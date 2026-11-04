@@ -173,7 +173,14 @@ def summarize(
     reported = {p.number_matched for p in pages if p.number_matched is not None}
     # A page that left numberMatched out cannot be said to agree with the others.
     every = all(p.number_matched is not None for p in pages)
-    matched = next(iter(reported)) if len(reported) == 1 and every else None
+    # Each piece of a split query counts its own matches. Only a chain's first page has
+    # params, since a next link carries its query in its URL (D-93).
+    firsts = [p.number_matched or 0 for p in pages if p.params]
+    split = len(firsts) > 1
+    if split:
+        matched = sum(firsts) if every else None
+    else:
+        matched = next(iter(reported)) if len(reported) == 1 and every else None
     returned = sum(p.feature_count for p in pages)
     sort_by = pages[0].params.get("sortby") if pages else None
     if failed:
@@ -194,7 +201,7 @@ def summarize(
         "unknown"
         if malformed
         or short
-        or len(reported) > 1
+        or (not split and len(reported) > 1)
         or mismatch
         or (reported and not every)
         or repeated

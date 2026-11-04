@@ -388,9 +388,10 @@ Layering rule for anything new:
     retried. Waiting for a concurrency permit is not bounded; a caller that needs a
     deadline wraps the call. `request()`, `get()`, `download()`, and their `Client`
     twins take `timeout=`, which sets both limits for that call only, every redirect hop
-    of a download included, and defaults to the transport's. A value that is not
-    positive and finite raises `ValidationError`. `download()`'s `total` stays as it was
-    (D-69).
+    of a download included, and defaults to the transport's. A `timeout`, on the
+    transport or a call, or a `download()` `total`, that is not positive and finite
+    raises `ValidationError`, before any request or file. `download()`'s `total`
+    otherwise stays as it was (D-69).
 - **Why:** httpx2 times each operation, so a server sending a body chunk every 29 s
     under `timeout=30` held a permit indefinitely. A slow service, such as a THREDDS
     NCSS subset the server builds before its first byte, needs longer than a shared

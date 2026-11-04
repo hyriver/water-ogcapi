@@ -31,7 +31,7 @@ from water_ogcapi._redact import CREDENTIAL_PARAMS, redact_url
 from water_ogcapi.exceptions import RateLimitError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
     from water_ogcapi._governor import Governor
 
@@ -1229,6 +1229,7 @@ class Transport:
         max_retries: int | None = None,
         timeout: float | None = None,  # noqa: ASYNC109
         public_query: bool = False,
+        check: Callable[[Path, Mapping[str, str]], object] | None = None,
     ) -> Download:
         """Stream a ``GET`` response to a file, following redirects (D-69).
 
@@ -1271,6 +1272,12 @@ class Transport:
             URL: a server's text can echo the signature into the error, its pickle, and
             log records. A redirect to a URL with a query, or to another origin, goes quiet
             whatever this says. The result and errors still name the URL without its query.
+        check : callable, optional
+            Called with the path of the finished ``.part`` file and the headers
+            `Download` keeps, before the rename, on the event loop, so keep it short. An
+            exception it raises propagates as raised, unretried, with the ``.part`` removed
+            and ``path`` keeping its old file, which stops a 200 holding an error document
+            from replacing a good file. A 304 skips it.
 
         Returns
         -------
@@ -1308,41 +1315,48 @@ class Transport:
         out, part = _create_part(target)
         made = 0
         try:
-            async with asyncio.timeout(total):
-                for attempt in range(retries + 1):
-                    made = attempt + 1
-                    outcome = await self._stream_to(
-                        client,
-                        sem,
-                        first,
-                        headers=headers,
-                        out=out,
-                        pacer=pacer,
-                        attempt=attempt,
-                        retries=retries,
-                        seconds=seconds,
-                        public_query=public_query,
-                    )
-                    if not isinstance(outcome, tuple):
+            try:
+                async with asyncio.timeout(total):
+                    for attempt in range(retries + 1):
+                        made = attempt + 1
+                        outcome = await self._stream_to(
+                            client,
+                            sem,
+                            first,
+                            headers=headers,
+                            out=out,
+                            pacer=pacer,
+                            attempt=attempt,
+                            retries=retries,
+                            seconds=seconds,
+                            public_query=public_query,
+                        )
+                        if isinstance(outcome, tuple):
+                            break
                         await asyncio.sleep(outcome)
-                        continue
-                    status, kept, size, redirects = outcome
-                    # Closed first: Windows does not rename a file that is still open.
-                    out.close()
-                    if status != 304:
-                        part.replace(target)
-                    return Download(
-                        path=target,
-                        url=named,
-                        status=status,
-                        headers=kept,
-                        size=size,
-                        attempts=made,
-                        redirects=redirects,
-                    )
-        except TimeoutError:
-            msg = f"download exceeded its total budget of {total} s"
-            raise ServiceError(msg, named, attempts=made) from None
+                    else:
+                        # Unreachable: the last attempt returns or raises.
+                        raise AssertionError  # pragma: no cover
+            except TimeoutError:
+                msg = f"download exceeded its total budget of {total} s"
+                raise ServiceError(msg, named, attempts=made) from None
+            status, kept, size, redirects = outcome
+            # Closed first: Windows does not rename a file that is still open.
+            out.close()
+            if status != 304:
+                # Outside the budget's scope, so a TimeoutError of its own stays its own.
+                if check is not None:
+                    check(part, kept)
+                part.replace(target)
+            return Download(
+                path=target,
+                url=named,
+                status=status,
+                headers=kept,
+                size=size,
+                attempts=made,
+                redirects=redirects,
+            )
         finally:
             # Synchronous, so the cleanup runs even while the task is being cancelled, and
             # even when closing fails on a full disk.
@@ -1350,8 +1364,6 @@ class Transport:
                 out.close()
             finally:
                 part.unlink(missing_ok=True)
-        # Unreachable: the last attempt returns or raises. Keeps the return type total.
-        raise AssertionError  # pragma: no cover
 
     async def aclose(self) -> None:
         """Close the underlying client and release the loop binding.

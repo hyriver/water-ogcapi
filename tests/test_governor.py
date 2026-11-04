@@ -10,6 +10,7 @@ import logging
 import pickle
 import types
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import httpx2
@@ -306,3 +307,67 @@ def test_a_service_without_a_window_keeps_its_static_spacing(
     service = OGCService(base, transport=transport) if bare else GeoConnex(transport=transport)
     asyncio.run(service.collect("c", validate=False))
     assert seen == [0.0, 1.0, 2.0], "counts ignored, starts 1 s apart"
+
+
+async def _let_the_others_run() -> None:
+    """Yield to the loop once: the ``clock`` fixture's ``asyncio.sleep`` never does."""
+    loop = asyncio.get_running_loop()
+    turn = loop.create_future()
+    loop.call_soon(turn.set_result, None)
+    await turn
+
+
+def _gathered_starts(clock: list[float], call: Callable[..., Any], n: int) -> list[float]:
+    """Return the clock at each send of ``n`` gathered calls, the first answered 429."""
+    sent: list[float] = []
+
+    async def handler(_: httpx2.Request) -> httpx2.Response:
+        sent.append(clock[0])
+        await _let_the_others_run()
+        if len(sent) == 1:
+            return httpx2.Response(429, headers={"retry-after": "30"})
+        return httpx2.Response(200, json={})
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_per_origin=1, max_retries=0)
+    governor = Governor(None, interval=0.0)
+
+    async def run() -> None:
+        calls = [call(transport, governor, i) for i in range(n)]
+        await asyncio.gather(*calls, return_exceptions=True)
+
+    asyncio.run(run())
+    return sent
+
+
+def test_a_429_holds_requests_queued_at_the_origin_permit(clock: list[float]) -> None:
+    """D-49: booked before the queue, 40 gathered calls went out inside 0.06 s of the hold."""
+    sent = _gathered_starts(clock, lambda t, g, _: t.get(URL, governor=g), 4)
+    assert sent == [0.0, 30.0, 30.0, 30.0]
+
+
+def test_a_429_holds_downloads_queued_at_the_origin_permit(
+    clock: list[float], tmp_path: Path
+) -> None:
+    sent = _gathered_starts(
+        clock, lambda t, g, i: t.download(URL, tmp_path / str(i), governor=g), 3
+    )
+    assert sent == [0.0, 30.0, 30.0]
+
+
+def test_a_reading_reaches_requests_queued_at_the_origin_permit(clock: list[float]) -> None:
+    """D-49: the ramp applies to calls already gathered, whose slots are not booked yet."""
+    sent: list[float] = []
+
+    async def handler(_: httpx2.Request) -> httpx2.Response:
+        sent.append(clock[0])
+        await _let_the_others_run()
+        return httpx2.Response(200, json={}, headers=counts(1000, 50))
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_per_origin=1, max_retries=0)
+    governor = Governor(3600.0)
+
+    async def run() -> None:
+        await asyncio.gather(*(transport.get(URL, governor=governor) for _ in range(3)))
+
+    asyncio.run(run())
+    assert sent == [0.0, pytest.approx(43.2), pytest.approx(86.4)]

@@ -7,6 +7,12 @@ services. The examples also use packages that `water-ogcapi` does not install:
 pip install "water-ogcapi[arrow]" geopandas polars "dask[distributed]"
 ```
 
+With conda:
+
+```bash
+conda install -c conda-forge water-ogcapi "pyarrow>=24" "pyproj>=3.7" "shapely>=2.1" geopandas polars dask
+```
+
 Read the pages in this order:
 
 1. [Installation and the API key](setup.md): installing the package and its `arrow`

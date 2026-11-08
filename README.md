@@ -1,5 +1,7 @@
 # Water OGC API: A Client for the USGS OGC web Services
 
+[![PyPI](https://img.shields.io/pypi/v/water-ogcapi.svg)](https://pypi.org/project/water-ogcapi/)
+[![conda-forge](https://img.shields.io/conda/vn/conda-forge/water-ogcapi.svg)](https://anaconda.org/conda-forge/water-ogcapi)
 [![CI](https://github.com/hyriver/water-ogcapi/actions/workflows/ci.yml/badge.svg)](https://github.com/hyriver/water-ogcapi/actions/workflows/ci.yml)
 [![Docs](https://github.com/hyriver/water-ogcapi/actions/workflows/docs.yml/badge.svg)](https://docs.hyriver.io/water-ogcapi/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/hyriver/water-ogcapi/blob/main/LICENSE)
@@ -44,10 +46,14 @@ two services never receive it.
 
 <!-- --8<-- [start:install] -->
 
-Install from PyPI (Python 3.13 or later):
+Install from PyPI or conda-forge (Python 3.13 or later):
 
 ```bash
 pip install water-ogcapi
+```
+
+```bash
+conda install -c conda-forge water-ogcapi
 ```
 
 The `arrow` extra adds `pyarrow`, `shapely`, and `pyproj` for the `to_arrow()` methods:
@@ -56,7 +62,13 @@ The `arrow` extra adds `pyarrow`, `shapely`, and `pyproj` for the `to_arrow()` m
 pip install "water-ogcapi[arrow]"
 ```
 
-conda-forge has no package yet. The development version installs from GitHub:
+conda-forge packages have no extras, so a conda install names the three packages:
+
+```bash
+conda install -c conda-forge water-ogcapi "pyarrow>=24" "pyproj>=3.7" "shapely>=2.1"
+```
+
+The development version installs from GitHub:
 
 ```bash
 pip install git+https://github.com/hyriver/water-ogcapi

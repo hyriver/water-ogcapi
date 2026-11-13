@@ -1675,7 +1675,7 @@ Layering rule for anything new:
 
 ### D-59: Python 3.13 is the floor, and the lock covers three platforms
 
-- **Status:** accepted; amended by D-71 and D-72. Amends D-58.
+- **Status:** accepted; amended by D-71, D-72, and D-96. Amends D-58.
 - **Date:** 2026-10-23.
 - **Decision:** `requires-python` is `>=3.13`. The offline tests run in `test313` and
     `test315`, ruff targets `py313`, and pyright checks as 3.13. The `dev`, `typecheck`,
@@ -2116,7 +2116,7 @@ Layering rule for anything new:
 
 ### D-72: CI tests and installs `dev` on Linux, macOS, and Windows
 
-- **Status:** accepted. Amends D-59.
+- **Status:** accepted; amended by D-96. Amends D-59.
 - **Date:** 2026-10-30.
 - **Decision:** The `ci.yml` test job runs `test313` and `test315` on `ubuntu-latest`,
     `macos-latest`, and `windows-latest`, one runner per pixi platform, as six jobs
@@ -2627,6 +2627,26 @@ Layering rule for anything new:
     gets a 403. The 2 KB limit is observed, not documented, and 50 sites leaves room for
     ids up to 20 characters and a few other parameters. USGS documents no limit for an
     unkeyed asset download.
+
+### D-96: Python 3.12 is the floor
+
+- **Status:** accepted. Amends D-59 and D-72.
+- **Date:** 2026-11-13.
+- **Decision:** `requires-python` is `>=3.12`. The offline tests run on the lowest and
+    highest supported Pythons, in `test312` and `test315`, on all three CI runners;
+    `test313` is gone. ruff targets `py312`, pyright checks as 3.12, and `lint` runs
+    3.12, so `pixi r audit` resolves for the floor. The other environments keep their
+    Pythons from D-59.
+- **Why:** The maintainer asked for 3.12, which gets security fixes until October 2028.
+    Only `itertools.batched(..., strict=False)` needed 3.13: on 3.12.16 the offline
+    suite failed 22 tests, all on that call, and passed the other 830, and vermin and
+    pyright set to 3.12 flagged nothing else. Every runtime dependency supports 3.12:
+    httpx2, pyarrow, and shapely ask for 3.11, and pyproj for 3.12.
+- **Rejected:** 3.11, below pyproj's floor for the `arrow` extra. A test environment per
+    minor version, which the maintainer cut to the two ends of the range.
+- **Limits:** 3.12.16 raises `ValueError` on an HTTP-date with a huge year, which
+    `_http_date` catches with the `OverflowError` of older 3.13 and 3.14 releases; older
+    3.12 releases were not probed.
 
 ## Lessons
 

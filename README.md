@@ -48,7 +48,7 @@ services never receive it. `NWIS`, its name in 0.1.0, is gone.
 
 <!-- --8<-- [start:install] -->
 
-Install from PyPI or conda-forge (Python 3.13 or later):
+Install from PyPI or conda-forge (Python 3.12 or later):
 
 ```bash
 pip install water-ogcapi

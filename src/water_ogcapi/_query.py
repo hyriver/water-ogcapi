@@ -427,10 +427,12 @@ def items_request(
     cql2: str | Mapping[str, Any] | None,
     ids: Sequence[str | int] | None,
     id_property: str | None,
+    json_in_query: bool = False,
 ) -> Request:
     """Return the first request of an items query, as `OGCService.iter_pages` takes it.
 
-    A CQL2-JSON filter, or ``ids``, makes it a ``POST`` with the filter as its body.
+    A CQL2-JSON filter, or ``ids``, makes it a ``POST`` with the filter as its body, or,
+    with ``json_in_query``, a ``GET`` with the filter in the query (D-95).
 
     Raises
     ------
@@ -439,6 +441,9 @@ def items_request(
     """
     url = f"{base_url}/collections/{path_segment(collection, 'collection')}/items"
     query, body = _items_query(params, bbox, geometry, _filter(cql2, ids, id_property))
+    if body is not None and json_in_query:
+        query |= {"filter": body.decode(), "filter-lang": "cql2-json"}
+        body = None
     if body is None:
         return Request(url=url, params=query)
     return Request(url=url, method="POST", params=query, body=body, headers=CQL2_JSON)

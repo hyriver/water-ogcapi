@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from water_ogcapi._query import Request
     from water_ogcapi._transport import Transport
 
-__all__ = ["FabricData", "GeoConnex", "WaterData"]
+__all__ = ["FabricData", "GeoConnex", "WaterData", "WaterDataSTAC"]
 
 PERIODS = frozenset({"year", "month"})
 SITES = "monitoring_location_id"
@@ -37,6 +37,17 @@ WATERDATA_PROFILE = ServiceProfile(
     key_env="USGS_API_KEY",
     # The hour api.data.gov documents.
     rate_limit_window=3_600.0,
+)
+
+WATERDATA_STAC_PROFILE = ServiceProfile(
+    base_url="https://api.waterdata.usgs.gov/stac/v0/",
+    # An item runs about 2.3 KB, so a default page is about 2.3 MB.
+    default_limit=1_000,
+    max_limit=10_000,
+    key_env="USGS_API_KEY",
+    rate_limit_window=3_600.0,
+    # Its items answer a POST with 405.
+    cql2_json_in_query=True,
 )
 
 FABRICDATA_PROFILE = ServiceProfile(
@@ -158,7 +169,25 @@ def _key(api_key: str | None) -> str | None:
     return api_key or None
 
 
-class WaterData(OGCService):
+class _Keyed(OGCService):
+    """A service sent the USGS key in the ``X-Api-Key`` header of every request (D-18)."""
+
+    def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
+        super().__init__(transport=transport)
+        self._api_key = _key(api_key)
+
+    def _headers(self) -> dict[str, str]:
+        return {"X-Api-Key": self._api_key} if self._api_key else {}
+
+    def __getstate__(self) -> dict[str, Any]:
+        return {**super().__getstate__(), "_api_key": None}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._api_key = _key(None)
+
+
+class WaterData(_Keyed):
     """Async client for the USGS Water Data OGC API (D-42, D-94).
 
     Construction performs no HTTP. A page asks for up to 10,000 features unless
@@ -182,13 +211,6 @@ class WaterData(OGCService):
     """
 
     profile = WATERDATA_PROFILE
-
-    def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
-        super().__init__(transport=transport)
-        self._api_key = _key(api_key)
-
-    def _headers(self) -> dict[str, str]:
-        return {"X-Api-Key": self._api_key} if self._api_key else {}
 
     def _pieces(
         self,
@@ -228,12 +250,33 @@ class WaterData(OGCService):
             raise ValidationError(msg)
         return pieces
 
-    def __getstate__(self) -> dict[str, Any]:
-        return {**super().__getstate__(), "_api_key": None}
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        self.__dict__.update(state)
-        self._api_key = _key(None)
+class WaterDataSTAC(_Keyed):
+    """Async client for the USGS Water Data STAC API, which lists data files (D-95).
+
+    Each item describes one file, and its ``assets`` link to that file, which
+    `Transport.download` or `Client.download` fetches with no key. Construction performs
+    no HTTP. A page asks for up to 1,000 items unless ``params`` set a ``limit``, and
+    10,000 at most. A CQL2-JSON ``filter``, and ``ids``, go in the query of a ``GET``,
+    since the service refuses a ``POST`` to its items. The service has no schema
+    endpoint, so `schema` raises `ServiceError`.
+
+    Parameters
+    ----------
+    api_key : str, optional
+        A USGS API key, as for `WaterData`. USGS suggests a separate key for this
+        service.
+    transport : Transport, optional
+        Sends every request, as for `OGCService`.
+
+    Raises
+    ------
+    ValidationError
+        If the key holds a character other than printable ASCII, or is not exactly
+        ``str``.
+    """
+
+    profile = WATERDATA_STAC_PROFILE
 
 
 class FabricData(OGCService):

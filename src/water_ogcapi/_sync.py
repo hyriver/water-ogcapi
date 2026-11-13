@@ -33,7 +33,7 @@ from water_ogcapi.exceptions import ValidationError
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 
-__all__ = ["Client", "FabricData", "GeoConnex", "OGCService", "WaterData"]
+__all__ = ["Client", "FabricData", "GeoConnex", "OGCService", "WaterData", "WaterDataSTAC"]
 
 # Seconds between interrupt checks while a call waits; a call still returns once its result
 # is ready. A blocked wait misses an interrupt that only sets the flag, as ipykernel's on
@@ -235,6 +235,28 @@ class WaterData(OGCService):
     def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
         self._transport = Transport() if transport is None else transport
         self._service = _services.WaterData(api_key=api_key, transport=self._transport)
+
+
+class WaterDataSTAC(OGCService):
+    """Blocking client for the USGS Water Data STAC API, as `water_ogcapi.aio.WaterDataSTAC`.
+
+    Parameters
+    ----------
+    api_key : str, optional
+        A USGS API key, as for `water_ogcapi.aio.WaterDataSTAC`.
+    transport : Transport, optional
+        Sends every request, as for `OGCService`.
+
+    Raises
+    ------
+    ValidationError
+        If the key holds a character other than printable ASCII, or is not exactly
+        ``str``.
+    """
+
+    def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
+        self._transport = Transport() if transport is None else transport
+        self._service = _services.WaterDataSTAC(api_key=api_key, transport=self._transport)
 
 
 class FabricData(OGCService):

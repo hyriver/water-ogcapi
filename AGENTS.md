@@ -7,9 +7,10 @@ project follows the
 
 ## Project
 
-`water-ogcapi` is a Python client for USGS water data services (WaterData, FabricData,
-GeoConnex) over OGC API Features, with blocking service classes at the package root and
-async twins in `water_ogcapi.aio`. `README.md` lists the endpoints.
+`water-ogcapi` is a Python client for USGS water data services (WaterData,
+WaterDataSTAC, FabricData, GeoConnex) over OGC API Features, with blocking service
+classes at the package root and async twins in `water_ogcapi.aio`. `README.md` lists the
+endpoints.
 
 USGS operates these APIs. Before any request to a live endpoint, read
 `.agents/skills/live-api/SKILL.md`.

@@ -128,6 +128,10 @@ class ServiceProfile:
         Seconds over which the service's ``X-RateLimit-Limit`` counts, read by its
         `Governor` (D-49). ``None``, the default, for a service that sends no
         ``X-RateLimit-*`` headers.
+    cql2_json_in_query : bool, optional
+        Send a CQL2-JSON filter, and ``ids``, as the ``filter`` parameter of a ``GET``
+        with ``filter-lang=cql2-json``, for a server that refuses a ``POST`` to its items
+        (D-95). Defaults to ``False``, which posts the filter as the body (D-39).
 
     Raises
     ------
@@ -141,6 +145,7 @@ class ServiceProfile:
     max_limit: int
     key_env: str | None = None
     rate_limit_window: float | None = None
+    cql2_json_in_query: bool = False
 
     def __post_init__(self) -> None:
         reject_non_str([self.base_url], "base_url")
@@ -785,6 +790,7 @@ class OGCService:
                 cql2=filter,
                 ids=ids,
                 id_property=id_property,
+                json_in_query=self.profile is not None and self.profile.cql2_json_in_query,
             )
             pieces = tuple(self._pieces(request, split_datetime, sites_per_piece))
             if validate:

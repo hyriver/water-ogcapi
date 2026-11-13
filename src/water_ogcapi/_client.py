@@ -542,7 +542,9 @@ class OGCService:
             If ``split_datetime`` or ``sites_per_piece`` is given.
         """
         if split_datetime is not None or sites_per_piece is not None:
-            msg = f"{type(self).__name__} does not split queries; only WaterData does"
+            msg = (
+                f"{type(self).__name__} does not split queries; only WaterData and WaterDataSTAC do"
+            )
             raise ValidationError(msg)
         return (request,)
 
@@ -713,10 +715,11 @@ class OGCService:
             offset, and each piece ends one microsecond before the next begins. Every
             piece costs at least one request, so size pieces near one page.
         sites_per_piece : int, optional
-            WaterData only (D-35, D-56): split the site list, ``ids`` or a comma-separated
-            ``monitoring_location_id`` in ``params``, into lists of this many sites
-            that run concurrently as ``split_datetime`` pieces do. A site listed twice
-            is sent once. Not with ``split_datetime``.
+            WaterData and WaterDataSTAC only (D-35, D-56, D-95): split the site list,
+            ``ids`` or a comma-separated ``monitoring_location_id`` in ``params``, into
+            lists of this many sites that run concurrently as ``split_datetime`` pieces
+            do. A site listed twice is sent once. Not with ``split_datetime``.
+            WaterDataSTAC splits a site list into pieces of 50 when this is omitted.
         validate : bool, optional
             Before the first page request, check ``collection`` against the collection
             index, and each name in ``params`` outside ``QUERY_PARAMS``, and

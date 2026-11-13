@@ -76,6 +76,7 @@ def test_waterdata_sends_the_key_read_at_construction_on_every_request(
     monkeypatch: pytest.MonkeyPatch, cls: type[WaterData | WaterDataSTAC]
 ) -> None:
     monkeypatch.setenv("USGS_API_KEY", "env-key")
+    monkeypatch.delenv("USGS_STAC_API_KEY", raising=False)
     transport, seen = recording()
     service = cls(transport=transport)
     monkeypatch.setenv("USGS_API_KEY", "changed")
@@ -319,6 +320,70 @@ def test_stac_sends_a_cql2_json_filter_in_a_get_query(query: dict[str, Any]) -> 
     assert json.loads(sent[0].url.params["filter"])["args"][0] == {"property": "id"}
 
 
+@pytest.mark.parametrize(("stac_env", "sent"), [("stac", "stac"), (None, "ogc"), ("", None)])
+def test_stac_reads_its_own_key_variable_then_usgs_api_key(
+    monkeypatch: pytest.MonkeyPatch, stac_env: str | None, sent: str | None
+) -> None:
+    monkeypatch.setenv("USGS_API_KEY", "ogc")
+    if stac_env is None:
+        monkeypatch.delenv("USGS_STAC_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("USGS_STAC_API_KEY", stac_env)
+    transport, seen = recording()
+
+    async def run() -> None:
+        await WaterDataSTAC(transport=transport).collect("c", validate=False)
+        await WaterData(transport=transport).collect("c", validate=False)
+
+    asyncio.run(run())
+    assert [r.headers.get("x-api-key") for r in seen] == [sent, "ogc"]
+
+
+def stac_pieces(**query: Any) -> list[httpx2.Request]:
+    transport, seen = recording()
+    service = WaterDataSTAC(api_key="", transport=transport)
+    asyncio.run(service.collect("c", validate=False, **query))
+    return seen
+
+
+def test_stac_splits_a_long_site_list_into_gets_of_50() -> None:
+    sites = [f"USGS-{i:08d}" for i in range(120)]
+    seen = stac_pieces(ids=[*sites, sites[0]], id_property="monitoring_location_id")
+    pieces = [json.loads(r.url.params["filter"])["args"][1] for r in seen]
+    assert {r.method for r in seen} == {"GET"}
+    assert sorted(map(len, pieces)) == [20, 50, 50]
+    assert sorted(s for piece in pieces for s in piece) == sites
+
+
+def test_stac_takes_another_piece_size() -> None:
+    sites = [f"USGS-{i:08d}" for i in range(30)]
+    seen = stac_pieces(ids=sites, id_property="monitoring_location_id", sites_per_piece=10)
+    assert len(seen) == 3
+
+
+def test_stac_sends_an_in_list_with_a_non_literal_value_whole() -> None:
+    # Pieces of a list holding a property reference can match the same item twice.
+    values: list[object] = [f"v{i}" for i in range(60)] + [{"property": "file_type"}]
+    query = {"op": "in", "args": [{"property": "file_type"}, values]}
+    assert len(stac_pieces(filter=query)) == 1
+
+
+def test_stac_sends_a_query_without_a_site_list_whole() -> None:
+    assert len(stac_pieces(filter="file_type = 'base'")) == 1
+
+
+@pytest.mark.parametrize(
+    ("query", "message"),
+    [
+        ({"split_datetime": "year", "params": {"datetime": "2020/2021"}}, "only a site list"),
+        ({"sites_per_piece": 5, "filter": "file_type = 'base'"}, "takes a site list"),
+    ],
+)
+def test_stac_refuses_a_split_it_cannot_make(query: dict[str, Any], message: str) -> None:
+    with pytest.raises(ValidationError, match=message):
+        stac_pieces(**query)
+
+
 def test_stac_follows_a_next_link_token_with_a_get() -> None:
     first = f"{WaterDataSTAC(api_key='').base_url}/collections/c/items"
     seen: list[httpx2.Request] = []
@@ -355,6 +420,20 @@ def test_stac_lists_and_downloads_the_potomac_ratings(tmp_path: Path) -> None:
     assert result.pagination.completeness == "complete"
     assert {f["properties"]["file_type"] for f in result.geojson["features"]} >= {"base"}
     assert path.read_text().startswith("#")
+
+
+@pytest.mark.network
+def test_stac_runs_a_site_list_too_long_for_one_get() -> None:
+    # One GET with 100 sites got a 403 on 2026-11-13; pieces of 50 fit.
+    sites = [f"USGS-{i:08d}" for i in range(120)]
+
+    async def run() -> QueryResult:
+        async with Transport(max_retries=0) as transport, WaterDataSTAC(transport=transport) as svc:
+            return await svc.collect("daily", ids=sites, id_property="monitoring_location_id")
+
+    result = asyncio.run(run())
+    assert result.pagination.completeness == "complete"
+    assert len(result.pages) == 3
 
 
 @pytest.mark.network

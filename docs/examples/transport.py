@@ -18,7 +18,7 @@
 # %% [markdown]
 # # Clients for other web services
 #
-# The service classes cover NWIS, FabricData, and GeoConnex. The transport under them,
+# The service classes cover WaterData, FabricData, and GeoConnex. The transport under them,
 # the async `Transport` and its blocking `Client`, sends requests to any HTTP API: it
 # bounds how many run at once, retries transient failures, refuses redirects outside
 # downloads, and keeps header credentials out of logs and errors. This notebook builds small

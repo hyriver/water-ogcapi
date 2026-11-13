@@ -5,7 +5,7 @@ and the types they return.
 
 ## Services
 
-::: water_ogcapi.NWIS
+::: water_ogcapi.WaterData
 
 ::: water_ogcapi.FabricData
 

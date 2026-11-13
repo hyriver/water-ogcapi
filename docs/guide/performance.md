@@ -2,11 +2,11 @@
 
 `scripts/bench.py` measures the five benchmarks that
 [D-14](../design.md#d-14-testing-strategy) plans and the two routes to Arrow. It runs
-offline against `httpx2.MockTransport`: each items page repeats one NWIS daily-value
-feature from `tests/fixtures/` (about 470 bytes of JSON) under distinct ids, and the
-mock builds each page before any timer or trace starts and hands every response its own
-copy of the bytes. The numbers therefore measure the client and leave out the network.
-Reproduce them with:
+offline against `httpx2.MockTransport`: each items page repeats one WaterData
+daily-value feature from `tests/fixtures/` (about 470 bytes of JSON) under distinct ids,
+and the mock builds each page before any timer or trace starts and hands every response
+its own copy of the bytes. The numbers therefore measure the client and leave out the
+network. Reproduce them with:
 
 ```bash
 pixi r -e dev bench
@@ -17,8 +17,9 @@ rows give the median and the range of 20 runs, or 5 for the 429 rows.
 
 ## Cold start
 
-Each run starts a fresh interpreter, imports `water_ogcapi`, builds a blocking `NWIS`,
-and takes the first page of a `daily` query with the default `validate=True`.
+Each run starts a fresh interpreter, imports `water_ogcapi`, builds a blocking
+`WaterData`, and takes the first page of a `daily` query with the default
+`validate=True`.
 
 | Step                              | Median (range)   |
 | --------------------------------- | ---------------- |
@@ -49,7 +50,7 @@ and the cache keeps both for an hour
 
 | Service    | Page size | Pages | Requests |
 | ---------- | --------- | ----- | -------- |
-| NWIS       | 10,000    | 10    | 12       |
+| WaterData  | 10,000    | 10    | 12       |
 | FabricData | 1,000     | 100   | 102      |
 | GeoConnex  | 500       | 200   | 202      |
 
@@ -59,8 +60,8 @@ requests are the metadata check. The governor's waits move only when requests st
 this run skips them. GeoConnex sends no rate-limit headers, so its governor spaces
 requests one second apart
 ([D-49](../design.md#d-49-the-governor-paces-every-attempt-over-the-last-eighth-of-the-quota)),
-and its 202 requests take at least 201 seconds. NWIS and FabricData with quota to spare
-add no wait.
+and its 202 requests take at least 201 seconds. WaterData and FabricData with quota to
+spare add no wait.
 
 ## Peak memory
 
@@ -120,11 +121,11 @@ run returned all 5,000 features with no id repeated.
 
 [Q-09](../design.md#q-09-orjson-for-decoding-large-responses) asked whether orjson
 should decode pages. `--fetch` saves three real pages per service at the profile's page
-size, NWIS `continuous` for a year at the Potomac gage and FabricData `gagesii`, and
-records how long `iter_pages` took to return each, its own `json.loads` included. It
-sends six requests through the services, whose checks keep the key on NWIS's origin, and
-refuses to write a page that holds the key. `--decode` times `json.loads` and
-`orjson.loads` on each page (median of 20) and measures how much each grows a fresh
+size, WaterData `continuous` for a year at the Potomac gage and FabricData `gagesii`,
+and records how long `iter_pages` took to return each, its own `json.loads` included. It
+sends six requests through the services, whose checks keep the key on WaterData's
+origin, and refuses to write a page that holds the key. `--decode` times `json.loads`
+and `orjson.loads` on each page (median of 20) and measures how much each grows a fresh
 process's peak RSS. Save the pages outside the repository:
 
 ```bash

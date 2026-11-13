@@ -15,8 +15,8 @@ The `Drift` workflow runs every Monday at 07:00 UTC, and from the Actions tab on
 ([D-63](design.md#d-63-weekly-drift-run-against-the-live-services)). It has two jobs:
 
 - `network-tests` runs the tests marked `network` against the live services: the Potomac
-    gage and the Washington, DC bounding box on NWIS, the DC bounding box on FabricData,
-    and the 22 two-digit HUCs on GeoConnex.
+    gage and the Washington, DC bounding box on WaterData, the DC bounding box on
+    FabricData, and the 22 two-digit HUCs on GeoConnex.
 - `openapi` fetches each service's OpenAPI document and compares it with
     `tests/fixtures/<service>/openapi.json`: the whole document minus its prose
     (descriptions, summaries, titles, and examples), with `info` cut to the title and

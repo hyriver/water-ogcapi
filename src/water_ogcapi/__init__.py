@@ -31,12 +31,11 @@ from water_ogcapi._results import (
     QueryResult,
     StopReason,
 )
-from water_ogcapi._sync import NWIS, Client, FabricData, GeoConnex, OGCService
+from water_ogcapi._sync import Client, FabricData, GeoConnex, OGCService, WaterData
 from water_ogcapi._transport import Download, Response, Transport, __version__
 
 __all__ = [
     "CRS",
-    "NWIS",
     "CRSSource",
     "Check",
     "Checkpoint",
@@ -63,6 +62,7 @@ __all__ = [
     "StopReason",
     "TemporalExtent",
     "Transport",
+    "WaterData",
     "__version__",
     "aio",
     "configure_logger",

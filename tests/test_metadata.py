@@ -87,7 +87,7 @@ def test_collection_fields() -> None:
     assert collection.description is None
 
 
-def test_nwis_extra_members_stay() -> None:
+def test_waterdata_extra_members_stay() -> None:
     collections = Collections.from_dict(body(FIXTURES / "nwis" / "collections.json"))
     assert collections.collections is not None
     extras = {c.id: set(c.extra) for c in collections.collections if c.extra}

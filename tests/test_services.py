@@ -16,7 +16,7 @@ import pytest
 
 import water_ogcapi
 from water_ogcapi import QueryResult, Transport
-from water_ogcapi.aio import NWIS, FabricData, GeoConnex, OGCService
+from water_ogcapi.aio import FabricData, GeoConnex, OGCService, WaterData
 from water_ogcapi.exceptions import PaginationError, ServiceError, ValidationError
 
 FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}
@@ -64,12 +64,17 @@ def exercise(*services: OGCService) -> None:
     asyncio.run(run())
 
 
-def test_nwis_sends_the_key_read_at_construction_on_every_request(
+def test_the_nwis_name_is_gone() -> None:
+    assert not hasattr(water_ogcapi, "NWIS")
+    assert not hasattr(water_ogcapi.aio, "NWIS")
+
+
+def test_waterdata_sends_the_key_read_at_construction_on_every_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("USGS_API_KEY", "env-key")
     transport, seen = recording()
-    service = NWIS(transport=transport)
+    service = WaterData(transport=transport)
     monkeypatch.setenv("USGS_API_KEY", "changed")
     exercise(service)
     assert [r.headers.get("x-api-key") for r in seen] == ["env-key"] * 5
@@ -80,7 +85,7 @@ def test_nwis_sends_the_key_read_at_construction_on_every_request(
     ("env", "api_key", "sent"),
     [("env-key", "arg-key", "arg-key"), ("env-key", "", None), (None, None, None)],
 )
-def test_nwis_takes_the_key_argument_over_the_environment(
+def test_waterdata_takes_the_key_argument_over_the_environment(
     monkeypatch: pytest.MonkeyPatch, env: str | None, api_key: str | None, sent: str | None
 ) -> None:
     if env is None:
@@ -88,13 +93,13 @@ def test_nwis_takes_the_key_argument_over_the_environment(
     else:
         monkeypatch.setenv("USGS_API_KEY", env)
     transport, seen = recording()
-    exercise(NWIS(api_key=api_key, transport=transport))
+    exercise(WaterData(api_key=api_key, transport=transport))
     assert {r.headers.get("x-api-key") for r in seen} == {sent}
 
 
-def test_nwis_sends_the_key_to_a_next_link(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_waterdata_sends_the_key_to_a_next_link(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("USGS_API_KEY", "env-key")
-    href = f"{NWIS().base_url}/collections/c/items?cursor=2"
+    href = f"{WaterData().base_url}/collections/c/items?cursor=2"
     first = {**EMPTY_PAGE, "links": [{"rel": "next", "href": href}]}
     seen: list[httpx2.Request] = []
 
@@ -103,19 +108,19 @@ def test_nwis_sends_the_key_to_a_next_link(monkeypatch: pytest.MonkeyPatch) -> N
         return httpx2.Response(200, json=first if len(seen) == 1 else EMPTY_PAGE)
 
     transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
-    asyncio.run(NWIS(transport=transport).collect("c", validate=False))
+    asyncio.run(WaterData(transport=transport).collect("c", validate=False))
     assert [(str(r.url), r.headers.get("x-api-key")) for r in seen][1] == (href, "env-key")
     assert seen[0].headers.get("x-api-key") == "env-key"
 
 
 @pytest.mark.parametrize("key", ["SECRET\u00a0", "SECRET\n"])
-def test_nwis_refuses_a_key_that_is_not_printable_ascii(
+def test_waterdata_refuses_a_key_that_is_not_printable_ascii(
     monkeypatch: pytest.MonkeyPatch, key: str
 ) -> None:
-    pickled = pickle.dumps(NWIS(api_key="arg-key"))
+    pickled = pickle.dumps(WaterData(api_key="arg-key"))
     monkeypatch.setenv("USGS_API_KEY", key)
     with pytest.raises(ValueError, match="printable ASCII") as excinfo:
-        NWIS()
+        WaterData()
     assert "SECRET" not in repr(excinfo.value)
     with pytest.raises(ValueError, match="printable ASCII"):
         pickle.loads(pickled)
@@ -130,9 +135,9 @@ class LooksASCII(str):
         return True
 
 
-def test_nwis_refuses_a_key_that_is_not_a_str() -> None:
+def test_waterdata_refuses_a_key_that_is_not_a_str() -> None:
     with pytest.raises(ValidationError, match=r"key must be str, got LooksASCII$") as excinfo:
-        NWIS(api_key=LooksASCII("SECRET\u00e9"))
+        WaterData(api_key=LooksASCII("SECRET\u00e9"))
     assert "SECRET" not in repr(excinfo.value)
 
 
@@ -141,7 +146,7 @@ def roundtrip(obj: object) -> object:
 
 
 @pytest.mark.parametrize("clone", [roundtrip, copy.deepcopy])
-@pytest.mark.parametrize("cls", [NWIS, water_ogcapi.NWIS])
+@pytest.mark.parametrize("cls", [WaterData, water_ogcapi.WaterData])
 @pytest.mark.parametrize(("env", "sent"), [("env-key", {"X-Api-Key": "env-key"}), (None, {})])
 def test_a_pickled_nwis_leaves_its_key_out_and_reads_the_environment_on_load(
     monkeypatch: pytest.MonkeyPatch,
@@ -179,8 +184,8 @@ sys.stdout.buffer.write(pickle.dumps((result, sys.modules[sys.argv[1]].SEEN)))
 """
 
 
-def pickled_after_a_query(service: NWIS | water_ogcapi.NWIS) -> bytes:
-    if isinstance(service, water_ogcapi.NWIS):
+def pickled_after_a_query(service: WaterData | water_ogcapi.WaterData) -> bytes:
+    if isinstance(service, water_ogcapi.WaterData):
         with service:
             service.collect("c")
             return pickle.dumps(service)
@@ -220,7 +225,7 @@ def test_a_service_pickles_while_a_metadata_request_waits() -> None:
     asyncio.run(again())
 
 
-@pytest.mark.parametrize("cls", [NWIS, water_ogcapi.NWIS])
+@pytest.mark.parametrize("cls", [WaterData, water_ogcapi.WaterData])
 def test_a_used_service_pickles_and_queries_in_another_process(cls: type) -> None:
     transport = Transport(transport=httpx2.MockTransport(answer), max_retries=0)
     data = pickled_after_a_query(cls(api_key="arg-key", transport=transport))
@@ -242,7 +247,10 @@ def test_a_used_service_pickles_and_queries_in_another_process(cls: type) -> Non
 
 def test_services_pickled_together_keep_sharing_their_transport() -> None:
     transport = Transport()
-    services = [water_ogcapi.NWIS(transport=transport), water_ogcapi.GeoConnex(transport=transport)]
+    services = [
+        water_ogcapi.WaterData(transport=transport),
+        water_ogcapi.GeoConnex(transport=transport),
+    ]
     loaded = pickle.loads(pickle.dumps(services))
     shared = {id(s._transport) for s in loaded} | {id(s._service._transport) for s in loaded}
     assert len(shared) == 1
@@ -262,7 +270,7 @@ def test_the_key_never_reaches_geoconnex_on_a_shared_transport(
 ) -> None:
     monkeypatch.setenv("USGS_API_KEY", "env-key")
     transport, seen = recording()
-    exercise(NWIS(transport=transport), GeoConnex(transport=transport))
+    exercise(WaterData(transport=transport), GeoConnex(transport=transport))
     keys = {
         host: [r.headers.get("x-api-key") for r in seen if r.url.host == host]
         for host in ("api.waterdata.usgs.gov", "reference.geoconnex.us")
@@ -272,10 +280,10 @@ def test_the_key_never_reaches_geoconnex_on_a_shared_transport(
 
 @pytest.mark.parametrize(
     ("service", "default", "cap"),
-    [(NWIS, 10_000, 50_000), (FabricData, 1_000, 1_000), (GeoConnex, 500, 10_000)],
+    [(WaterData, 10_000, 50_000), (FabricData, 1_000, 1_000), (GeoConnex, 500, 10_000)],
 )
 def test_a_service_sends_its_profile_page_sizes(
-    service: type[NWIS | FabricData | GeoConnex], default: int, cap: int
+    service: type[WaterData | FabricData | GeoConnex], default: int, cap: int
 ) -> None:
     transport, seen = recording()
     client = service(transport=transport)
@@ -288,9 +296,9 @@ def test_a_service_sends_its_profile_page_sizes(
 
 
 @pytest.mark.network
-def test_nwis_fetches_the_potomac_gage() -> None:
+def test_waterdata_fetches_the_potomac_gage() -> None:
     async def run() -> object:
-        async with Transport(max_retries=0) as transport, NWIS(transport=transport) as service:
+        async with Transport(max_retries=0) as transport, WaterData(transport=transport) as service:
             page = await service.item("monitoring-locations", "USGS-01646500")
             return (page.body or {}).get("id")
 
@@ -298,11 +306,11 @@ def test_nwis_fetches_the_potomac_gage() -> None:
 
 
 @pytest.mark.network
-def test_nwis_finds_every_site_in_the_dc_bbox() -> None:
+def test_waterdata_finds_every_site_in_the_dc_bbox() -> None:
     bbox = (-77.12, 38.80, -76.91, 38.99)
 
     async def run() -> QueryResult:
-        async with Transport(max_retries=0) as transport, NWIS(transport=transport) as svc:
+        async with Transport(max_retries=0) as transport, WaterData(transport=transport) as svc:
             return await svc.collect("monitoring-locations", bbox=bbox)
 
     result = asyncio.run(run())

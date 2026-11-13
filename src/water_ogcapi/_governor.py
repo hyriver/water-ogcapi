@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 __all__ = ["RAMP", "STATIC_INTERVAL", "Governor"]
 
 # Seconds between request starts while no recent response has carried usable counts. Neither
-# GeoConnex nor unkeyed NWIS documents a limit, and this keeps either under 3,600 an hour.
+# GeoConnex nor unkeyed WaterData documents a limit, and this keeps either under 3,600 an hour.
 STATIC_INTERVAL = 1.0
 # The share of the quota left when pacing starts. The ramp settles near 89% of a rolling
 # quota; starting at the whole quota would settle at 62% (D-49).
@@ -34,7 +34,7 @@ class Governor:
 
     `Transport.request` calls `wait` before each attempt and `observe` on each response,
     retries included. Each ``X-RateLimit-Limit`` value keeps its own reading, since a
-    default NWIS key counts ``/items`` and metadata separately, and the widest interval
+    default WaterData key counts ``/items`` and metadata separately, and the widest interval
     of the readings from the last ``window`` seconds applies; with none, the static
     ``interval`` does. With ``remaining`` of ``limit`` left, the interval is
     ``window / remaining - 8 * window / limit`` seconds, from 0 at an eighth of the quota

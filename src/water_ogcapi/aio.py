@@ -7,12 +7,12 @@ method is a coroutine, apart from `iter_pages`, which returns an async iterator.
 ```python
 import asyncio
 
-from water_ogcapi.aio import NWIS
+from water_ogcapi.aio import WaterData
 
 
 async def main() -> None:
-    async with NWIS() as nwis:
-        result = await nwis.collect("daily", params={"monitoring_location_id": "USGS-01646500"})
+    async with WaterData() as wd:
+        result = await wd.collect("daily", params={"monitoring_location_id": "USGS-01646500"})
 
 
 asyncio.run(main())
@@ -22,6 +22,6 @@ asyncio.run(main())
 from __future__ import annotations
 
 from water_ogcapi._client import OGCService
-from water_ogcapi._services import NWIS, FabricData, GeoConnex
+from water_ogcapi._services import FabricData, GeoConnex, WaterData
 
-__all__ = ["NWIS", "FabricData", "GeoConnex", "OGCService"]
+__all__ = ["FabricData", "GeoConnex", "OGCService", "WaterData"]

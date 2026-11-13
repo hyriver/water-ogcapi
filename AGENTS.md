@@ -7,7 +7,7 @@ project follows the
 
 ## Project
 
-`water-ogcapi` is a Python client for USGS water data services (NWIS, FabricData,
+`water-ogcapi` is a Python client for USGS water data services (WaterData, FabricData,
 GeoConnex) over OGC API Features, with blocking service classes at the package root and
 async twins in `water_ogcapi.aio`. `README.md` lists the endpoints.
 
@@ -33,7 +33,7 @@ One-line summaries of the decisions any code change can break. The IDs point int
 
 - `src/water_ogcapi/_transport.py` is the only module that imports `httpx2` (D-01).
 - `iter_pages()` is the primitive and `collect()` builds on it (D-02).
-- Every service pages through `next` links, and only NWIS fans out, on request, by
+- Every service pages through `next` links, and only WaterData fans out, on request, by
     splitting a query by calendar period or site list into pieces run concurrently
     (D-35, D-56).
 - Every `OGCService` request goes through `_send()`, which adds the service's headers

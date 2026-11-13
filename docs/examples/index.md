@@ -12,6 +12,9 @@ pip install "water-ogcapi[arrow]" geopandas polars matplotlib contextily rasteri
 - [![Querying the Water Data API](images/nwis.png){ loading=lazy }](nwis.md "Querying the Water Data API")
     **Querying the Water Data API**
 
+- [![Data files from the STAC API](images/stac.png){ loading=lazy }](stac.md "Data files from the STAC API")
+    **Data files from the STAC API**
+
 - [![Cache, quota, and resume](images/cache_quota_resume.png){ loading=lazy }](cache_quota_resume.md "Cache, quota, and resume")
     **Cache, quota, and resume**
 

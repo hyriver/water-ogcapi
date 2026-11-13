@@ -2594,28 +2594,39 @@ Layering rule for anything new:
 - **Decision:** `WaterDataSTAC`, blocking at the package root and async in
     `water_ogcapi.aio`, queries `api.waterdata.usgs.gov/stac/v0/` through the inherited
     `OGCService` methods, one collection at a time through `/collections/{id}/items`. It
-    sends the key in `USGS_API_KEY` like `WaterData`, from a shared private base class,
-    and paces requests over the hour. A page asks for 1,000 items by default and 10,000
-    at most. `ServiceProfile.cql2_json_in_query` makes a CQL2-JSON filter, and `ids`, go
-    out as `filter` with `filter-lang=cql2-json` in the query of a `GET`; this profile
-    sets it. Asset files download through `Client.download()` and `Transport.download()`
-    with no key.
+    sends the key in `USGS_STAC_API_KEY`, else `USGS_API_KEY`, from a private base class
+    it shares with `WaterData`, and paces requests over the hour. A page asks for 1,000
+    items by default and 10,000 at most. `ServiceProfile.cql2_json_in_query` makes a
+    CQL2-JSON filter, and `ids`, go out as `filter` with `filter-lang=cql2-json` in the
+    query of a `GET`; this profile sets it. A site list, `ids` or a CQL2-JSON `in`
+    filter, runs as concurrent pieces of 50 sites unless `sites_per_piece` sets another
+    size, through the splitter `WaterData` uses (D-56). Asset files download through
+    `Client.download()` and `Transport.download()`.
 - **Why:** Probes on 2026-11-13 found the items endpoint answers `GET` with `bbox`,
     CQL2-Text, and CQL2-JSON in the query, pages through `next` links that carry a
     `token`, and answers a `POST` with 405. Keyed responses carry `X-RateLimit-*`
     headers. An item runs about 2.3 KB in all three collections, so a default page is
-    about 2.3 MB. An asset file answered with no key and no rate-limit headers.
+    about 2.3 MB. A `GET` with an `in` filter over 75 sites (a 1,854-character URL)
+    answered 200, and over 100 sites an HTML 403, in CQL2-JSON and CQL2-Text alike, so a
+    site list splits by default where `WaterData` splits on request. A keyed asset
+    download lowered `X-RateLimit-Remaining` by one, and a range request by one more,
+    while an unkeyed one carried no rate-limit headers. dataRetrieval's R client moved
+    STAC to its own key variable for the same reason (DOI-USGS/dataRetrieval#939), so a
+    reader that fetches Parquet files in pieces does not spend the OGC API quota.
     `/collections` and `/queryables` answer as on the OGC API, so the query check (D-47)
     works unchanged.
-- **Rejected:** A `search()` method for `/search`, which queries several collections at
-    once: with three collections a caller loops over them, and a method for one endpoint
-    goes against D-39. `/search` by `POST`, whose `next` links carry a body with a new
-    `token`, which D-38's rule that every `next` link reuses the first body would repeat
-    forever. A download method on the class, which `Client.download()` already covers. A
-    STAC library such as pystac, kept off the core path by D-09.
+- **Rejected:** `/search`, which queries several collections at once: pystac-client
+    covers it, posting the query and following each `next` link with the body that link
+    carries, while here every `next` link reuses the first body (D-38), so a `POST`
+    search would need that rule changed for every service. The STAC guide shows
+    pystac-client for it. A download method on the class, which `Client.download()`
+    already covers. A STAC library such as pystac, kept off the core path by D-09.
+    Splitting a CQL2-Text `IN` list, which would mean parsing CQL2-Text.
 - **Limits:** `schema()` raises `ServiceError`: the service answers 404. The drift check
-    snapshots no STAC OpenAPI document. USGS suggests a separate key for this service,
-    passed as `api_key`; no separate environment variable reads it.
+    snapshots no STAC OpenAPI document. A CQL2-Text `IN` list over about 75 sites still
+    gets a 403. The 2 KB limit is observed, not documented, and 50 sites leaves room for
+    ids up to 20 characters and a few other parameters. USGS documents no limit for an
+    unkeyed asset download.
 
 ## Lessons
 

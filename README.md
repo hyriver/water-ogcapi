@@ -40,9 +40,9 @@ Report problems and missing features in
 | FabricData      | `FabricData`    | `api.water.usgs.gov/fabric/pygeoapi/` |
 | GeoConnex       | `GeoConnex`     | `reference.geoconnex.us/`             |
 
-`WaterData` and `WaterDataSTAC` send the key in `USGS_API_KEY`, when set, in the
-`X-Api-Key` header. The other two services never receive it. `NWIS`, its name in 0.1.0,
-is gone.
+`WaterData` sends the key in `USGS_API_KEY`, when set, in the `X-Api-Key` header, and
+`WaterDataSTAC` the key in `USGS_STAC_API_KEY`, else `USGS_API_KEY`. The other two
+services never receive it. `NWIS`, its name in 0.1.0, is gone.
 
 ## Installation
 

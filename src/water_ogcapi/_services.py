@@ -23,6 +23,9 @@ __all__ = ["FabricData", "GeoConnex", "WaterData", "WaterDataSTAC"]
 
 PERIODS = frozenset({"year", "month"})
 SITES = "monitoring_location_id"
+KEY_ENV = "USGS_API_KEY"
+# 75 sites fit in a STAC GET URL and 100 got a 403, so 50 leaves room for longer ids.
+STAC_SITES_PER_PIECE = 50
 # Pieces end a microsecond before the next begins: the Water Data API reads both ends of an interval as
 # inclusive and compares to the microsecond, so pieces sharing a bound would both return
 # a value at it (D-56).
@@ -34,7 +37,7 @@ WATERDATA_PROFILE = ServiceProfile(
     base_url="https://api.waterdata.usgs.gov/ogcapi/v1/",
     default_limit=10_000,
     max_limit=50_000,
-    key_env="USGS_API_KEY",
+    key_env=KEY_ENV,
     # The hour api.data.gov documents.
     rate_limit_window=3_600.0,
 )
@@ -44,7 +47,8 @@ WATERDATA_STAC_PROFILE = ServiceProfile(
     # An item runs about 2.3 KB, so a default page is about 2.3 MB.
     default_limit=1_000,
     max_limit=10_000,
-    key_env="USGS_API_KEY",
+    # Its own key keeps asset reads off the OGC API quota; USGS_API_KEY is the fallback.
+    key_env="USGS_STAC_API_KEY",
     rate_limit_window=3_600.0,
     # Its items answer a POST with 405.
     cql2_json_in_query=True,
@@ -129,7 +133,9 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
     """Split the site list of ``request`` into lists of ``size``, or ``None`` without one.
 
     The list is a comma-separated ``monitoring_location_id`` parameter or a CQL2-JSON
-    ``in`` filter, as ``ids`` sends. A value listed twice goes in one piece only.
+    ``in`` filter of literal values, as ``ids`` sends, in the body or, with
+    ``filter-lang=cql2-json``, in the query (D-95). A value listed twice goes in one
+    piece only.
     """
     listed = request.params.get(SITES)
     if listed is not None:
@@ -138,28 +144,62 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
             dataclasses.replace(request, params={**request.params, SITES: ",".join(chunk)})
             for chunk in batched(sites, size, strict=False)
         ]
-    doc: Any = None if request.body is None else json.loads(request.body)
+    in_query = request.body is None and request.params.get("filter-lang") == "cql2-json"
+    text = request.params["filter"] if in_query else request.body
+    doc: Any = None if text is None else json.loads(text)
     match doc:
         case {"op": "in", "args": [{"property": str()} as prop, list() as values]} if len(doc) == 2:
+            # Only literal values make disjoint pieces; a property reference can match twice.
+            if not all(isinstance(v, str | int | float | bool) for v in values):
+                return None
             # Keyed by JSON text, so 1 and true stay apart.
             unique = list({json.dumps(v, sort_keys=True): v for v in values}.values())
-            return [
-                dataclasses.replace(
-                    request,
-                    body=json.dumps(
-                        {"op": "in", "args": [prop, list(chunk)]}, separators=(",", ":")
-                    ).encode(),
-                )
+            pieces = [
+                json.dumps({"op": "in", "args": [prop, list(chunk)]}, separators=(",", ":"))
                 for chunk in batched(unique, size, strict=False)
             ]
+            if in_query:
+                return [
+                    dataclasses.replace(request, params={**request.params, "filter": piece})
+                    for piece in pieces
+                ]
+            return [dataclasses.replace(request, body=piece.encode()) for piece in pieces]
         case _:
             return None
 
 
-def _key(api_key: str | None) -> str | None:
-    """Return the key WaterData sends: ``api_key``, else ``USGS_API_KEY``, ``None`` for none."""
-    if api_key is None and WATERDATA_PROFILE.key_env:
-        api_key = os.environ.get(WATERDATA_PROFILE.key_env)
+def _sites(request: Request, sites_per_piece: int, *, required: bool) -> Sequence[Request]:
+    """Split the site list of ``request``, or, unless ``required``, keep a query without one.
+
+    Raises
+    ------
+    ValidationError
+        If ``sites_per_piece`` is not a positive integer, or ``required`` and the query
+        has no site list.
+    """
+    # Runtime check for untyped callers: True is an int, and 2.5 slips past the hint.
+    count = cast("object", sites_per_piece)
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        msg = f"sites_per_piece takes a positive integer, got {sites_per_piece!r}"
+        raise ValidationError(msg)
+    pieces = _site_pieces(request, sites_per_piece)
+    if pieces is not None:
+        return pieces
+    if required:
+        msg = f"sites_per_piece takes a site list: ids, or a comma-separated {SITES} in params"
+        raise ValidationError(msg)
+    return (request,)
+
+
+def _key(api_key: str | None, key_env: str | None) -> str | None:
+    """Return the key a service sends, ``None`` for none.
+
+    That is ``api_key``, else the first of ``key_env`` and ``USGS_API_KEY`` that is set.
+    """
+    for name in dict.fromkeys(filter(None, (key_env, KEY_ENV))):
+        if api_key is not None:
+            break
+        api_key = os.environ.get(name)
     # Transport.request() refuses such a key too, but only once a query runs (D-43, D-65).
     if api_key is not None:
         reject_non_str([api_key], "the USGS API key")
@@ -172,9 +212,12 @@ def _key(api_key: str | None) -> str | None:
 class _Keyed(OGCService):
     """A service sent the USGS key in the ``X-Api-Key`` header of every request (D-18)."""
 
+    def _key_env(self) -> str | None:
+        return None if self.profile is None else self.profile.key_env
+
     def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
         super().__init__(transport=transport)
-        self._api_key = _key(api_key)
+        self._api_key = _key(api_key, self._key_env())
 
     def _headers(self) -> dict[str, str]:
         return {"X-Api-Key": self._api_key} if self._api_key else {}
@@ -184,7 +227,7 @@ class _Keyed(OGCService):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
-        self._api_key = _key(None)
+        self._api_key = _key(None, self._key_env())
 
 
 class WaterData(_Keyed):
@@ -239,33 +282,28 @@ class WaterData(_Keyed):
             ]
         if sites_per_piece is None:
             return (request,)
-        # Runtime check for untyped callers: True is an int, and 2.5 slips past the hint.
-        count = cast("object", sites_per_piece)
-        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
-            msg = f"sites_per_piece takes a positive integer, got {sites_per_piece!r}"
-            raise ValidationError(msg)
-        pieces = _site_pieces(request, sites_per_piece)
-        if pieces is None:
-            msg = f"sites_per_piece takes a site list: ids, or a comma-separated {SITES} in params"
-            raise ValidationError(msg)
-        return pieces
+        return _sites(request, sites_per_piece, required=True)
 
 
 class WaterDataSTAC(_Keyed):
     """Async client for the USGS Water Data STAC API, which lists data files (D-95).
 
     Each item describes one file, and its ``assets`` link to that file, which
-    `Transport.download` or `Client.download` fetches with no key. Construction performs
-    no HTTP. A page asks for up to 1,000 items unless ``params`` set a ``limit``, and
-    10,000 at most. A CQL2-JSON ``filter``, and ``ids``, go in the query of a ``GET``,
-    since the service refuses a ``POST`` to its items. The service has no schema
-    endpoint, so `schema` raises `ServiceError`.
+    `Transport.download` or `Client.download` fetches. Construction performs no HTTP. A
+    page asks for up to 1,000 items unless ``params`` set a ``limit``, and 10,000 at most.
+    A CQL2-JSON ``filter``, and ``ids``, go in the query of a ``GET``, since the service
+    refuses a ``POST`` to its items. A ``GET`` URL past about 2 KB gets a 403, so a site
+    list, ``ids`` or a CQL2-JSON ``in`` filter, runs as concurrent pieces of 50 sites
+    unless ``sites_per_piece`` sets another size. The service has no schema endpoint, so
+    `schema` raises `ServiceError`.
 
     Parameters
     ----------
     api_key : str, optional
-        A USGS API key, as for `WaterData`. USGS suggests a separate key for this
-        service.
+        A USGS API key, sent in the ``X-Api-Key`` header of every request. Defaults to
+        the ``USGS_STAC_API_KEY`` environment variable, else ``USGS_API_KEY``, read once
+        here; USGS suggests a separate key for this service. An empty string sends no
+        key, and a pickle leaves the key out, as for `WaterData`.
     transport : Transport, optional
         Sends every request, as for `OGCService`.
 
@@ -277,6 +315,19 @@ class WaterDataSTAC(_Keyed):
     """
 
     profile = WATERDATA_STAC_PROFILE
+
+    def _pieces(
+        self,
+        request: Request,
+        split_datetime: Literal["year", "month"] | None,
+        sites_per_piece: int | None,
+    ) -> Sequence[Request]:
+        """Split a site list into pieces of ``sites_per_piece`` sites, 50 by default (D-95)."""
+        if split_datetime is not None:
+            msg = "WaterDataSTAC splits only a site list; split_datetime is WaterData's"
+            raise ValidationError(msg)
+        size = STAC_SITES_PER_PIECE if sites_per_piece is None else sites_per_piece
+        return _sites(request, size, required=sites_per_piece is not None)
 
 
 class FabricData(OGCService):

@@ -7,6 +7,8 @@ and the types they return.
 
 ::: water_ogcapi.WaterData
 
+::: water_ogcapi.WaterDataSTAC
+
 ::: water_ogcapi.FabricData
 
 ::: water_ogcapi.GeoConnex

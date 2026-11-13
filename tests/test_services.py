@@ -4,19 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import json
 import os
 import pickle
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import httpx2
 import pytest
 
 import water_ogcapi
 from water_ogcapi import QueryResult, Transport
-from water_ogcapi.aio import FabricData, GeoConnex, OGCService, WaterData
+from water_ogcapi.aio import FabricData, GeoConnex, OGCService, WaterData, WaterDataSTAC
 from water_ogcapi.exceptions import PaginationError, ServiceError, ValidationError
 
 FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}
@@ -69,12 +71,13 @@ def test_the_nwis_name_is_gone() -> None:
     assert not hasattr(water_ogcapi.aio, "NWIS")
 
 
+@pytest.mark.parametrize("cls", [WaterData, WaterDataSTAC])
 def test_waterdata_sends_the_key_read_at_construction_on_every_request(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, cls: type[WaterData | WaterDataSTAC]
 ) -> None:
     monkeypatch.setenv("USGS_API_KEY", "env-key")
     transport, seen = recording()
-    service = WaterData(transport=transport)
+    service = cls(transport=transport)
     monkeypatch.setenv("USGS_API_KEY", "changed")
     exercise(service)
     assert [r.headers.get("x-api-key") for r in seen] == ["env-key"] * 5
@@ -280,10 +283,15 @@ def test_the_key_never_reaches_geoconnex_on_a_shared_transport(
 
 @pytest.mark.parametrize(
     ("service", "default", "cap"),
-    [(WaterData, 10_000, 50_000), (FabricData, 1_000, 1_000), (GeoConnex, 500, 10_000)],
+    [
+        (WaterData, 10_000, 50_000),
+        (WaterDataSTAC, 1_000, 10_000),
+        (FabricData, 1_000, 1_000),
+        (GeoConnex, 500, 10_000),
+    ],
 )
 def test_a_service_sends_its_profile_page_sizes(
-    service: type[WaterData | FabricData | GeoConnex], default: int, cap: int
+    service: type[WaterData | WaterDataSTAC | FabricData | GeoConnex], default: int, cap: int
 ) -> None:
     transport, seen = recording()
     client = service(transport=transport)
@@ -293,6 +301,60 @@ def test_a_service_sends_its_profile_page_sizes(
     with pytest.raises(ValueError, match=f"from 1 to {cap},"):
         asyncio.run(client.collect("c", params={"limit": str(cap + 1)}))
     assert len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"filter": {"op": "=", "args": [{"property": "id"}, "x"]}},
+        {"ids": ["x"], "id_property": "id"},
+    ],
+)
+def test_stac_sends_a_cql2_json_filter_in_a_get_query(query: dict[str, Any]) -> None:
+    transport, seen = recording()
+    asyncio.run(WaterDataSTAC(api_key="", transport=transport).collect("c", **query))
+    sent = [r for r in seen if r.url.path.endswith("/items")]
+    assert [(r.method, r.content) for r in sent] == [("GET", b"")]
+    assert sent[0].url.params["filter-lang"] == "cql2-json"
+    assert json.loads(sent[0].url.params["filter"])["args"][0] == {"property": "id"}
+
+
+def test_stac_follows_a_next_link_token_with_a_get() -> None:
+    first = f"{WaterDataSTAC(api_key='').base_url}/collections/c/items"
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        if "token" in request.url.params:
+            return httpx2.Response(200, json={**EMPTY_PAGE, "features": [FEATURE]})
+        link = {"rel": "next", "href": f"{first}?limit=1&token=next%3Ac%3Ax"}
+        return httpx2.Response(200, json={**EMPTY_PAGE, "features": [FEATURE], "links": [link]})
+
+    transport = Transport(transport=httpx2.MockTransport(handler), max_retries=0)
+    service = WaterDataSTAC(api_key="", transport=transport)
+    result = asyncio.run(service.collect("c", filter={"op": "=", "args": [1, 1]}, validate=False))
+    assert len(result.geojson["features"]) == 2
+    assert [(r.method, r.url.params.get("token")) for r in seen] == [
+        ("GET", None),
+        ("GET", "next:c:x"),
+    ]
+
+
+@pytest.mark.network
+def test_stac_lists_and_downloads_the_potomac_ratings(tmp_path: Path) -> None:
+    async def run() -> tuple[QueryResult, Path]:
+        async with Transport(max_retries=0) as transport, WaterDataSTAC(transport=transport) as svc:
+            ids = ["USGS-01646500"]
+            result = await svc.collect("ratings", ids=ids, id_property="monitoring_location_id")
+            base = next(f for f in result.geojson["features"] if f["id"].endswith(".base.rdb"))
+            path = tmp_path / "base.rdb"
+            await transport.download(base["assets"]["data"]["href"], path)
+            return result, path
+
+    result, path = asyncio.run(run())
+    assert result.pagination.completeness == "complete"
+    assert {f["properties"]["file_type"] for f in result.geojson["features"]} >= {"base"}
+    assert path.read_text().startswith("#")
 
 
 @pytest.mark.network

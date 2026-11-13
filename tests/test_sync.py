@@ -18,7 +18,7 @@ import pytest
 
 import water_ogcapi
 from water_ogcapi import Page, QueryResult, Transport, _sync, aio
-from water_ogcapi.aio import FabricData, GeoConnex, OGCService, WaterData
+from water_ogcapi.aio import FabricData, GeoConnex, OGCService, WaterData, WaterDataSTAC
 from water_ogcapi.exceptions import PaginationError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
@@ -176,13 +176,15 @@ def test_errors_propagate_with_their_type() -> None:
         next(service.iter_pages(".."))
 
 
-@pytest.mark.parametrize("name", ["OGCService", "WaterData", "FabricData", "GeoConnex"])
+@pytest.mark.parametrize(
+    "name", ["OGCService", "WaterData", "WaterDataSTAC", "FabricData", "GeoConnex"]
+)
 def test_the_root_classes_block_and_the_aio_classes_await(name: str) -> None:
     assert not inspect.iscoroutinefunction(getattr(water_ogcapi, name).collect)
     assert inspect.iscoroutinefunction(getattr(aio, name).collect)
 
 
-@pytest.mark.parametrize("name", ["WaterData", "FabricData", "GeoConnex"])
+@pytest.mark.parametrize("name", ["WaterData", "WaterDataSTAC", "FabricData", "GeoConnex"])
 def test_a_blocking_service_reads_its_twin_s_profile(name: str) -> None:
     profile = getattr(water_ogcapi, name)().profile
     assert profile is not None
@@ -207,6 +209,7 @@ def test_the_sync_module_is_gone() -> None:
 PAIRS = [
     (water_ogcapi.OGCService, OGCService),
     (water_ogcapi.WaterData, WaterData),
+    (water_ogcapi.WaterDataSTAC, WaterDataSTAC),
     (water_ogcapi.FabricData, FabricData),
     (water_ogcapi.GeoConnex, GeoConnex),
 ]
@@ -250,13 +253,19 @@ def test_iter_pages_names_the_iterator_it_returns() -> None:
     ("blocking", "service"),
     [
         (water_ogcapi.WaterData, WaterData),
+        (water_ogcapi.WaterDataSTAC, WaterDataSTAC),
         (water_ogcapi.FabricData, FabricData),
         (water_ogcapi.GeoConnex, GeoConnex),
     ],
 )
 def test_each_class_queries_its_own_service(
-    blocking: type[water_ogcapi.WaterData | water_ogcapi.FabricData | water_ogcapi.GeoConnex],
-    service: type[WaterData | FabricData | GeoConnex],
+    blocking: type[
+        water_ogcapi.WaterData
+        | water_ogcapi.WaterDataSTAC
+        | water_ogcapi.FabricData
+        | water_ogcapi.GeoConnex
+    ],
+    service: type[WaterData | WaterDataSTAC | FabricData | GeoConnex],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("USGS_API_KEY", "k")
@@ -270,8 +279,9 @@ def test_each_class_queries_its_own_service(
     blocking(transport=transport).collections()
     assert service.profile is not None
     assert str(seen[0].url).startswith(service.profile.base_url)
-    # The key goes only to WaterData (D-13).
-    assert seen[0].headers.get("X-Api-Key") == ("k" if service is WaterData else None)
+    # The key goes only to the USGS Water Data host (D-13).
+    keyed = service in {WaterData, WaterDataSTAC}
+    assert seen[0].headers.get("X-Api-Key") == ("k" if keyed else None)
 
 
 def test_close_closes_a_passed_transport() -> None:

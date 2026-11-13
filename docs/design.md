@@ -2587,6 +2587,36 @@ Layering rule for anything new:
     its link holds. A 0.1.0 caller gets `ImportError`, and a pickled 0.1.0 `NWIS` does
     not unpickle.
 
+### D-95: `WaterDataSTAC` queries the Water Data STAC API by collection
+
+- **Status:** accepted.
+- **Date:** 2026-11-13.
+- **Decision:** `WaterDataSTAC`, blocking at the package root and async in
+    `water_ogcapi.aio`, queries `api.waterdata.usgs.gov/stac/v0/` through the inherited
+    `OGCService` methods, one collection at a time through `/collections/{id}/items`. It
+    sends the key in `USGS_API_KEY` like `WaterData`, from a shared private base class,
+    and paces requests over the hour. A page asks for 1,000 items by default and 10,000
+    at most. `ServiceProfile.cql2_json_in_query` makes a CQL2-JSON filter, and `ids`, go
+    out as `filter` with `filter-lang=cql2-json` in the query of a `GET`; this profile
+    sets it. Asset files download through `Client.download()` and `Transport.download()`
+    with no key.
+- **Why:** Probes on 2026-11-13 found the items endpoint answers `GET` with `bbox`,
+    CQL2-Text, and CQL2-JSON in the query, pages through `next` links that carry a
+    `token`, and answers a `POST` with 405. Keyed responses carry `X-RateLimit-*`
+    headers. An item runs about 2.3 KB in all three collections, so a default page is
+    about 2.3 MB. An asset file answered with no key and no rate-limit headers.
+    `/collections` and `/queryables` answer as on the OGC API, so the query check (D-47)
+    works unchanged.
+- **Rejected:** A `search()` method for `/search`, which queries several collections at
+    once: with three collections a caller loops over them, and a method for one endpoint
+    goes against D-39. `/search` by `POST`, whose `next` links carry a body with a new
+    `token`, which D-38's rule that every `next` link reuses the first body would repeat
+    forever. A download method on the class, which `Client.download()` already covers. A
+    STAC library such as pystac, kept off the core path by D-09.
+- **Limits:** `schema()` raises `ServiceError`: the service answers 404. The drift check
+    snapshots no STAC OpenAPI document. USGS suggests a separate key for this service,
+    passed as `api_key`; no separate environment variable reads it.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

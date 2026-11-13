@@ -142,7 +142,7 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
         sites = list(dict.fromkeys(listed.split(",")))
         return [
             dataclasses.replace(request, params={**request.params, SITES: ",".join(chunk)})
-            for chunk in batched(sites, size, strict=False)
+            for chunk in batched(sites, size)
         ]
     in_query = request.body is None and request.params.get("filter-lang") == "cql2-json"
     text = request.params["filter"] if in_query else request.body
@@ -156,7 +156,7 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
             unique = list({json.dumps(v, sort_keys=True): v for v in values}.values())
             pieces = [
                 json.dumps({"op": "in", "args": [prop, list(chunk)]}, separators=(",", ":"))
-                for chunk in batched(unique, size, strict=False)
+                for chunk in batched(unique, size)
             ]
             if in_query:
                 return [

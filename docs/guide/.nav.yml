@@ -2,6 +2,7 @@ nav:
 - index.md
 - setup.md
 - queries.md
+- stac.md
 - pagination.md
 - errors.md
 - sync-and-async.md

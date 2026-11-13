@@ -9,7 +9,7 @@
 A Python client for USGS water data services over OGC API Features. Its service classes
 block, for scripts and notebooks, and `water_ogcapi.aio` holds their async twins.
 
-**Status:** beta. The async and sync query APIs and the metadata cache work on all three
+**Status:** beta. The async and sync query APIs and the metadata cache work on all four
 services, with the quota governor, page-level resume, and concurrent WaterData pieces.
 Report problems and missing features in
 [GitHub issues](https://github.com/hyriver/water-ogcapi/issues).
@@ -33,14 +33,16 @@ Report problems and missing features in
 
 ## Services
 
-| Service    | Class        | Base URL                              |
-| ---------- | ------------ | ------------------------------------- |
-| Water Data | `WaterData`  | `api.waterdata.usgs.gov/ogcapi/v1/`   |
-| FabricData | `FabricData` | `api.water.usgs.gov/fabric/pygeoapi/` |
-| GeoConnex  | `GeoConnex`  | `reference.geoconnex.us/`             |
+| Service         | Class           | Base URL                              |
+| --------------- | --------------- | ------------------------------------- |
+| Water Data      | `WaterData`     | `api.waterdata.usgs.gov/ogcapi/v1/`   |
+| Water Data STAC | `WaterDataSTAC` | `api.waterdata.usgs.gov/stac/v0/`     |
+| FabricData      | `FabricData`    | `api.water.usgs.gov/fabric/pygeoapi/` |
+| GeoConnex       | `GeoConnex`     | `reference.geoconnex.us/`             |
 
-`WaterData` sends the key in `USGS_API_KEY`, when set, in the `X-Api-Key` header. The
-other two services never receive it. `NWIS`, its name in 0.1.0, is gone.
+`WaterData` and `WaterDataSTAC` send the key in `USGS_API_KEY`, when set, in the
+`X-Api-Key` header. The other two services never receive it. `NWIS`, its name in 0.1.0,
+is gone.
 
 ## Installation
 

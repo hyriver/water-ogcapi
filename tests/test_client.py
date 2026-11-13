@@ -259,7 +259,7 @@ def recorded_pages(directory: str, count: int) -> list[dict[str, Any]]:
     return [record(f"{directory}/items-{n}.json") for n in range(1, count + 1)]
 
 
-# NWIS reports no numberMatched, and FabricData names port 443 in its next links.
+# WaterData reports no numberMatched, and FabricData names port 443 in its next links.
 @pytest.mark.parametrize(
     ("directory", "count"), [("nwis/daily", 3), ("fabricdata/gagesii", 2), ("geoconnex/hu02", 3)]
 )
@@ -651,7 +651,7 @@ def test_a_collection_that_changes_mid_pagination_reads_unknown(
 
 
 def test_a_repeated_id_on_a_cursor_service_reads_unknown() -> None:
-    """NWIS reports no numberMatched, so the repeat is the only witness."""
+    """WaterData reports no numberMatched, so the repeat is the only witness."""
     docs = [record(f"nwis/daily/items-{n}.json")["response"]["body"] for n in (1, 2, 3)]
     docs[1]["features"][0] = docs[0]["features"][-1]
     transport, _ = serve(*docs[:-1], without_next(docs[-1]))

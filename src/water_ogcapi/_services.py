@@ -19,16 +19,16 @@ if TYPE_CHECKING:
     from water_ogcapi._query import Request
     from water_ogcapi._transport import Transport
 
-__all__ = ["NWIS", "FabricData", "GeoConnex"]
+__all__ = ["FabricData", "GeoConnex", "WaterData"]
 
 PERIODS = frozenset({"year", "month"})
 SITES = "monitoring_location_id"
-# Pieces end a microsecond before the next begins: NWIS reads both ends of an interval as
+# Pieces end a microsecond before the next begins: the Water Data API reads both ends of an interval as
 # inclusive and compares to the microsecond, so pieces sharing a bound would both return
 # a value at it (D-56).
 GAP = timedelta(microseconds=1)
 
-NWIS_PROFILE = ServiceProfile(
+WATERDATA_PROFILE = ServiceProfile(
     # The landing page; without the slash it redirects to http:// with the key in its
     # query (L-11).
     base_url="https://api.waterdata.usgs.gov/ogcapi/v1/",
@@ -55,7 +55,7 @@ GEOCONNEX_PROFILE = ServiceProfile(
 
 
 def _instant(text: str) -> datetime:
-    """Return one bound of a ``datetime`` interval in UTC; NWIS reads a date as its midnight.
+    """Return one bound of a ``datetime`` interval in UTC; the API reads a date as its midnight.
 
     Raises
     ------
@@ -146,9 +146,9 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
 
 
 def _key(api_key: str | None) -> str | None:
-    """Return the key NWIS sends: ``api_key``, else ``USGS_API_KEY``, ``None`` for none."""
-    if api_key is None and NWIS_PROFILE.key_env:
-        api_key = os.environ.get(NWIS_PROFILE.key_env)
+    """Return the key WaterData sends: ``api_key``, else ``USGS_API_KEY``, ``None`` for none."""
+    if api_key is None and WATERDATA_PROFILE.key_env:
+        api_key = os.environ.get(WATERDATA_PROFILE.key_env)
     # Transport.request() refuses such a key too, but only once a query runs (D-43, D-65).
     if api_key is not None:
         reject_non_str([api_key], "the USGS API key")
@@ -158,8 +158,8 @@ def _key(api_key: str | None) -> str | None:
     return api_key or None
 
 
-class NWIS(OGCService):
-    """Async client for the USGS Water Data OGC API, which serves NWIS data (D-42).
+class WaterData(OGCService):
+    """Async client for the USGS Water Data OGC API (D-42, D-94).
 
     Construction performs no HTTP. A page asks for up to 10,000 features unless
     ``params`` set a ``limit``, and 50,000 at most (D-41).
@@ -181,7 +181,7 @@ class NWIS(OGCService):
         or is not exactly ``str`` (D-65).
     """
 
-    profile = NWIS_PROFILE
+    profile = WATERDATA_PROFILE
 
     def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
         super().__init__(transport=transport)
@@ -265,8 +265,8 @@ class GeoConnex(OGCService):
     Parameters
     ----------
     transport : Transport, optional
-        Sends every request, as for `OGCService`. Sharing one with an `NWIS` service
-        is safe, since the key travels with each NWIS request.
+        Sends every request, as for `OGCService`. Sharing one with a `WaterData`
+        service is safe, since the key travels with each WaterData request.
     """
 
     profile = GEOCONNEX_PROFILE

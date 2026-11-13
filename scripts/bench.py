@@ -1,10 +1,10 @@
 """Measure the five D-14 benchmarks and D-66's two routes to Arrow, against a mock.
 
-Every items page repeats one NWIS daily-value feature from ``tests/fixtures/`` under
+Every items page repeats one WaterData daily-value feature from ``tests/fixtures/`` under
 distinct ids, and each page's bytes are built once and served from memory, so the
 numbers measure the client. ``docs/guide/performance.md`` records a run.
 
-``--fetch DIR`` saves real NWIS and FabricData pages from the live services, and
+``--fetch DIR`` saves real WaterData and FabricData pages from the live services, and
 ``--decode DIR`` compares ``json.loads`` with ``orjson.loads`` on them (Q-09).
 """
 
@@ -28,10 +28,10 @@ from typing import TYPE_CHECKING, Any
 import httpx2
 import orjson
 
-from water_ogcapi import NWIS as BlockingNWIS
 from water_ogcapi import Governor, Transport
+from water_ogcapi import WaterData as BlockingWaterData
 from water_ogcapi._transport import parse_count
-from water_ogcapi.aio import NWIS, FabricData, GeoConnex
+from water_ogcapi.aio import FabricData, GeoConnex, WaterData
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -48,7 +48,7 @@ MIB = 2**20
 # Potomac gage, and the GAGES-II collection.
 LIVE = {
     "nwis": (
-        NWIS,
+        WaterData,
         "continuous",
         {
             "monitoring_location_id": "USGS-01646500",
@@ -67,7 +67,7 @@ def _body(name: str) -> Any:
 
 
 class Server:
-    """Answer metadata from the NWIS fixtures and ``total`` features in pages.
+    """Answer metadata from the WaterData fixtures and ``total`` features in pages.
 
     Parameters
     ----------
@@ -172,7 +172,7 @@ def cold_child(start: float, imported: float) -> None:
     # The only page has no next link, so a page built for any URL serves the query.
     server.page(httpx2.URL("https://example.org/items?limit=3"))
     built = time.perf_counter()
-    service = BlockingNWIS(transport=server.transport())
+    service = BlockingWaterData(transport=server.transport())
     pages = service.iter_pages(COLLECTION, params=QUERY)
     page = next(iter(pages))
     first = time.perf_counter()
@@ -214,7 +214,7 @@ def round_trips() -> list[str]:
     async def run() -> list[int]:
         server = Server(3)
         counts = []
-        async with NWIS(transport=server.transport()) as service:
+        async with WaterData(transport=server.transport()) as service:
             for validate in (True, True, False):
                 before = server.requests
                 result = await service.collect(COLLECTION, params=QUERY, validate=validate)
@@ -244,7 +244,7 @@ def requests_per_100k() -> list[str]:
 
     rows = []
     with unpaced():
-        for cls in (NWIS, FabricData, GeoConnex):
+        for cls in (WaterData, FabricData, GeoConnex):
             requests, pages = asyncio.run(run(cls))
             limit = cls.profile.default_limit if cls.profile else None
             rows.append(f"| {cls.__name__} | {limit:,} | {pages} | {requests} |")
@@ -255,7 +255,7 @@ def peak_memory() -> list[str]:
     """Trace the Python heap during `collect` against the number of features."""
 
     async def collect(server: Server, *, keep_pages: bool) -> tuple[int, int]:
-        async with NWIS(transport=server.transport()) as service:
+        async with WaterData(transport=server.transport()) as service:
             # The first request builds the HTTP client, which the trace leaves out.
             await service.collections()
             tracemalloc.start()
@@ -287,7 +287,7 @@ def arrow_memory() -> list[str]:
     """Trace both routes to a table for an unsplit query of 100,000 features (D-66)."""
 
     async def imports() -> int:
-        async with NWIS(transport=Server(1).transport()) as service:
+        async with WaterData(transport=Server(1).transport()) as service:
             result = await service.collect(COLLECTION, params=QUERY, validate=False)
             tracemalloc.start()
             result.to_arrow()
@@ -309,7 +309,7 @@ def arrow_memory() -> list[str]:
         return pa.concat_tables(tables, promote_options="permissive")
 
     async def run(server: Server, route: Any) -> tuple[int, int, int, int]:
-        async with NWIS(transport=server.transport()) as service:
+        async with WaterData(transport=server.transport()) as service:
             # The first request builds the HTTP client, which the trace leaves out.
             await service.collections()
             default = pa.default_memory_pool()
@@ -348,7 +348,7 @@ def recovery(runs: int) -> list[str]:
 
     async def run(server: Server) -> tuple[float, int]:
         before = server.requests
-        async with NWIS(transport=server.transport()) as service:
+        async with WaterData(transport=server.transport()) as service:
             start = time.perf_counter()
             result = await service.collect(COLLECTION, params={**QUERY, "limit": "1000"})
             elapsed = time.perf_counter() - start
@@ -379,7 +379,7 @@ def recovery(runs: int) -> list[str]:
 def fetch(folder: Path) -> None:
     """Save three real pages per service and the seconds the client took to return each.
 
-    Pages come through `iter_pages`, so the package's own checks keep the key on NWIS's
+    Pages come through `iter_pages`, so the package's own checks keep the key on WaterData's
     origin (D-34, D-40, D-53). Sends six requests with no retry, and writes no page that
     holds the key (``.agents/skills/live-api/SKILL.md``).
     """
@@ -421,7 +421,7 @@ def fetch(folder: Path) -> None:
 def _rss_growth(module: str, page: Path) -> float:
     """Bytes a fresh process's peak RSS grows by while ``module.loads`` decodes ``page``.
 
-    tracemalloc reported four times this growth for orjson on an NWIS page, so memory
+    tracemalloc reported four times this growth for orjson on a WaterData page, so memory
     here is resident memory.
     """
     child = (

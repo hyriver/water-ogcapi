@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from water_ogcapi import Transport, configure_logger
-from water_ogcapi.aio import NWIS, OGCService
+from water_ogcapi.aio import OGCService, WaterData
 from water_ogcapi.exceptions import (
     PaginationError,
     RateLimitError,
@@ -72,9 +72,9 @@ def test_a_service_error_masks_a_credential_in_its_url() -> None:
     [
         lambda: OGCService("https://example.com").iter_pages("c", bbox=[1, 2, 3]).__anext__(),
         lambda: OGCService("https://example.com").item("..", "x"),
-        lambda: NWIS(api_key="", transport=None).collect("c", params={"limit": "0"}),
+        lambda: WaterData(api_key="", transport=None).collect("c", params={"limit": "0"}),
         lambda: Transport(max_concurrent=0),
-        lambda: NWIS(api_key="key\n"),
+        lambda: WaterData(api_key="key\n"),
         lambda: configure_logger(level="LOUD"),
     ],
     ids=["bbox", "path-segment", "limit", "transport", "key", "log-level"],

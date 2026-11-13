@@ -529,7 +529,7 @@ class OGCService:
     ) -> Sequence[Request]:
         """Split an items request into independent pieces, run concurrently (D-44, D-56).
 
-        The base service keeps it whole and refuses a split; NWIS overrides this (D-35).
+        The base service keeps it whole and refuses a split; WaterData overrides this (D-35).
 
         Raises
         ------
@@ -537,7 +537,7 @@ class OGCService:
             If ``split_datetime`` or ``sites_per_piece`` is given.
         """
         if split_datetime is not None or sites_per_piece is not None:
-            msg = f"{type(self).__name__} does not split queries; only NWIS does"
+            msg = f"{type(self).__name__} does not split queries; only WaterData does"
             raise ValidationError(msg)
         return (request,)
 
@@ -698,9 +698,9 @@ class OGCService:
             its leading zero.
         id_property : str, optional
             The property ``ids`` matches, such as ``id`` for feature ids or
-            ``monitoring_location_id`` for the sites of an NWIS time series.
+            ``monitoring_location_id`` for the sites of a WaterData time series.
         split_datetime : {'year', 'month'}, optional
-            NWIS only (D-35, D-56): split the ``datetime`` interval in ``params`` at
+            WaterData only (D-35, D-56): split the ``datetime`` interval in ``params`` at
             calendar boundaries in UTC into pieces that run concurrently, up to the
             smaller of the transport's ``max_per_origin`` and ``max_concurrent`` at once,
             each following its own ``next``
@@ -708,7 +708,7 @@ class OGCService:
             offset, and each piece ends one microsecond before the next begins. Every
             piece costs at least one request, so size pieces near one page.
         sites_per_piece : int, optional
-            NWIS only (D-35, D-56): split the site list, ``ids`` or a comma-separated
+            WaterData only (D-35, D-56): split the site list, ``ids`` or a comma-separated
             ``monitoring_location_id`` in ``params``, into lists of this many sites
             that run concurrently as ``split_datetime`` pieces do. A site listed twice
             is sent once. Not with ``split_datetime``.
@@ -742,7 +742,7 @@ class OGCService:
             number, a filter is empty, ``params`` also holds a parameter a keyword sets
             (``bbox``, ``filter``, ``filter-lang``) or a credential such as ``api_key``,
             or ``limit`` is not an integer from 1 to the profile's ``max_limit``, or
-            a split is given to a service other than NWIS, both splits are given, or
+            a split is given to a service other than WaterData, both splits are given, or
             the query has no closed ``datetime`` interval or site list to split.
             With ``validate``, before the first page request, when the collection, a
             name in ``params``, or ``id_property`` is unknown; the message lists the

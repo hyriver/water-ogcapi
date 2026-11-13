@@ -1,4 +1,4 @@
-"""Tests for NWIS partitioned fan-out (D-35, D-56), against a mock that filters as NWIS does."""
+"""Tests for WaterData partitioned fan-out (D-35, D-56), against a mock that filters as WaterData does."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import pytest
 import water_ogcapi
 from water_ogcapi import Page, QueryResult, Transport
 from water_ogcapi._query import Checkpoint, Request
-from water_ogcapi.aio import NWIS, GeoConnex
+from water_ogcapi.aio import GeoConnex, WaterData
 from water_ogcapi.exceptions import PaginationError, PartialResultsError, ValidationError
 
 ITEMS = "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items"
@@ -37,7 +37,7 @@ type Hook = Callable[[httpx2.Request, list[tuple[str, str]]], Awaitable[httpx2.R
 
 
 def instant(text: str) -> datetime:
-    """Read a time or bound as NWIS does: a date is its midnight in UTC."""
+    """Read a time or bound as WaterData does: a date is its midnight in UTC."""
     if "T" not in text:
         return datetime.combine(date.fromisoformat(text), datetime.min.time(), UTC)
     return datetime.fromisoformat(text).astimezone(UTC)
@@ -63,7 +63,7 @@ def mock(
 ) -> tuple[Transport, list[httpx2.Request]]:
     """A transport paging ``matching`` rows, ``limit`` a page, by a cursor holding the offset.
 
-    Like NWIS, a ``next`` link keeps the request's params and drops a POST body, so the
+    Like WaterData, a ``next`` link keeps the request's params and drops a POST body, so the
     client must re-send it. ``hook`` may answer a request in place of the mock.
     """
     seen: list[httpx2.Request] = []
@@ -105,12 +105,12 @@ def mock(
 
 def nwis(
     hook: Hook | None = None, *, max_concurrent: int = 4, max_per_origin: int = 4
-) -> tuple[NWIS, list[httpx2.Request]]:
+) -> tuple[WaterData, list[httpx2.Request]]:
     transport, seen = mock(hook, max_concurrent=max_concurrent, max_per_origin=max_per_origin)
-    return NWIS(api_key="", transport=transport), seen
+    return WaterData(api_key="", transport=transport), seen
 
 
-def collect(service: NWIS, **query: Any) -> QueryResult | PartialResultsError:
+def collect(service: WaterData, **query: Any) -> QueryResult | PartialResultsError:
     async def run() -> QueryResult:
         async with service:
             return await service.collect("daily", validate=False, **query)
@@ -157,7 +157,7 @@ def test_year_pieces_end_one_microsecond_before_the_next_begins() -> None:
 
 
 def test_a_value_in_the_last_microsecond_of_a_period_is_fetched_once() -> None:
-    """NWIS compares bounds to the microsecond, so disjoint pieces leave no gap (D-56)."""
+    """WaterData compares bounds to the microsecond, so disjoint pieces leave no gap (D-56)."""
     late = ("USGS-01", "2024-12-31T23:59:59.999999+00:00")
     ROWS.append(late)
     try:
@@ -245,7 +245,7 @@ def test_a_failed_middle_piece_keeps_the_others_and_resumes_alone() -> None:
     assert sorted(ids(result)) == sorted(ids(whole))
 
 
-async def pages(service: NWIS, **query: Any) -> list[Page] | PaginationError:
+async def pages(service: WaterData, **query: Any) -> list[Page] | PaginationError:
     async with service:
         try:
             return [page async for page in service.iter_pages("daily", validate=False, **query)]
@@ -338,7 +338,7 @@ def test_a_request_already_in_flight_is_not_sent_twice() -> None:
 
 def test_the_blocking_class_splits_too() -> None:
     transport, seen = mock()
-    with water_ogcapi.NWIS(api_key="", transport=transport) as blocking:
+    with water_ogcapi.WaterData(api_key="", transport=transport) as blocking:
         result = blocking.collect("daily", params=WIDE, split_datetime="year", validate=False)
     assert len(ids(result)) == len(ROWS)
     assert len(first_params(seen)) == 3
@@ -381,7 +381,7 @@ def test_only_nwis_splits(query: dict[str, Any]) -> None:
         async with GeoConnex(transport=transport) as service:
             await service.collect("hu02", validate=False, **query)
 
-    with pytest.raises(ValidationError, match="only NWIS"):
+    with pytest.raises(ValidationError, match="only WaterData"):
         asyncio.run(run())
 
 
@@ -463,7 +463,7 @@ def test_pages_come_in_the_order_their_responses_arrived() -> None:
 def test_the_blocking_iterator_yields_every_piece() -> None:
     transport, seen = mock()
     sites = {"monitoring_location_id": ",".join(SITES)}
-    with water_ogcapi.NWIS(api_key="", transport=transport) as blocking:
+    with water_ogcapi.WaterData(api_key="", transport=transport) as blocking:
         got = list(blocking.iter_pages("daily", params=sites, sites_per_piece=2, validate=False))
     assert sorted(p.params["monitoring_location_id"] for p in got) == [
         "USGS-01,USGS-02",

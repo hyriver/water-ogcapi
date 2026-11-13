@@ -17,7 +17,7 @@ import httpx2
 import pytest
 
 from water_ogcapi import Governor, Transport, _governor
-from water_ogcapi.aio import NWIS, GeoConnex, OGCService
+from water_ogcapi.aio import GeoConnex, OGCService, WaterData
 from water_ogcapi.exceptions import PartialResultsError, ServiceError, ValidationError
 
 URL = "https://example.com/collections"
@@ -230,8 +230,8 @@ def test_the_transport_reads_a_refused_redirect() -> None:
 
 
 def rolling_quota(clock: list[float], limit: int, window: float) -> tuple[Transport, list[Any]]:
-    """An NWIS mock that counts requests over a rolling window and pages forever."""
-    base = NWIS(api_key="").base_url
+    """A WaterData mock that counts requests over a rolling window and pages forever."""
+    base = WaterData(api_key="").base_url
     sent: collections.deque[float] = collections.deque()
     log: list[tuple[float, int]] = []
 
@@ -267,7 +267,7 @@ def first_pages(service: OGCService, n: int) -> None:
 
 def test_a_running_down_quota_widens_the_spacing_before_any_429(clock: list[float]) -> None:
     transport, log = rolling_quota(clock, limit=1000, window=3600.0)
-    first_pages(NWIS(api_key="", transport=transport), 2500)
+    first_pages(WaterData(api_key="", transport=transport), 2500)
     times = [t for t, _ in log]
     gaps = [b - a for a, b in itertools.pairwise(times)]
     assert {status for _, status in log} == {200}, "no 429 over more than a window"
@@ -281,7 +281,7 @@ def test_a_running_down_quota_widens_the_spacing_before_any_429(clock: list[floa
 
 def test_without_the_governor_the_same_quota_runs_out(clock: list[float]) -> None:
     transport, log = rolling_quota(clock, limit=1000, window=3600.0)
-    service = NWIS(api_key="", transport=transport)
+    service = WaterData(api_key="", transport=transport)
     service._governor = None  # pyright: ignore[reportPrivateUsage]
     with pytest.raises(PartialResultsError):
         asyncio.run(service.collect("c", validate=False))

@@ -1070,7 +1070,7 @@ class Transport:
                 retries,
                 delay,
             )
-            # shortcut: no jitter, so the retries of NWIS pieces (D-56) that fail together
+            # shortcut: no jitter, so the retries of WaterData pieces (D-56) that fail together
             # stay in lockstep, at most max_per_origin of them; add it if that load matters.
             await asyncio.sleep(delay)
         # Unreachable: the last attempt returns or raises. Keeps the return type total.

@@ -279,7 +279,7 @@ def test_a_swap_keeps_each_geometry_s_dimensions() -> None:
     ],
 )
 def test_an_x_first_crs_is_written_as_sent(crs: str, first: tuple[float, float]) -> None:
-    """The CRSs NWIS and GeoConnex return for a crs request (live, D-60)."""
+    """The CRSs WaterData and GeoConnex return for a crs request (live, D-60)."""
     feature = {**point(1, first[0]), "geometry": {"type": "Point", "coordinates": list(first)}}
     table = result_of([feature], CRS(crs, (crs,), crs, "content_crs")).to_arrow()
     [geometry] = shapely.from_wkb(table.column("geometry").to_pylist())

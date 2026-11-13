@@ -27,10 +27,10 @@ Each decision lists its status, the decision, why, what was rejected, and its li
 ## Scope
 
 `water-ogcapi` is a lean client for the USGS OGC API Features endpoints, blocking by
-default over an async core (D-48): NWIS, FabricData, and GeoConnex (base URLs in
-`README.md`). It complements `dataretrieval` and offers a small runtime dependency
-footprint with no pandas, native async, raw GeoJSON with the evidence of how it was
-fetched, GeoConnex and FabricData coverage, and metadata caching.
+default over an async core (D-48): the Water Data API (`WaterData`, D-94), FabricData,
+and GeoConnex (base URLs in `README.md`). It complements `dataretrieval` and offers a
+small runtime dependency footprint with no pandas, native async, raw GeoJSON with the
+evidence of how it was fetched, GeoConnex and FabricData coverage, and metadata caching.
 
 Planned surface: bbox queries, CQL2 spatial predicates, CQL2-JSON and CQL2-Text
 passthrough, identifier filters, direct item fetch, a metadata cache (D-07), typed
@@ -2565,6 +2565,27 @@ Layering rule for anything new:
 - **Limits:** Pages of different chains interleave, so a count that changes within one
     piece is seen only through the sum. A hand-built `Request` with no `params` reads as
     a `next` link.
+
+### D-94: The Water Data API class is `WaterData`
+
+- **Status:** accepted. Renames the class of D-42; the decisions that say NWIS mean this
+    class. A one-time exception to the deprecation period of D-21.
+- **Date:** 2026-11-13.
+- **Decision:** The service class for `api.waterdata.usgs.gov/ogcapi/v1/` is
+    `WaterData`, blocking at the package root and async in `water_ogcapi.aio`. `NWIS`
+    goes in 0.2.0 with no deprecation release, and 0.1.0 is yanked from PyPI. Code,
+    comments, and docs name the service WaterData or the Water Data API. The profile
+    constant is `WATERDATA_PROFILE`.
+- **Why:** USGS is decommissioning the NWIS name in favor of Water Data. 0.1.0 was the
+    first release, out for nine days, so the maintainer chose a clean break over
+    carrying the old name through 0.2.
+- **Rejected:** A deprecated `NWIS` subclass that warns through 0.2, as D-21 asks, which
+    keeps the decommissioned name in the public API for another release. A plain alias
+    (`NWIS = WaterData`), which cannot warn.
+- **Limits:** Earlier entries here keep the name NWIS. The test fixtures stay under
+    `tests/fixtures/nwis/`, and the example notebook keeps the file name `nwis.ipynb` so
+    its link holds. A 0.1.0 caller gets `ImportError`, and a pickled 0.1.0 `NWIS` does
+    not unpickle.
 
 ## Lessons
 

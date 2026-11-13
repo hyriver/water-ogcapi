@@ -18,7 +18,7 @@ import pytest
 
 import water_ogcapi
 from water_ogcapi import Page, QueryResult, Transport, _sync, aio
-from water_ogcapi.aio import NWIS, FabricData, GeoConnex, OGCService
+from water_ogcapi.aio import FabricData, GeoConnex, OGCService, WaterData
 from water_ogcapi.exceptions import PaginationError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
@@ -176,13 +176,13 @@ def test_errors_propagate_with_their_type() -> None:
         next(service.iter_pages(".."))
 
 
-@pytest.mark.parametrize("name", ["OGCService", "NWIS", "FabricData", "GeoConnex"])
+@pytest.mark.parametrize("name", ["OGCService", "WaterData", "FabricData", "GeoConnex"])
 def test_the_root_classes_block_and_the_aio_classes_await(name: str) -> None:
     assert not inspect.iscoroutinefunction(getattr(water_ogcapi, name).collect)
     assert inspect.iscoroutinefunction(getattr(aio, name).collect)
 
 
-@pytest.mark.parametrize("name", ["NWIS", "FabricData", "GeoConnex"])
+@pytest.mark.parametrize("name", ["WaterData", "FabricData", "GeoConnex"])
 def test_a_blocking_service_reads_its_twin_s_profile(name: str) -> None:
     profile = getattr(water_ogcapi, name)().profile
     assert profile is not None
@@ -195,7 +195,7 @@ def test_a_blocking_service_without_a_profile_reads_none() -> None:
 
 def test_a_plain_import_binds_aio_and_exceptions() -> None:
     # A fresh interpreter: this one imported both submodules already.
-    code = "import water_ogcapi as w; w.aio.NWIS; w.exceptions.ServiceError"
+    code = "import water_ogcapi as w; w.aio.WaterData; w.exceptions.ServiceError"
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
@@ -206,7 +206,7 @@ def test_the_sync_module_is_gone() -> None:
 
 PAIRS = [
     (water_ogcapi.OGCService, OGCService),
-    (water_ogcapi.NWIS, NWIS),
+    (water_ogcapi.WaterData, WaterData),
     (water_ogcapi.FabricData, FabricData),
     (water_ogcapi.GeoConnex, GeoConnex),
 ]
@@ -249,14 +249,14 @@ def test_iter_pages_names_the_iterator_it_returns() -> None:
 @pytest.mark.parametrize(
     ("blocking", "service"),
     [
-        (water_ogcapi.NWIS, NWIS),
+        (water_ogcapi.WaterData, WaterData),
         (water_ogcapi.FabricData, FabricData),
         (water_ogcapi.GeoConnex, GeoConnex),
     ],
 )
 def test_each_class_queries_its_own_service(
-    blocking: type[water_ogcapi.NWIS | water_ogcapi.FabricData | water_ogcapi.GeoConnex],
-    service: type[NWIS | FabricData | GeoConnex],
+    blocking: type[water_ogcapi.WaterData | water_ogcapi.FabricData | water_ogcapi.GeoConnex],
+    service: type[WaterData | FabricData | GeoConnex],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("USGS_API_KEY", "k")
@@ -270,8 +270,8 @@ def test_each_class_queries_its_own_service(
     blocking(transport=transport).collections()
     assert service.profile is not None
     assert str(seen[0].url).startswith(service.profile.base_url)
-    # The key goes only to NWIS (D-13).
-    assert seen[0].headers.get("X-Api-Key") == ("k" if service is NWIS else None)
+    # The key goes only to WaterData (D-13).
+    assert seen[0].headers.get("X-Api-Key") == ("k" if service is WaterData else None)
 
 
 def test_close_closes_a_passed_transport() -> None:
@@ -430,7 +430,7 @@ def test_run_gathers_requests_on_the_clients_transport() -> None:
 
 
 def test_run_shares_one_transport_with_a_blocking_service() -> None:
-    """A dependent package's blocking twin runs its gather where NWIS sends (D-73)."""
+    """A dependent package's blocking twin runs its gather where WaterData sends (D-73)."""
     transport, seen = serve()
     nwis = water_ogcapi.OGCService(BASE, transport=transport)
     client = water_ogcapi.Client(transport=transport)

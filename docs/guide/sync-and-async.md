@@ -2,22 +2,22 @@
 
 ## Blocking classes
 
-`NWIS`, `FabricData`, `GeoConnex`, and `OGCService` at the package root block until each
-call returns. Each one owns an async service of its own and runs it on one background
-event-loop thread that the package starts on first use. A call from any thread, a
-Jupyter cell included, waits for that loop and never calls `asyncio.run()`, so it works
-where another event loop is already running.
+`WaterData`, `FabricData`, `GeoConnex`, and `OGCService` at the package root block until
+each call returns. Each one owns an async service of its own and runs it on one
+background event-loop thread that the package starts on first use. A call from any
+thread, a Jupyter cell included, waits for that loop and never calls `asyncio.run()`, so
+it works where another event loop is already running.
 
 `iter_pages()` returns a plain iterator. Each step fetches one page, and closing the
 iterator, or dropping it, stops the query:
 
 ```python
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 
 DC = (-77.12, 38.80, -76.91, 38.99)
 
-with NWIS() as nwis:
-    pages = nwis.iter_pages("monitoring-locations", bbox=DC, params={"limit": "100"})
+with WaterData() as wd:
+    pages = wd.iter_pages("monitoring-locations", bbox=DC, params={"limit": "100"})
     first = next(pages)
     pages.close()
 print(first.feature_count, "features in the first page")
@@ -32,21 +32,21 @@ service:
 ```python
 import asyncio
 
-from water_ogcapi.aio import NWIS as AsyncNWIS
+from water_ogcapi.aio import WaterData as AsyncWaterData
 
 SITES = ["USGS-01646500", "USGS-01594440", "USGS-01638500"]
 QUERY = {"parameter_code": "00060", "statistic_id": "00003", "datetime": "2025-06-01/2025-06-30"}
 
 
 async def main() -> None:
-    async with AsyncNWIS() as nwis:
+    async with AsyncWaterData() as wd:
         results = await asyncio.gather(
             *(
-                nwis.collect("daily", params={**QUERY, "monitoring_location_id": site})
+                wd.collect("daily", params={**QUERY, "monitoring_location_id": site})
                 for site in SITES
             )
         )
-        async for page in nwis.iter_pages("monitoring-locations", bbox=DC, params={"limit": "100"}):
+        async for page in wd.iter_pages("monitoring-locations", bbox=DC, params={"limit": "100"}):
             print(page.feature_count, "features")
             break
     for site, result in zip(SITES, results, strict=True):
@@ -74,11 +74,11 @@ loop, or only among async services on one loop:
 from water_ogcapi import FabricData, Transport
 
 transport = Transport(timeout=60, max_concurrent=2)
-nwis = NWIS(transport=transport)
+wd = WaterData(transport=transport)
 fabric = FabricData(transport=transport)
-print(len(nwis.collect("monitoring-locations", bbox=DC).geojson["features"]))
+print(len(wd.collect("monitoring-locations", bbox=DC).geojson["features"]))
 print(len(fabric.collect("gagesii", bbox=DC).geojson["features"]))
-nwis.close()
+wd.close()
 ```
 
 `close()` on either service closes the shared transport, and the other reconnects on its

@@ -10,8 +10,8 @@ A Python client for USGS water data services over OGC API Features. Its service 
 block, for scripts and notebooks, and `water_ogcapi.aio` holds their async twins.
 
 **Status:** beta. The async and sync query APIs and the metadata cache work on all three
-services, with the quota governor, page-level resume, and concurrent NWIS pieces. Report
-problems and missing features in
+services, with the quota governor, page-level resume, and concurrent WaterData pieces.
+Report problems and missing features in
 [GitHub issues](https://github.com/hyriver/water-ogcapi/issues).
 
 ## Features
@@ -19,8 +19,8 @@ problems and missing features in
 - Blocking service classes for scripts and notebooks, Jupyter included.
 - Async twins in `water_ogcapi.aio`, over HTTP/2 with bounded concurrency.
 - Retries transient failures with exponential backoff and honors `Retry-After`.
-- Splits an NWIS query by year, month, or site list and runs the pieces concurrently, as
-    USGS's efficiency guidance recommends.
+- Splits a WaterData query by year, month, or site list and runs the pieces
+    concurrently, as USGS's efficiency guidance recommends.
 - Spaces requests further apart as a service's `X-RateLimit-Remaining` runs down, and
     one second apart on a service that sends no rate-limit headers.
 - Checks a query's collection and parameter names against the service's metadata, so a
@@ -35,12 +35,12 @@ problems and missing features in
 
 | Service    | Class        | Base URL                              |
 | ---------- | ------------ | ------------------------------------- |
-| NWIS       | `NWIS`       | `api.waterdata.usgs.gov/ogcapi/v1/`   |
+| Water Data | `WaterData`  | `api.waterdata.usgs.gov/ogcapi/v1/`   |
 | FabricData | `FabricData` | `api.water.usgs.gov/fabric/pygeoapi/` |
 | GeoConnex  | `GeoConnex`  | `reference.geoconnex.us/`             |
 
-`NWIS` sends the key in `USGS_API_KEY`, when set, in the `X-Api-Key` header. The other
-two services never receive it.
+`WaterData` sends the key in `USGS_API_KEY`, when set, in the `X-Api-Key` header. The
+other two services never receive it. `NWIS`, its name in 0.1.0, is gone.
 
 ## Installation
 
@@ -81,10 +81,10 @@ pip install git+https://github.com/hyriver/water-ogcapi
 The monitoring locations in a small box around Washington, DC:
 
 ```python
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 
-with NWIS() as nwis:
-    result = nwis.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
+with WaterData() as wd:
+    result = wd.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
 print(len(result.geojson["features"]), result.pagination.completeness)
 ```
 
@@ -99,12 +99,12 @@ take the same arguments:
 ```python
 import asyncio
 
-from water_ogcapi.aio import NWIS
+from water_ogcapi.aio import WaterData
 
 
 async def main() -> None:
-    async with NWIS() as nwis:
-        result = await nwis.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
+    async with WaterData() as wd:
+        result = await wd.collect("monitoring-locations", bbox=(-77.12, 38.80, -76.91, 38.99))
 
 
 asyncio.run(main())

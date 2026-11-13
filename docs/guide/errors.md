@@ -13,20 +13,20 @@ cannot encode raises `TypeError`.
 | `PaginationError`     | Page requests of a traversal fail                                | `failures`, `checkpoint`                   |
 | `PartialResultsError` | `collect()` lost a page after others arrived                     | `result`, plus the above                   |
 
-Every URL an error holds has its credential query parameters masked, and `NWIS` sends
-the key only in a header.
+Every URL an error holds has its credential query parameters masked, and `WaterData`
+sends the key only in a header.
 
 ## Input errors
 
 `ValidationError` names what went wrong and, where the set is finite, the valid options:
 
 ```python
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 from water_ogcapi.exceptions import ServiceError, ValidationError
 
-nwis = NWIS()
+wd = WaterData()
 try:
-    nwis.collect("monitoring-location")
+    wd.collect("monitoring-location")
 except ValidationError as err:
     print(str(err)[:160])
 ```
@@ -38,7 +38,7 @@ above 1 means the transport retried first:
 
 ```python
 try:
-    nwis.item("monitoring-locations", "USGS-not-a-site")
+    wd.item("monitoring-locations", "USGS-not-a-site")
 except ServiceError as err:
     print(err.status, err.attempts, err.url)
 ```
@@ -60,15 +60,15 @@ from water_ogcapi.exceptions import PaginationError, PartialResultsError
 
 QUERY = {"monitoring_location_id": "USGS-01646500", "datetime": "2025-01-01/2025-01-31"}
 try:
-    result = nwis.collect("daily", params=QUERY)
+    result = wd.collect("daily", params=QUERY)
 except PartialResultsError as err:
-    result = nwis.collect("daily", resume=err.result)
+    result = wd.collect("daily", resume=err.result)
 except PaginationError as err:
     if err.checkpoint is None:
         raise
-    result = nwis.collect("daily", resume=err.checkpoint)
+    result = wd.collect("daily", resume=err.checkpoint)
 print(result.pagination.completeness)
-nwis.close()
+wd.close()
 ```
 
 The [cache, quota, and resume notebook](../examples/cache_quota_resume.md) runs this

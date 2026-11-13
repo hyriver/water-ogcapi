@@ -2,9 +2,9 @@
 
 `pynhd.ogcapi`, in pynhd 0.20.0, has three classes, `GeoConnex`, `FabricData`, and
 `NWIS`, that query the same services and return GeoDataFrames. `water-ogcapi` has a
-class for each service under the same name, returns the GeoJSON with the evidence of how
-each page was fetched, and converts it to a GeoDataFrame through `to_arrow()`. The
-`pynhd` code on this page is shown, not run.
+class for each service, under the same name apart from `WaterData` for `NWIS`, returns
+the GeoJSON with the evidence of how each page was fetched, and converts it to a
+GeoDataFrame through `to_arrow()`. The `pynhd` code on this page is shown, not run.
 
 ## The calls side by side
 
@@ -44,7 +44,7 @@ regions = gpd.GeoDataFrame.from_arrow(result.to_arrow())
 print(regions[["id", "name"]])
 ```
 
-The NWIS monitoring locations in a box around Washington, DC:
+The Water Data monitoring locations in a box around Washington, DC:
 
 <!-- not run -->
 
@@ -55,12 +55,12 @@ sites = NWIS("monitoring-locations").bybox((-77.12, 38.80, -76.91, 38.99))
 ```
 
 ```python title="water-ogcapi"
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 
 DC = (-77.12, 38.80, -76.91, 38.99)
 
-with NWIS() as nwis:
-    result = nwis.collect("monitoring-locations", bbox=DC)
+with WaterData() as wd:
+    result = wd.collect("monitoring-locations", bbox=DC)
 sites = gpd.GeoDataFrame.from_arrow(result.to_arrow())
 print(len(sites), result.pagination.completeness)
 ```
@@ -115,7 +115,7 @@ passing it.
     `geojson["features"]` is empty.
 - **The API key.** `pynhd`'s `NWIS` and `FabricData` read `USGS_API_KEY`, and its
     `FabricData` sends the key in an `api_key` header. `water-ogcapi` sends the key only
-    to NWIS, in the `X-Api-Key` header.
+    to the Water Data API, in the `X-Api-Key` header.
 - **Development endpoints.** `pynhd` takes `dev=True`. The `water-ogcapi` service
     classes have fixed base URLs, and `OGCService(base_url)` queries any other OGC API
     Features service, with no key.
@@ -128,7 +128,7 @@ passing it.
 A query that matches nothing:
 
 ```python
-with NWIS() as nwis:
-    empty = nwis.collect("monitoring-locations", bbox=DC, params={"site_type_code": "XX"})
+with WaterData() as wd:
+    empty = wd.collect("monitoring-locations", bbox=DC, params={"site_type_code": "XX"})
 print(len(empty.geojson["features"]), empty.pagination.completeness)
 ```

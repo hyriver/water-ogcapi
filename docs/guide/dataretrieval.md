@@ -26,7 +26,7 @@ df, md = waterdata.get_daily(
 ```
 
 ```python title="water-ogcapi"
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 
 QUERY = {
     "monitoring_location_id": "USGS-01646500",
@@ -34,8 +34,8 @@ QUERY = {
     "statistic_id": "00003",
     "datetime": "2025-01-01/2025-12-31",
 }
-with NWIS() as nwis:
-    result = nwis.collect("daily", params=QUERY)
+with WaterData() as wd:
+    result = wd.collect("daily", params=QUERY)
 frame = result.to_arrow().to_pandas()
 print(frame.shape, result.pagination.completeness)
 ```
@@ -62,11 +62,11 @@ from typing import Any
 import pandas as pd
 
 from water_ogcapi import Page
-from water_ogcapi.aio import NWIS as AsyncNWIS
+from water_ogcapi.aio import WaterData as AsyncWaterData
 
 
 async def walk_pages(
-    nwis: AsyncNWIS,
+    wd: AsyncWaterData,
     collection: str,
     params: dict[str, str],
     cql2: dict[str, Any] | None = None,
@@ -74,15 +74,15 @@ async def walk_pages(
     """Fetch every page of one query and join their features into one frame."""
     frames: list[pd.DataFrame] = []
     pages: list[Page] = []
-    async for page in nwis.iter_pages(collection, params=params, filter=cql2):
+    async for page in wd.iter_pages(collection, params=params, filter=cql2):
         frames.append(page.to_arrow().to_pandas())
         pages.append(page)
     return pd.concat(frames, ignore_index=True), pages
 
 
 async def main() -> None:
-    async with AsyncNWIS() as nwis:
-        frame, pages = await walk_pages(nwis, "daily", QUERY)
+    async with AsyncWaterData() as wd:
+        frame, pages = await walk_pages(wd, "daily", QUERY)
     print(len(frame), "rows from", len(pages), "pages")
     print(pages[0].url)
     print(pages[-1].headers.get("x-ratelimit-remaining"))
@@ -106,17 +106,17 @@ reads from the aggregated response.
 | `FanOut` runs the chunks of a query split to fit a URL's bytes | `sites_per_piece` splits a site list, `split_datetime` an interval, and `ids` sends a list in a `POST` body   |
 | `concurrency` caps the chunks in flight                        | `Transport(max_per_origin=...)` caps the requests in flight to one host, 4 by default                         |
 | `ChunkInterrupted` and its `.call.resume()`                    | `PartialResultsError` and `collect(resume=...)`, or a page's `checkpoint`                                     |
-| `API_USGS_PAT`, sent only to the host that accepts it          | `USGS_API_KEY`, sent only by `NWIS`, in the `X-Api-Key` header                                                |
+| `API_USGS_PAT`, sent only to the host that accepts it          | `USGS_API_KEY`, sent only by `WaterData`, in the `X-Api-Key` header                                           |
 
-`dataretrieval` keeps its key in `API_USGS_PAT`, and `NWIS(api_key=...)` takes it from
-there. A long site list fits either way: `dataretrieval` splits the URL, and `ids` sends
-the list as a CQL2-JSON body that no URL limit reaches:
+`dataretrieval` keeps its key in `API_USGS_PAT`, and `WaterData(api_key=...)` takes it
+from there. A long site list fits either way: `dataretrieval` splits the URL, and `ids`
+sends the list as a CQL2-JSON body that no URL limit reaches:
 
 ```python
 SITES = ["USGS-01646500", "USGS-01594440", "USGS-01638500"]
 DAILY = {"parameter_code": "00060", "statistic_id": "00003", "datetime": "2025-06-01/2025-06-30"}
 
-with NWIS() as nwis:
-    result = nwis.collect("daily", ids=SITES, id_property="monitoring_location_id", params=DAILY)
+with WaterData() as wd:
+    result = wd.collect("daily", ids=SITES, id_property="monitoring_location_id", params=DAILY)
 print(len(result.geojson["features"]), "daily values for", len(SITES), "sites")
 ```

@@ -2,18 +2,18 @@
 
 ## Services and collections
 
-Three classes cover the three services: `NWIS` for the USGS Water Data API, `FabricData`
-for the USGS FabricData service, and `GeoConnex` for the GeoConnex reference features.
-Building one sends no request. Each holds its HTTP connections until `close()`, which a
-`with` block calls:
+Three classes cover the three services: `WaterData` for the USGS Water Data API,
+`FabricData` for the USGS FabricData service, and `GeoConnex` for the GeoConnex
+reference features. Building one sends no request. Each holds its HTTP connections until
+`close()`, which a `with` block calls:
 
 ```python
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 
-nwis = NWIS()
-collections = nwis.collections()
+wd = WaterData()
+collections = wd.collections()
 print([c.id for c in collections.collections or ()][:5])
-queryables = nwis.queryables("monitoring-locations")
+queryables = wd.queryables("monitoring-locations")
 print(sorted(queryables.properties or {})[:5])
 ```
 
@@ -38,14 +38,14 @@ A property in `params` matches its value:
 ```python
 DC = (-77.12, 38.80, -76.91, 38.99)
 
-streams = nwis.collect("monitoring-locations", bbox=DC, params={"site_type_code": "ST"})
+streams = wd.collect("monitoring-locations", bbox=DC, params={"site_type_code": "ST"})
 print(len(streams.geojson["features"]), "stream sites")
 ```
 
 CQL2-Text compares, combines, and tests geometry:
 
 ```python
-large = nwis.collect(
+large = wd.collect(
     "monitoring-locations",
     bbox=DC,
     filter="site_type_code = 'ST' AND drainage_area > 100",
@@ -57,7 +57,7 @@ print("stream sites draining over 100 square miles:", len(large.geojson["feature
 one week:
 
 ```python
-week = nwis.collect(
+week = wd.collect(
     "daily",
     ids=["USGS-01646500", "USGS-01594440"],
     id_property="monitoring_location_id",
@@ -76,7 +76,7 @@ intersects that bbox. Filter the result with the shape for exact containment.
 `item()` fetches one feature by its id and returns a `Page` whose `body` is the Feature:
 
 ```python
-site = nwis.item("monitoring-locations", "USGS-01646500")
+site = wd.item("monitoring-locations", "USGS-01646500")
 print(site.body["properties"]["monitoring_location_name"])
 ```
 
@@ -90,7 +90,7 @@ parameter it does not know, so an unchecked typo returns the whole collection:
 from water_ogcapi.exceptions import ValidationError
 
 try:
-    nwis.collect("monitoring-locations", params={"site_typ_code": "ST"})
+    wd.collect("monitoring-locations", params={"site_typ_code": "ST"})
 except ValidationError as err:
     print(str(err)[:120])
 ```
@@ -119,7 +119,7 @@ print(streams.pages[0].url)
 
 `complete` means the traversal reached a page without a `next` link and every check that
 could run passed. A `Page` masks credential query parameters in its URL and `params`,
-and `NWIS` sends the key only in a header. The body is kept as the server sent it.
+and `WaterData` sends the key only in a header. The body is kept as the server sent it.
 
 ## Arrow tables
 
@@ -138,7 +138,7 @@ sites = gpd.GeoDataFrame.from_arrow(table)
 print(sites.crs.to_string(), len(sites))
 print(pl.from_arrow(table).select("id", "monitoring_location_name").head(3))
 print(table.drop_columns("geometry").to_pandas().shape)
-nwis.close()
+wd.close()
 ```
 
 A large result holds every feature in Python beside the table, so

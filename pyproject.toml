@@ -84,6 +84,12 @@ lint = [
   "uv",
 ]
 typecheck = [
+  # What docs/examples/*.py import, so pyright can check them; contextily brings
+  # rasterio and xyzservices.
+  "contextily",
+  "geopandas",
+  "matplotlib",
+  "polars",
   "pyright",
 ]
 
@@ -268,7 +274,7 @@ expand_tables = [ "tool.git-cliff", "tool.pixi" ]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
-include = [ "src" ]
+include = [ "docs/examples", "src" ]
 ignore = [
   "tests/*.py",
 ]

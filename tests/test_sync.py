@@ -243,9 +243,10 @@ def test_methods_copy_the_async_parameters_and_docstring(name: str) -> None:
     assert method.__doc__ == original.__doc__
 
 
-def test_iter_pages_names_the_iterator_it_returns() -> None:
+def test_iter_pages_names_the_generator_it_returns() -> None:
+    # A Generator, so a type checker lets the caller close() it.
     assert (
-        inspect.signature(water_ogcapi.OGCService.iter_pages).return_annotation == "Iterator[Page]"
+        inspect.signature(water_ogcapi.OGCService.iter_pages).return_annotation == "Generator[Page]"
     )
 
 

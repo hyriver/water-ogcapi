@@ -368,6 +368,15 @@ def test_stac_sends_an_in_list_with_a_non_literal_value_whole() -> None:
     assert len(stac_pieces(filter=query)) == 1
 
 
+def test_stac_sends_equal_numbers_in_one_piece() -> None:
+    # Two pieces holding 1 and 1.0 would both match the item whose value is 1.
+    values: list[object] = [*range(1, 51), 1.0, True]
+    seen = stac_pieces(filter={"op": "in", "args": [{"property": "n"}, values]})
+    sent = [v for r in seen for v in json.loads(r.url.params["filter"])["args"][1]]
+    assert len(sent) == 51
+    assert sum(v is True for v in sent) == 1
+
+
 def test_stac_sends_a_query_without_a_site_list_whole() -> None:
     assert len(stac_pieces(filter="file_type = 'base'")) == 1
 

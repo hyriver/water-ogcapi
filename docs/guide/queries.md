@@ -25,13 +25,16 @@ and each service caches them for an hour. `refresh()` drops the cache.
 `collect()` and `iter_pages()` take the query as keyword arguments, and each form can
 combine with `params`:
 
-| Keyword    | Sends                                                                   |
-| ---------- | ----------------------------------------------------------------------- |
-| `params`   | Query parameters as given, such as `limit`, `datetime`, or a property   |
-| `bbox`     | `(west, south, east, north)` in CRS84                                   |
-| `geometry` | The bbox of a GeoJSON geometry or a shapely shape, in CRS84             |
-| `filter`   | A CQL2 filter: a `str` as CQL2-Text, a mapping as CQL2-JSON in a `POST` |
-| `ids`      | Values of `id_property` to match, as a CQL2-JSON `in` filter            |
+| Keyword    | Sends                                                                 |
+| ---------- | --------------------------------------------------------------------- |
+| `params`   | Query parameters as given, such as `limit`, `datetime`, or a property |
+| `bbox`     | `(west, south, east, north)` in CRS84                                 |
+| `geometry` | The bbox of a GeoJSON geometry or a shapely shape, in CRS84           |
+| `filter`   | A CQL2 filter: a `str` as CQL2-Text, a mapping as CQL2-JSON           |
+| `ids`      | Values of `id_property` to match, as a CQL2-JSON `in` filter          |
+
+A CQL2-JSON filter, `ids` included, goes in the body of a `POST`. WaterDataSTAC sends it
+in the query of a `GET`, since its service refuses a `POST`.
 
 A property in `params` matches its value:
 

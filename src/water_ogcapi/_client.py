@@ -697,7 +697,9 @@ class OGCService:
             ``str`` is CQL2-Text, sent as the ``filter`` parameter of a ``GET``. A
             mapping is CQL2-JSON, sent as the body of a ``POST`` with ``Content-Type:
             application/query-cql-json``; every ``next`` link gets the same body, since
-            a ``GET`` there drops the filter (D-38).
+            a ``GET`` there drops the filter (D-38). WaterDataSTAC sends it in the query
+            of a ``GET`` with ``filter-lang=cql2-json``, since its service refuses a
+            ``POST`` (D-95).
         ids : sequence of str or int, optional
             Values of ``id_property`` to match, sent as the CQL2-JSON filter
             ``{"op": "in", "args": [{"property": id_property}, ids]}``, as ``filter``

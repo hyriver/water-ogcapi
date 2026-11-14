@@ -44,11 +44,11 @@ fabric = FabricData()
 # valid names.
 
 # %%
-ids = [collection.id for collection in fabric.collections().collections]
+ids = [collection.id for collection in fabric.collections().collections or ()]
 print(len(ids), "collections:", ", ".join(ids[:6]), "...")
 
 # %%
-for name, prop in fabric.queryables("gagesii").properties.items():
+for name, prop in (fabric.queryables("gagesii").properties or {}).items():
     print(f"{name:12} {prop.type or prop.format}")
 
 # %% [markdown]
@@ -90,7 +90,7 @@ import geopandas as gpd
 
 frame = gpd.GeoDataFrame.from_arrow(gages.to_arrow())
 print(frame.crs)
-frame[["staid", "staname", "state", "drain_sqkm"]].sort_values("staid")
+frame.sort_values("staid")[["staid", "staname", "state", "drain_sqkm"]]
 
 # %% [markdown]
 # ## Map the gages
@@ -103,6 +103,7 @@ import contextily as ctx
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import shapely
+from xyzservices import providers
 
 points = frame.to_crs(3857)
 big = gpd.GeoDataFrame.from_arrow(large.to_arrow()).to_crs(3857)
@@ -116,16 +117,16 @@ big.plot(
     label="Drainage area over 100 km²",
 )
 halo = [pe.withStroke(linewidth=2.5, foreground="white")]
-for row in points.itertuples():
-    x, y = row.geometry.centroid.coords[0]
+for geometry, staid in zip(points.geometry, points["staid"], strict=True):
+    x, y = geometry.centroid.coords[0]
     ax.annotate(
-        row.staid, (x, y), xytext=(5, 4), textcoords="offset points", fontsize=7, path_effects=halo
+        staid, (x, y), xytext=(5, 4), textcoords="offset points", fontsize=7, path_effects=halo
     )
 box.boundary.plot(ax=ax, color="gray", linestyle="--")
 west, south, east, north = box.total_bounds
 ax.set_xlim(west - 1000, east + 1000)  # meters
 ax.set_ylim(south - 1000, north + 1000)
-ctx.add_basemap(ax, source=ctx.providers.Esri.WorldGrayCanvas)
+ctx.add_basemap(ax, source=providers.Esri.WorldGrayCanvas)
 ax.legend(loc="upper center", bbox_to_anchor=(0.5, 0), ncols=2, frameon=False)
 ax.set(title="GAGES-II streamgages around Washington, DC")
 ax.set_axis_off()

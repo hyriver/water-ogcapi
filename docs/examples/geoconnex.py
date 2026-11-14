@@ -46,13 +46,13 @@ gc = GeoConnex()
 regions = gc.collect("hu02", params={"skipGeometry": "true"}, keep_pages=True)
 print(len(regions.geojson["features"]), "regions in", regions.pagination.page_count, "page(s)")
 print(regions.pagination.completeness, regions.pagination.checks)
-print(sum(len(page.content) for page in regions.pages) / 1e3, "kB")
+print(sum(len(page.content or b"") for page in regions.pages) / 1e3, "kB")
 
 # %%
 import polars as pl
 
 pl.Config.set_tbl_rows(22)
-pl.from_arrow(regions.to_arrow()).select("id", "name", "gnis_id").sort("id")
+pl.DataFrame(regions.to_arrow()).select("id", "name", "gnis_id").sort("id")
 
 # %% [markdown]
 # ## Stream pages
@@ -71,7 +71,7 @@ for page in gc.iter_pages("hu02", params={"skipGeometry": "true", "limit": "10"}
 # `queryables()` lists the properties of a collection that a filter can name:
 
 # %%
-print(", ".join(gc.queryables("hu02").properties))
+print(", ".join(gc.queryables("hu02").properties or {}))
 
 # %% [markdown]
 # `huc2` is a string, so a CQL2-Text `filter` of `huc2 <= '18'` keeps the 18 regions of the
@@ -82,7 +82,7 @@ print(", ".join(gc.queryables("hu02").properties))
 # %%
 conus = gc.collect("hu02", filter="huc2 <= '18'", keep_pages=True)
 print(len(conus.geojson["features"]), "regions,", end=" ")
-print(round(sum(len(page.content) for page in conus.pages) / 1e6), "MB")
+print(round(sum(len(page.content or b"") for page in conus.pages) / 1e6), "MB")
 print(conus.pagination.completeness, conus.pagination.checks)
 print(conus.crs.effective, conus.crs.source)
 

@@ -67,21 +67,30 @@ print({k: v for k, v in page.headers.items() if k.startswith("x-ratelimit")})
 # as the quota runs down, up to 60 s. WaterData counts its quota over an hour, so the same
 # `Governor` with a one-minute window and a quota of 100 shows the effect in seconds.
 # Each step reports a response with fewer requests left, then times the wait before the
-# next request may start.
+# next request may start. `Governor.wait()` is a coroutine, so `Client.run()` runs it on
+# the package's event loop, in a script or a notebook.
 
 # %%
 import time
 
-from water_ogcapi import Governor
+from water_ogcapi import Client, Governor
 
-governor = Governor(window=60.0)
-await governor.wait()  # the first request never waits
-waits = {}
-for remaining in (40, 20, 14, 12, 10, 8, 6):
-    governor.observe(200, {"x-ratelimit-limit": "100", "x-ratelimit-remaining": str(remaining)})
-    start = time.monotonic()
-    await governor.wait()
-    waits[remaining] = time.monotonic() - start
+
+async def time_waits() -> dict[int, float]:
+    governor = Governor(window=60.0)
+    await governor.wait()  # the first request never waits
+    waits: dict[int, float] = {}
+    for remaining in (40, 20, 14, 12, 10, 8, 6):
+        counts = {"x-ratelimit-limit": "100", "x-ratelimit-remaining": str(remaining)}
+        governor.observe(200, counts)
+        start = time.monotonic()
+        await governor.wait()
+        waits[remaining] = time.monotonic() - start
+    return waits
+
+
+with Client() as client:
+    waits = client.run(time_waits())
 {left: round(wait, 1) for left, wait in waits.items()}
 
 # %%
@@ -137,9 +146,13 @@ try:
 except PartialResultsError as err:
     partial = err.result
     print(err.failures[0].status, "from", err.failures[0].url)
+else:
+    msg = "FailOnce lets no query through whole"
+    raise AssertionError(msg)
 flaky.close()
+pending = partial.checkpoint.pending if partial.checkpoint else ()
 print(len(partial.geojson["features"]), "days kept from", partial.pagination.page_count, "pages")
-print(len(partial.checkpoint.pending), "request(s) left to send")
+print(len(pending), "request(s) left to send")
 
 # %% [markdown]
 # `collect(resume=...)` sends only the requests the checkpoint lists, on any `WaterData`

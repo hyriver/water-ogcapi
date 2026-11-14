@@ -159,7 +159,9 @@ def test_a_wait_set_by_counts_is_logged_at_info(
 
 def test_a_reading_during_a_wait_widens_it() -> None:
     # Real time with short intervals: the fake clock serializes concurrent sleeps.
-    governor = Governor(0.2, interval=0.02)
+    # The 2 s window keeps the reading live through both waits, even when a coarse timer
+    # wakes a task late.
+    governor = Governor(2.0, interval=0.02)
 
     async def run() -> list[float]:
         loop = asyncio.get_running_loop()
@@ -167,7 +169,7 @@ def test_a_reading_during_a_wait_widens_it() -> None:
         t0 = loop.time()
         queued = [asyncio.create_task(governor.wait()) for _ in range(2)]
         await asyncio.sleep(0.005)
-        governor.observe(200, counts(100, 1))  # widens the spacing to 0.18 s
+        governor.observe(200, counts(1000, 10))  # widens the spacing to 0.18 s
         done = []
         for task in asyncio.as_completed(queued):
             await task

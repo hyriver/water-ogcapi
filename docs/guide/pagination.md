@@ -7,33 +7,33 @@ next. `iter_pages()` yields one `Page` per response as it arrives, and `collect(
 every page into one `QueryResult`. Both follow the `next` links to the end, and only a
 page without one ends the traversal.
 
-An NWIS page asks for up to 10,000 features unless `params` set a `limit`, which NWIS
-caps at 50,000. FabricData pages ask for up to 1,000 and GeoConnex pages 500 by default.
-The last page, and any page of a small query, holds fewer.
+A WaterData page asks for up to 10,000 features unless `params` set a `limit`, which
+WaterData caps at 50,000. FabricData pages ask for up to 1,000 and GeoConnex pages 500
+by default. The last page, and any page of a small query, holds fewer.
 
 ```python
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 
 DC = (-77.12, 38.80, -76.91, 38.99)
 
-nwis = NWIS()
-for page in nwis.iter_pages("monitoring-locations", bbox=DC, params={"limit": "200"}):
+wd = WaterData()
+for page in wd.iter_pages("monitoring-locations", bbox=DC, params={"limit": "200"}):
     print(page.feature_count, "features")
 ```
 
 A page from `iter_pages()` holds the decoded document in `body` and its bytes in
 `content`. `collect()` keeps neither, unless `keep_pages=True` keeps the bytes.
 
-## Splitting an NWIS query
+## Splitting a WaterData query
 
-NWIS can split one query into pieces that run concurrently, as the USGS efficiency
+WaterData can split one query into pieces that run concurrently, as the USGS efficiency
 guidance recommends for long records and long site lists. `split_datetime="year"` or
 `"month"` splits a closed `datetime` interval at calendar boundaries in UTC, and
 `sites_per_piece` splits a site list. The transport runs up to `max_per_origin` pieces
 at once, 4 by default, and pages arrive in the order they finish:
 
 ```python
-daily = nwis.collect(
+daily = wd.collect(
     "daily",
     params={
         "monitoring_location_id": "USGS-01646500",
@@ -72,7 +72,7 @@ import pyarrow as pa
 
 tables = [
     page.to_arrow()
-    for page in nwis.iter_pages(
+    for page in wd.iter_pages(
         "daily",
         params={
             "monitoring_location_id": "USGS-01646500",
@@ -106,14 +106,14 @@ pickles, so a stopped process can save it and another resume from it:
 ```python
 import pickle
 
-pages = nwis.iter_pages("monitoring-locations", bbox=DC, params={"limit": "200"})
+pages = wd.iter_pages("monitoring-locations", bbox=DC, params={"limit": "200"})
 first = next(pages)
 pages.close()
 saved = pickle.dumps(first.checkpoint)
 
-rest = list(nwis.iter_pages("monitoring-locations", resume=pickle.loads(saved)))
+rest = list(wd.iter_pages("monitoring-locations", resume=pickle.loads(saved)))
 print(first.feature_count + sum(page.feature_count for page in rest), "features in all")
-nwis.close()
+wd.close()
 ```
 
 `collect()` raises `PartialResultsError` when a page fails after others arrived. Its

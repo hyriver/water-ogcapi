@@ -22,12 +22,12 @@ from pathlib import Path
 from typing import Any
 
 from water_ogcapi import Transport
-from water_ogcapi._services import FABRICDATA_PROFILE, GEOCONNEX_PROFILE, NWIS_PROFILE
+from water_ogcapi._services import FABRICDATA_PROFILE, GEOCONNEX_PROFILE, WATERDATA_PROFILE
 from water_ogcapi.exceptions import ServiceError
 
 ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
 SERVICES = {
-    "nwis": NWIS_PROFILE.base_url + "openapi",
+    "nwis": WATERDATA_PROFILE.base_url + "openapi",
     "fabricdata": FABRICDATA_PROFILE.base_url + "openapi",
     "geoconnex": GEOCONNEX_PROFILE.base_url + "openapi",
 }

@@ -16,34 +16,34 @@
 # ---
 
 # %% [markdown]
-# # Querying NWIS
+# # Querying the Water Data API
 #
-# `NWIS` queries the USGS Water Data API. It sends the key in `USGS_API_KEY`, when set, in
+# `WaterData` queries the USGS Water Data API. It sends the key in `USGS_API_KEY`, when set, in
 # the `X-Api-Key` header. This notebook asks for the monitoring locations in a box around
 # Washington, DC, streams the pages as they arrive, collects a `QueryResult`, narrows the
 # query with a CQL2 filter, and fetches daily discharge split by year. `to_arrow()` turns
 # each result into a table for geopandas or polars, which needs the `arrow` extra.
 
 # %%
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 
 DC = (-77.12, 38.80, -76.91, 38.99)
-nwis = NWIS()
+wd = WaterData()
 
 # %% [markdown]
 # A service keeps its HTTP connections open until it is closed. In a script, use it in
-# a `with` block, `with NWIS() as nwis:`, which closes it on exit. A notebook keeps one
-# service across cells, so it calls `nwis.close()` explicitly in its last cell.
+# a `with` block, `with WaterData() as wd:`, which closes it on exit. A notebook keeps one
+# service across cells, so it calls `wd.close()` explicitly in its last cell.
 
 # %% [markdown]
 # ## Stream pages
 #
 # `iter_pages()` yields one `Page` per response and follows each page's `next` link. A
-# `limit` of 200 shows the paging; the default is 10,000 features a page. NWIS reports no
+# `limit` of 200 shows the paging; the default is 10,000 features a page. WaterData reports no
 # `numberMatched`, so the total is known only once the last page arrives.
 
 # %%
-for page in nwis.iter_pages("monitoring-locations", bbox=DC, params={"limit": "200"}):
+for page in wd.iter_pages("monitoring-locations", bbox=DC, params={"limit": "200"}):
     print(page.status, page.feature_count, page.number_matched)
 
 # %% [markdown]
@@ -53,7 +53,7 @@ for page in nwis.iter_pages("monitoring-locations", bbox=DC, params={"limit": "2
 # went: the checks that passed and the CRS the server named.
 
 # %%
-sites = nwis.collect("monitoring-locations", bbox=DC)
+sites = wd.collect("monitoring-locations", bbox=DC)
 print(len(sites.geojson["features"]), "features in", sites.pagination.page_count, "page(s)")
 print(sites.pagination.completeness, sites.pagination.checks)
 print(sites.crs.effective, sites.crs.source)
@@ -64,7 +64,7 @@ print(sites.crs.effective, sites.crs.source)
 # A CQL2-Text `filter` combines with the bounding box. Only the stream sites:
 
 # %%
-streams = nwis.collect("monitoring-locations", bbox=DC, filter="site_type_code = 'ST'")
+streams = wd.collect("monitoring-locations", bbox=DC, filter="site_type_code = 'ST'")
 for feature in streams.geojson["features"][:10]:
     print(feature["id"], feature["properties"]["monitoring_location_name"])
 
@@ -87,14 +87,15 @@ frame["site_type"].value_counts().head()
 
 # %%
 import contextily as ctx
+from xyzservices import providers
 
 ax = frame.to_crs(3857).plot(color="dimgray", markersize=8, figsize=(6, 6), label="All sites")
 gpd.GeoDataFrame.from_arrow(streams.to_arrow()).to_crs(3857).plot(
     ax=ax, color="tab:blue", edgecolor="white", linewidth=0.5, markersize=28, label="Stream sites"
 )
-ctx.add_basemap(ax, source=ctx.providers.Esri.WorldGrayCanvas)
+ctx.add_basemap(ax, source=providers.Esri.WorldGrayCanvas)
 ax.legend(loc="upper center", bbox_to_anchor=(0.5, 0), ncols=2, frameon=False)
-ax.set(title="NWIS monitoring locations around Washington, DC")
+ax.set(title="Monitoring locations around Washington, DC")
 ax.set_axis_off()
 
 # %% [markdown]
@@ -105,7 +106,7 @@ ax.set_axis_off()
 # and statistic `00003` the daily mean.
 
 # %%
-daily = nwis.collect(
+daily = wd.collect(
     "daily",
     params={
         "monitoring_location_id": "USGS-01646500",
@@ -126,7 +127,7 @@ print(daily.pagination.completeness, daily.pagination.checks)
 import polars as pl
 
 values = (
-    pl.from_arrow(daily.to_arrow())
+    pl.DataFrame(daily.to_arrow())
     .select(pl.col("time").str.to_date(), pl.col("value").cast(pl.Float64))
     .sort("time")
 )
@@ -141,4 +142,4 @@ ax.set(yscale="log", ylabel="Discharge (ft³/s)", title="Potomac River near Wash
 fig.tight_layout()
 
 # %%
-nwis.close()
+wd.close()

@@ -51,7 +51,6 @@ from water_ogcapi.exceptions import (
 if TYPE_CHECKING:
     from collections.abc import (
         AsyncGenerator,
-        AsyncIterator,
         Callable,
         Collection,
         Coroutine,
@@ -128,6 +127,10 @@ class ServiceProfile:
         Seconds over which the service's ``X-RateLimit-Limit`` counts, read by its
         `Governor` (D-49). ``None``, the default, for a service that sends no
         ``X-RateLimit-*`` headers.
+    cql2_json_in_query : bool, optional
+        Send a CQL2-JSON filter, and ``ids``, as the ``filter`` parameter of a ``GET``
+        with ``filter-lang=cql2-json``, for a server that refuses a ``POST`` to its items
+        (D-95). Defaults to ``False``, which posts the filter as the body (D-39).
 
     Raises
     ------
@@ -141,6 +144,7 @@ class ServiceProfile:
     max_limit: int
     key_env: str | None = None
     rate_limit_window: float | None = None
+    cql2_json_in_query: bool = False
 
     def __post_init__(self) -> None:
         reject_non_str([self.base_url], "base_url")
@@ -529,7 +533,8 @@ class OGCService:
     ) -> Sequence[Request]:
         """Split an items request into independent pieces, run concurrently (D-44, D-56).
 
-        The base service keeps it whole and refuses a split; NWIS overrides this (D-35).
+        The base service keeps it whole and refuses a split; WaterData and WaterDataSTAC
+        override this (D-35, D-95).
 
         Raises
         ------
@@ -537,7 +542,9 @@ class OGCService:
             If ``split_datetime`` or ``sites_per_piece`` is given.
         """
         if split_datetime is not None or sites_per_piece is not None:
-            msg = f"{type(self).__name__} does not split queries; only NWIS does"
+            msg = (
+                f"{type(self).__name__} does not split queries; only WaterData and WaterDataSTAC do"
+            )
             raise ValidationError(msg)
         return (request,)
 
@@ -660,7 +667,7 @@ class OGCService:
         sites_per_piece: int | None = None,
         validate: bool = True,
         resume: Checkpoint | None = None,
-    ) -> AsyncIterator[Page]:
+    ) -> AsyncGenerator[Page]:
         """Yield each page of a collection's items, following ``next`` links (D-34).
 
         Only a page without a ``next`` link ends the traversal. A page shorter than
@@ -698,9 +705,9 @@ class OGCService:
             its leading zero.
         id_property : str, optional
             The property ``ids`` matches, such as ``id`` for feature ids or
-            ``monitoring_location_id`` for the sites of an NWIS time series.
+            ``monitoring_location_id`` for the sites of a WaterData time series.
         split_datetime : {'year', 'month'}, optional
-            NWIS only (D-35, D-56): split the ``datetime`` interval in ``params`` at
+            WaterData only (D-35, D-56): split the ``datetime`` interval in ``params`` at
             calendar boundaries in UTC into pieces that run concurrently, up to the
             smaller of the transport's ``max_per_origin`` and ``max_concurrent`` at once,
             each following its own ``next``
@@ -708,10 +715,11 @@ class OGCService:
             offset, and each piece ends one microsecond before the next begins. Every
             piece costs at least one request, so size pieces near one page.
         sites_per_piece : int, optional
-            NWIS only (D-35, D-56): split the site list, ``ids`` or a comma-separated
-            ``monitoring_location_id`` in ``params``, into lists of this many sites
-            that run concurrently as ``split_datetime`` pieces do. A site listed twice
-            is sent once. Not with ``split_datetime``.
+            WaterData and WaterDataSTAC only (D-35, D-56, D-95): split the site list,
+            ``ids`` or a comma-separated ``monitoring_location_id`` in ``params``, into
+            lists of this many sites that run concurrently as ``split_datetime`` pieces
+            do. A site listed twice is sent once. Not with ``split_datetime``.
+            WaterDataSTAC splits a site list into pieces of 50 when this is omitted.
         validate : bool, optional
             Before the first page request, check ``collection`` against the collection
             index, and each name in ``params`` outside ``QUERY_PARAMS``, and
@@ -742,8 +750,11 @@ class OGCService:
             number, a filter is empty, ``params`` also holds a parameter a keyword sets
             (``bbox``, ``filter``, ``filter-lang``) or a credential such as ``api_key``,
             or ``limit`` is not an integer from 1 to the profile's ``max_limit``, or
-            a split is given to a service other than NWIS, both splits are given, or
-            the query has no closed ``datetime`` interval or site list to split.
+            ``split_datetime`` is given to a service other than WaterData or
+            ``sites_per_piece`` to one other than WaterData and WaterDataSTAC, both
+            splits are given, the query has no closed ``datetime`` interval or site
+            list to split, or a query split into more than one piece has an
+            ``offset`` in ``params``.
             With ``validate``, before the first page request, when the collection, a
             name in ``params``, or ``id_property`` is unknown; the message lists the
             valid ones.
@@ -785,8 +796,15 @@ class OGCService:
                 cql2=filter,
                 ids=ids,
                 id_property=id_property,
+                json_in_query=self.profile is not None and self.profile.cql2_json_in_query,
             )
             pieces = tuple(self._pieces(request, split_datetime, sites_per_piece))
+            if len(pieces) > 1 and "offset" in request.params:
+                msg = (
+                    f"offset applies to each of the {len(pieces)} pieces of a split query, "
+                    "so each would skip its own first features; drop the offset or the split"
+                )
+                raise ValidationError(msg)
             if validate:
                 # The request's copy: the caller's mapping may change during the await.
                 await self._validate(collection, request.params, id_property)

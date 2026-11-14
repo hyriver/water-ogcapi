@@ -20,12 +20,12 @@
 #
 # Three things happen behind every query: metadata is cached, requests are spaced so the
 # service's quota lasts, and a query that fails partway keeps what it fetched. This
-# notebook shows each one against NWIS.
+# notebook shows each one against WaterData.
 
 # %%
-from water_ogcapi import NWIS, configure_logger
+from water_ogcapi import WaterData, configure_logger
 
-nwis = NWIS()
+wd = WaterData()
 
 # %% [markdown]
 # ## A cache hit
@@ -36,27 +36,27 @@ nwis = NWIS()
 
 # %%
 configure_logger(level="DEBUG")
-first = nwis.collections()
-second = nwis.collections()
+first = wd.collections()
+second = wd.collections()
 print(len(first.collections or ()), "collections, the same both times:", first == second)
 
 # %% [markdown]
 # `refresh()` drops the cache, so the next call requests the collections again.
 
 # %%
-nwis.refresh()
-_ = nwis.collections()
+wd.refresh()
+_ = wd.collections()
 configure_logger()
 
 # %% [markdown]
 # ## The quota governor
 #
-# Each NWIS response carries the key's quota in `X-RateLimit-Limit` and
+# Each WaterData response carries the key's quota in `X-RateLimit-Limit` and
 # `X-RateLimit-Remaining`, and every `Page` keeps them.
 
 # %%
 DC = (-77.12, 38.80, -76.91, 38.99)
-pages = nwis.iter_pages("monitoring-locations", bbox=DC, params={"limit": "1"})
+pages = wd.iter_pages("monitoring-locations", bbox=DC, params={"limit": "1"})
 page = next(pages)
 pages.close()
 print({k: v for k, v in page.headers.items() if k.startswith("x-ratelimit")})
@@ -64,24 +64,33 @@ print({k: v for k, v in page.headers.items() if k.startswith("x-ratelimit")})
 # %% [markdown]
 # The service's `Governor` reads those counts. While more than an eighth of the quota is
 # left, requests start back to back; below that, it spaces their starts further apart
-# as the quota runs down, up to 60 s. NWIS counts its quota over an hour, so the same
+# as the quota runs down, up to 60 s. WaterData counts its quota over an hour, so the same
 # `Governor` with a one-minute window and a quota of 100 shows the effect in seconds.
 # Each step reports a response with fewer requests left, then times the wait before the
-# next request may start.
+# next request may start. `Governor.wait()` is a coroutine, so `Client.run()` runs it on
+# the package's event loop, in a script or a notebook.
 
 # %%
 import time
 
-from water_ogcapi import Governor
+from water_ogcapi import Client, Governor
 
-governor = Governor(window=60.0)
-await governor.wait()  # the first request never waits
-waits = {}
-for remaining in (40, 20, 14, 12, 10, 8, 6):
-    governor.observe(200, {"x-ratelimit-limit": "100", "x-ratelimit-remaining": str(remaining)})
-    start = time.monotonic()
-    await governor.wait()
-    waits[remaining] = time.monotonic() - start
+
+async def time_waits() -> dict[int, float]:
+    governor = Governor(window=60.0)
+    await governor.wait()  # the first request never waits
+    waits: dict[int, float] = {}
+    for remaining in (40, 20, 14, 12, 10, 8, 6):
+        counts = {"x-ratelimit-limit": "100", "x-ratelimit-remaining": str(remaining)}
+        governor.observe(200, counts)
+        start = time.monotonic()
+        await governor.wait()
+        waits[remaining] = time.monotonic() - start
+    return waits
+
+
+with Client() as client:
+    waits = client.run(time_waits())
 {left: round(wait, 1) for left, wait in waits.items()}
 
 # %%
@@ -131,24 +140,28 @@ QUERY = {
     "statistic_id": "00003",
     "datetime": "2021-01-01/2025-12-31",
 }
-flaky = NWIS(transport=Transport(transport=FailOnce(), max_retries=0))
+flaky = WaterData(transport=Transport(transport=FailOnce(), max_retries=0))
 try:
     flaky.collect("daily", params=QUERY, split_datetime="year")
 except PartialResultsError as err:
     partial = err.result
     print(err.failures[0].status, "from", err.failures[0].url)
+else:
+    msg = "FailOnce lets no query through whole"
+    raise AssertionError(msg)
 flaky.close()
+pending = partial.checkpoint.pending if partial.checkpoint else ()
 print(len(partial.geojson["features"]), "days kept from", partial.pagination.page_count, "pages")
-print(len(partial.checkpoint.pending), "request(s) left to send")
+print(len(pending), "request(s) left to send")
 
 # %% [markdown]
-# `collect(resume=...)` sends only the requests the checkpoint lists, on any `NWIS`
+# `collect(resume=...)` sends only the requests the checkpoint lists, on any `WaterData`
 # instance, and returns the whole result.
 
 # %%
-whole = nwis.collect("daily", resume=partial)
+whole = wd.collect("daily", resume=partial)
 print(len(whole.geojson["features"]), "days in", whole.pagination.page_count, "pages")
 print(whole.pagination.completeness, whole.pagination.checks)
 
 # %%
-nwis.close()
+wd.close()

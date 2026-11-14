@@ -7,9 +7,10 @@ project follows the
 
 ## Project
 
-`water-ogcapi` is a Python client for USGS water data services (NWIS, FabricData,
-GeoConnex) over OGC API Features, with blocking service classes at the package root and
-async twins in `water_ogcapi.aio`. `README.md` lists the endpoints.
+`water-ogcapi` is a Python client for USGS water data services (WaterData,
+WaterDataSTAC, FabricData, GeoConnex) over OGC API Features, with blocking service
+classes at the package root and async twins in `water_ogcapi.aio`. `README.md` lists the
+endpoints.
 
 USGS operates these APIs. Before any request to a live endpoint, read
 `.agents/skills/live-api/SKILL.md`.
@@ -33,9 +34,9 @@ One-line summaries of the decisions any code change can break. The IDs point int
 
 - `src/water_ogcapi/_transport.py` is the only module that imports `httpx2` (D-01).
 - `iter_pages()` is the primitive and `collect()` builds on it (D-02).
-- Every service pages through `next` links, and only NWIS fans out, on request, by
-    splitting a query by calendar period or site list into pieces run concurrently
-    (D-35, D-56).
+- Every service pages through `next` links. WaterData fans out on request, splitting a
+    query by calendar period or site list into pieces run concurrently, and
+    WaterDataSTAC splits a site list longer than 50 by default (D-35, D-56, D-95).
 - Every `OGCService` request goes through `_send()`, which adds the service's headers
     and refuses a URL outside the scheme, host, and port of `base_url` (D-34, D-40).
 - A request is identified by its method, URL as sent, and body, and every `next` link
@@ -80,7 +81,7 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Lint (pre-commit)          | `pixi r lint`                       |
 | Dependency audit           | `pixi r audit`                      |
 | Type check                 | `pixi r typecheck`                  |
-| Test, offline (3.13)       | `pixi r -e test313 test`            |
+| Test, offline (3.12)       | `pixi r -e test312 test`            |
 | Test, offline (3.15)       | `pixi r -e test315 test`            |
 | Test, network-marked only  | `pixi r -e test315 test-network`    |
 | Test, everything           | `pixi r -e test315 test-all`        |
@@ -96,16 +97,17 @@ created on first use. Never call bare `pytest`, `python`, or `pyright`.
 | Notebooks, sync and run    | `pixi r nb-run`                     |
 | Notebooks, pair a new one  | `pixi r nb-pair`                    |
 
-Environments: `dev`, `test313`, `test315`, `typecheck`, `lint`, `docs`.
+Environments: `dev`, `test312`, `test315`, `typecheck`, `lint`, `docs`.
 
-A change is done when lint, typecheck, and the offline tests on both test313 and test315
-pass, plus `pixi r docs` when it touches `docs/`, `README.md`, or `zensical.toml`.
-`.github/workflows/ci.yml` runs the first three, and `.github/workflows/docs.yml` builds
-the site on every PR and deploys `main` to GitHub Pages.
+A change is done when lint, typecheck, and the offline tests on test312 and test315, the
+lowest and highest supported Pythons, pass, plus `pixi r docs` when it touches `docs/`,
+`README.md`, or `zensical.toml`. `.github/workflows/ci.yml` runs the first three, and
+`.github/workflows/docs.yml` builds the site on every PR and deploys `main` to GitHub
+Pages.
 
 ## Code style
 
-- Python >= 3.13, with `from __future__ import annotations` in every file.
+- Python >= 3.12, with `from __future__ import annotations` in every file.
 - ruff with 100-character lines and `select = ["ALL"]`; pyright in strict mode. Both are
     configured in `pyproject.toml`.
 - NumPy-convention docstrings.
@@ -121,7 +123,8 @@ the site on every PR and deploys `main` to GitHub Pages.
     accumulates across runs. Delete `.coverage` and any `.coverage.*` files before
     trusting a number.
 - `report` and `html` depend on `test-all`, so they also run the network-marked tests.
-- pyright checks only `src/`, so a green `typecheck` says nothing about `tests/`.
+- pyright checks `src/` and the `docs/examples/*.py` scripts, so a green `typecheck`
+    says nothing about `tests/` or the paired `.ipynb` files.
 - `pixi r lint` runs vulture at 80% confidence, which catches only unused imports,
     unused function arguments, and unreachable code. Unused functions, classes, and
     local variables score 60% and pass.
@@ -163,7 +166,7 @@ the site on every PR and deploys `main` to GitHub Pages.
 - Skills live in `.agents/skills/`. `.claude/skills` is a symlink to it for Claude Code,
     which does not read `.agents/`.
 - The ruleset on `main` names its required checks by job: the six
-    `Test (<environment>, <runner>)` jobs (`test313` and `test315` on `ubuntu-latest`,
+    `Test (<environment>, <runner>)` jobs (`test312` and `test315` on `ubuntu-latest`,
     `macos-latest`, and `windows-latest`), the three `Install dev (<runner>)` jobs,
     `typecheck`, and `lint` from `ci.yml`, and `build` from `docs.yml`. Renaming a job
     or a matrix entry leaves the old name unreported, so the renaming PR and every PR

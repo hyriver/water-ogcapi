@@ -18,7 +18,7 @@
 # %% [markdown]
 # # Clients for other web services
 #
-# The service classes cover NWIS, FabricData, and GeoConnex. The transport under them,
+# The service classes cover WaterData, FabricData, and GeoConnex. The transport under them,
 # the async `Transport` and its blocking `Client`, sends requests to any HTTP API: it
 # bounds how many run at once, retries transient failures, refuses redirects outside
 # downloads, and keeps header credentials out of logs and errors. This notebook builds small
@@ -98,6 +98,8 @@ paths = [f"nwissite/{SITE}", "nwissite/USGS-01645704", "nwissite/USGS-01654000",
 for path, found in zip(paths, nldi.features(paths), strict=True):
     if isinstance(found, ServiceError):
         print(f"{path}: HTTP {found.status}, {(found.response_body or b'').decode()}")
+    elif isinstance(found, BaseException):
+        raise found
     else:
         print(f"{path}: {found['properties']['name']}")
 
@@ -167,7 +169,8 @@ HP3D = "https://3dhp.nationalmap.gov/arcgis/rest/services/usgs_3dhp_all/FeatureS
 
 outline = gpd.GeoDataFrame.from_features(basin["features"], crs=4326)
 flowlines = ArcGISLayer(HP3D, transport)
-fc = client.run(flowlines.bygeom(tuple(outline.total_bounds)))
+west, south, east, north = map(float, outline.total_bounds)
+fc = client.run(flowlines.bygeom((west, south, east, north)))
 hp3d = gpd.GeoDataFrame.from_features(fc["features"], crs=4326).clip(outline)
 print(len(fc["features"]), "3DHP flowlines in the box,", len(hp3d), "inside the basin")
 

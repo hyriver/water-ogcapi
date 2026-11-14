@@ -16,11 +16,13 @@ conda install -c conda-forge water-ogcapi "pyarrow>=24" "pyproj>=3.7" "shapely>=
 Read the pages in this order:
 
 1. [Installation and the API key](setup.md): installing the package and its `arrow`
-    extra, and how `NWIS` sends a USGS API key.
+    extra, and how `WaterData` sends a USGS API key.
 1. [Queries and results](queries.md): collections, the query forms, `QueryResult` and
     `Page`, and Arrow tables.
+1. [Data files from the STAC API](stac.md): `WaterDataSTAC`, its items, and downloading
+    the files they link.
 1. [Pagination and large queries](pagination.md): `iter_pages()` and `collect()`,
-    splitting an NWIS query, converting page by page, and resuming a stopped query.
+    splitting a WaterData query, converting page by page, and resuming a stopped query.
 1. [Errors](errors.md): what each exception means and what it carries.
 1. [Blocking and async APIs](sync-and-async.md): the blocking classes and their async
     twins in `water_ogcapi.aio`.

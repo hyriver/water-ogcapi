@@ -11,7 +11,7 @@ description = "A Python client for USGS water data services over OGC API Feature
 readme = "README.md"
 license = { text = "MIT" }
 authors = [ { name = "Taher Chegini", email = "cheginit@gmail.com" } ]
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Science/Research",
@@ -19,6 +19,7 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: 3.15",
@@ -83,6 +84,12 @@ lint = [
   "uv",
 ]
 typecheck = [
+  # What docs/examples/*.py import, so pyright can check them; contextily brings
+  # rasterio and xyzservices.
+  "contextily",
+  "geopandas",
+  "matplotlib",
+  "polars",
   "pyright",
 ]
 
@@ -144,8 +151,8 @@ audit = "pysentry-rs . --fail-on low --requirements-files scripts/audit-requirem
 pcupdate = "pre-commit autoupdate"
 spell = "codespell -w"
 
-[tool.pixi.feature.py313.dependencies]
-python = "~=3.13.0"
+[tool.pixi.feature.py312.dependencies]
+python = "~=3.12.0"
 
 [tool.pixi.feature.py315.dependencies]
 python = "~=3.15.0"
@@ -164,15 +171,15 @@ typecheck = "pyright"
 
 [tool.pixi.environments]
 dev = { features = [ "dev", "py315" ] }
-test313 = { features = [ "test", "py313" ] }
+test312 = { features = [ "test", "py312" ] }
 test315 = { features = [ "test", "py315" ] }
 typecheck = { features = [ "typecheck", "py315" ] }
 # The audit resolves for this Python, so lint stays on the floor, where backports install.
-lint = { features = [ "lint", "py313" ], no-default-feature = true }
+lint = { features = [ "lint", "py312" ], no-default-feature = true }
 docs = { features = [ "docs", "py315" ], no-default-feature = true }
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py312"
 line-length = 100
 exclude = [ ".pixi", "__pycache__" ]
 lint.select = [ "ALL" ]
@@ -196,14 +203,12 @@ lint.ignore = [
 ]
 lint.per-file-ignores.".agents/skills/*/*.py" = [ "INP001" ]
 lint.per-file-ignores."docs/examples/*.{ipynb,py}" = [
-  "B018",    # a bare expression displays a value in a notebook
-  "E402",    # imports sit in the cell that first needs them
-  "ERA001",  # jupytext headers look like commented-out code
-  "F704",    # a notebook cell can await at the top level
-  "I002",    # no __future__ import in example notebooks
-  "INP001",  # docs/examples is not a package
-  "PLE1142", # a notebook cell can await at the top level
-  "T201",    # printing is how notebooks show results
+  "B018",   # a bare expression displays a value in a notebook
+  "E402",   # imports sit in the cell that first needs them
+  "ERA001", # jupytext headers look like commented-out code
+  "I002",   # no __future__ import in example notebooks
+  "INP001", # docs/examples is not a package
+  "T201",   # printing is how notebooks show results
 ]
 lint.per-file-ignores."scripts/*.py" = [ "INP001" ]
 # Its asserts check that each run measured what its table claims.
@@ -267,9 +272,9 @@ min_confidence = 80
 expand_tables = [ "tool.git-cliff", "tool.pixi" ]
 
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.12"
 typeCheckingMode = "strict"
-include = [ "src" ]
+include = [ "docs/examples", "src" ]
 ignore = [
   "tests/*.py",
 ]

@@ -8,10 +8,10 @@ the async method of the same name returns, and
 background event loop, so it works where a loop is already running, as in Jupyter.
 
 ```python
-from water_ogcapi import NWIS
+from water_ogcapi import WaterData
 
-with NWIS() as nwis:
-    result = nwis.collect("daily", params={"monitoring_location_id": "USGS-01646500"})
+with WaterData() as wd:
+    result = wd.collect("daily", params={"monitoring_location_id": "USGS-01646500"})
 ```
 """
 
@@ -31,9 +31,9 @@ from water_ogcapi._transport import Transport
 from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+    from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
 
-__all__ = ["NWIS", "Client", "FabricData", "GeoConnex", "OGCService"]
+__all__ = ["Client", "FabricData", "GeoConnex", "OGCService", "WaterData", "WaterDataSTAC"]
 
 # Seconds between interrupt checks while a call waits; a call still returns once its result
 # is ready. A blocked wait misses an interrupt that only sets the flag, as ipykernel's on
@@ -129,8 +129,8 @@ def _blocking[**P, T](
 
 
 def _iterating[**P, T](
-    method: Callable[Concatenate[Any, P], AsyncIterator[T]],
-) -> Callable[Concatenate[OGCService, P], Iterator[T]]:
+    method: Callable[Concatenate[Any, P], AsyncGenerator[T]],
+) -> Callable[Concatenate[OGCService, P], Generator[T]]:
     """Return a method that steps through the async iterator ``method`` returns.
 
     Each step fetches one item, so an unsplit query sends no request between steps; the
@@ -139,7 +139,7 @@ def _iterating[**P, T](
     """
 
     @functools.wraps(method)
-    def call(self: OGCService, /, *args: P.args, **kwargs: P.kwargs) -> Iterator[T]:
+    def call(self: OGCService, /, *args: P.args, **kwargs: P.kwargs) -> Generator[T]:
         service = self._service  # pyright: ignore[reportPrivateUsage]
         items = getattr(service, method.__name__)(*args, **kwargs)
         while True:
@@ -215,13 +215,13 @@ class OGCService:
         self.close()
 
 
-class NWIS(OGCService):
-    """Blocking client for the USGS Water Data OGC API, as `water_ogcapi.aio.NWIS`.
+class WaterData(OGCService):
+    """Blocking client for the USGS Water Data OGC API, as `water_ogcapi.aio.WaterData`.
 
     Parameters
     ----------
     api_key : str, optional
-        A USGS API key, as for `water_ogcapi.aio.NWIS`.
+        A USGS API key, as for `water_ogcapi.aio.WaterData`.
     transport : Transport, optional
         Sends every request, as for `OGCService`.
 
@@ -234,7 +234,29 @@ class NWIS(OGCService):
 
     def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
         self._transport = Transport() if transport is None else transport
-        self._service = _services.NWIS(api_key=api_key, transport=self._transport)
+        self._service = _services.WaterData(api_key=api_key, transport=self._transport)
+
+
+class WaterDataSTAC(OGCService):
+    """Blocking client for the USGS Water Data STAC API, as `water_ogcapi.aio.WaterDataSTAC`.
+
+    Parameters
+    ----------
+    api_key : str, optional
+        A USGS API key, as for `water_ogcapi.aio.WaterDataSTAC`.
+    transport : Transport, optional
+        Sends every request, as for `OGCService`.
+
+    Raises
+    ------
+    ValidationError
+        If the key holds a character other than printable ASCII, or is not exactly
+        ``str``.
+    """
+
+    def __init__(self, *, api_key: str | None = None, transport: Transport | None = None) -> None:
+        self._transport = Transport() if transport is None else transport
+        self._service = _services.WaterDataSTAC(api_key=api_key, transport=self._transport)
 
 
 class FabricData(OGCService):

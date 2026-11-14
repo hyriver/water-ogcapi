@@ -27,10 +27,10 @@ Each decision lists its status, the decision, why, what was rejected, and its li
 ## Scope
 
 `water-ogcapi` is a lean client for the USGS OGC API Features endpoints, blocking by
-default over an async core (D-48): NWIS, FabricData, and GeoConnex (base URLs in
-`README.md`). It complements `dataretrieval` and offers a small runtime dependency
-footprint with no pandas, native async, raw GeoJSON with the evidence of how it was
-fetched, GeoConnex and FabricData coverage, and metadata caching.
+default over an async core (D-48): the Water Data API (`WaterData`, D-94), FabricData,
+and GeoConnex (base URLs in `README.md`). It complements `dataretrieval` and offers a
+small runtime dependency footprint with no pandas, native async, raw GeoJSON with the
+evidence of how it was fetched, GeoConnex and FabricData coverage, and metadata caching.
 
 Planned surface: bbox queries, CQL2 spatial predicates, CQL2-JSON and CQL2-Text
 passthrough, identifier filters, direct item fetch, a metadata cache (D-07), typed
@@ -1675,7 +1675,7 @@ Layering rule for anything new:
 
 ### D-59: Python 3.13 is the floor, and the lock covers three platforms
 
-- **Status:** accepted; amended by D-71 and D-72. Amends D-58.
+- **Status:** accepted; amended by D-71, D-72, and D-96. Amends D-58.
 - **Date:** 2026-10-23.
 - **Decision:** `requires-python` is `>=3.13`. The offline tests run in `test313` and
     `test315`, ruff targets `py313`, and pyright checks as 3.13. The `dev`, `typecheck`,
@@ -2116,7 +2116,7 @@ Layering rule for anything new:
 
 ### D-72: CI tests and installs `dev` on Linux, macOS, and Windows
 
-- **Status:** accepted. Amends D-59.
+- **Status:** accepted; amended by D-96. Amends D-59.
 - **Date:** 2026-10-30.
 - **Decision:** The `ci.yml` test job runs `test313` and `test315` on `ubuntu-latest`,
     `macos-latest`, and `windows-latest`, one runner per pixi platform, as six jobs
@@ -2566,6 +2566,88 @@ Layering rule for anything new:
     piece is seen only through the sum. A hand-built `Request` with no `params` reads as
     a `next` link.
 
+### D-94: The Water Data API class is `WaterData`
+
+- **Status:** accepted. Renames the class of D-42; the decisions that say NWIS mean this
+    class. A one-time exception to the deprecation period of D-21.
+- **Date:** 2026-11-13.
+- **Decision:** The service class for `api.waterdata.usgs.gov/ogcapi/v1/` is
+    `WaterData`, blocking at the package root and async in `water_ogcapi.aio`. `NWIS`
+    goes in 0.2.0 with no deprecation release, and 0.1.0 is yanked from PyPI. Code,
+    comments, and docs name the service WaterData or the Water Data API. The profile
+    constant is `WATERDATA_PROFILE`.
+- **Why:** USGS is decommissioning the NWIS name in favor of Water Data. 0.1.0 was the
+    first release, out for nine days, so the maintainer chose a clean break over
+    carrying the old name through 0.2.
+- **Rejected:** A deprecated `NWIS` subclass that warns through 0.2, as D-21 asks, which
+    keeps the decommissioned name in the public API for another release. A plain alias
+    (`NWIS = WaterData`), which cannot warn.
+- **Limits:** Earlier entries here keep the name NWIS. The test fixtures stay under
+    `tests/fixtures/nwis/`, and the example notebook keeps the file name `nwis.ipynb` so
+    its link holds. A 0.1.0 caller gets `ImportError`, and a pickled 0.1.0 `NWIS` does
+    not unpickle.
+
+### D-95: `WaterDataSTAC` queries the Water Data STAC API by collection
+
+- **Status:** accepted.
+- **Date:** 2026-11-13.
+- **Decision:** `WaterDataSTAC`, blocking at the package root and async in
+    `water_ogcapi.aio`, queries `api.waterdata.usgs.gov/stac/v0/` through the inherited
+    `OGCService` methods, one collection at a time through `/collections/{id}/items`. It
+    sends the key in `USGS_STAC_API_KEY`, else `USGS_API_KEY`, from a private base class
+    it shares with `WaterData`, and paces requests over the hour. A page asks for 1,000
+    items by default and 10,000 at most. `ServiceProfile.cql2_json_in_query` makes a
+    CQL2-JSON filter, and `ids`, go out as `filter` with `filter-lang=cql2-json` in the
+    query of a `GET`; this profile sets it. A site list, `ids` or a CQL2-JSON `in`
+    filter, runs as concurrent pieces of 50 sites unless `sites_per_piece` sets another
+    size, through the splitter `WaterData` uses (D-56). Asset files download through
+    `Client.download()` and `Transport.download()`.
+- **Why:** Probes on 2026-11-13 found the items endpoint answers `GET` with `bbox`,
+    CQL2-Text, and CQL2-JSON in the query, pages through `next` links that carry a
+    `token`, and answers a `POST` with 405. Keyed responses carry `X-RateLimit-*`
+    headers. An item runs about 2.3 KB in all three collections, so a default page is
+    about 2.3 MB. A `GET` with an `in` filter over 75 sites (a 1,854-character URL)
+    answered 200, and over 100 sites an HTML 403, in CQL2-JSON and CQL2-Text alike, so a
+    site list splits by default where `WaterData` splits on request. A keyed asset
+    download lowered `X-RateLimit-Remaining` by one, and a range request by one more,
+    while an unkeyed one carried no rate-limit headers. dataRetrieval's R client moved
+    STAC to its own key variable for the same reason (DOI-USGS/dataRetrieval#939), so a
+    reader that fetches Parquet files in pieces does not spend the OGC API quota.
+    `/collections` and `/queryables` answer as on the OGC API, so the query check (D-47)
+    works unchanged.
+- **Rejected:** `/search`, which queries several collections at once: pystac-client
+    covers it, posting the query and following each `next` link with the body that link
+    carries, while here every `next` link reuses the first body (D-38), so a `POST`
+    search would need that rule changed for every service. The STAC guide shows
+    pystac-client for it. A download method on the class, which `Client.download()`
+    already covers. A STAC library such as pystac, kept off the core path by D-09.
+    Splitting a CQL2-Text `IN` list, which would mean parsing CQL2-Text.
+- **Limits:** `schema()` raises `ServiceError`: the service answers 404. The drift check
+    snapshots no STAC OpenAPI document. A CQL2-Text `IN` list over about 75 sites still
+    gets a 403. The 2 KB limit is observed, not documented, and 50 sites leaves room for
+    ids up to 20 characters and a few other parameters. USGS documents no limit for an
+    unkeyed asset download.
+
+### D-96: Python 3.12 is the floor
+
+- **Status:** accepted. Amends D-59 and D-72.
+- **Date:** 2026-11-13.
+- **Decision:** `requires-python` is `>=3.12`. The offline tests run on the lowest and
+    highest supported Pythons, in `test312` and `test315`, on all three CI runners;
+    `test313` is gone. ruff targets `py312`, pyright checks as 3.12, and `lint` runs
+    3.12, so `pixi r audit` resolves for the floor. The other environments keep their
+    Pythons from D-59.
+- **Why:** The maintainer asked for 3.12, which gets security fixes until October 2028.
+    Only `itertools.batched(..., strict=False)` needed 3.13: on 3.12.16 the offline
+    suite failed 22 tests, all on that call, and passed the other 830, and vermin and
+    pyright set to 3.12 flagged nothing else. Every runtime dependency supports 3.12:
+    httpx2, pyarrow, and shapely ask for 3.11, and pyproj for 3.12.
+- **Rejected:** 3.11, below pyproj's floor for the `arrow` extra. A test environment per
+    minor version, which the maintainer cut to the two ends of the range.
+- **Limits:** 3.12.16 raises `ValueError` on an HTTP-date with a huge year, which
+    `_http_date` catches with the `OverflowError` of older 3.13 and 3.14 releases; older
+    3.12 releases were not probed.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -2725,6 +2807,18 @@ Layering rule for anything new:
     since the last `-m` wins.
 - **Check:** `pixi r -e test315 pytest --collect-only` deselects the network-marked
     tests, `test-network` collects only them, and `test-all` deselects none.
+
+### L-15: Every split piece kept the caller's offset
+
+- **What happened:** D-56's pieces copy `params` whole, `offset` included, so each piece
+    skipped its own first features. A 120-site query with `offset=1` lost three features
+    in place of one, and with no `numberMatched` the result still read `complete`. The
+    2026-11-13 review found it once D-95 made `WaterDataSTAC` split by default.
+- **Rule:** `iter_pages()` refuses an `offset` in `params` when a query makes more than
+    one piece. A query sent whole keeps it.
+- **Check:** `test_a_malformed_split_sends_nothing`,
+    `test_stac_refuses_an_offset_on_a_site_list_it_splits`, and
+    `test_stac_keeps_an_offset_on_a_site_list_it_sends_whole`.
 
 ## Open questions
 

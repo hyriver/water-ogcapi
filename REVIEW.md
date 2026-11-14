@@ -6,8 +6,8 @@ the `docs/design.md` entries the change touches.
 ## What failure looks like here
 
 1. **A credential leaks.** The USGS key reaches a log record, an error message, a URL, a
-    pickle, a redirect target, or a host other than the NWIS profile's (D-04, D-13,
-    D-18, D-20, D-40, L-09, L-11).
+    pickle, a redirect target, or a host other than the `WaterData` or `WaterDataSTAC`
+    profile's (D-04, D-13, D-18, D-20, D-40, L-09, L-11).
 1. **The evidence lies.** A `QueryResult` reads `complete` after a page was skipped,
     cut, or failed, or a `Page` or an error misstates the request that produced it
     (D-03, D-24, D-36, D-38).

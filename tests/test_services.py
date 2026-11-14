@@ -372,6 +372,17 @@ def test_stac_sends_a_query_without_a_site_list_whole() -> None:
     assert len(stac_pieces(filter="file_type = 'base'")) == 1
 
 
+def test_stac_keeps_an_offset_on_a_site_list_it_sends_whole() -> None:
+    seen = stac_pieces(ids=["USGS-01"], id_property="monitoring_location_id", params={"offset": 1})
+    assert [r.url.params["offset"] for r in seen] == ["1"]
+
+
+def test_stac_refuses_an_offset_on_a_site_list_it_splits() -> None:
+    sites = [f"USGS-{i:08d}" for i in range(51)]
+    with pytest.raises(ValidationError, match="each of the 2 pieces"):
+        stac_pieces(ids=sites, id_property="monitoring_location_id", params={"offset": 1})
+
+
 @pytest.mark.parametrize(
     ("query", "message"),
     [

@@ -150,21 +150,30 @@ def roundtrip(obj: object) -> object:
 
 
 @pytest.mark.parametrize("clone", [roundtrip, copy.deepcopy])
-@pytest.mark.parametrize("cls", [WaterData, water_ogcapi.WaterData])
-@pytest.mark.parametrize(("env", "sent"), [("env-key", {"X-Api-Key": "env-key"}), (None, {})])
-def test_a_pickled_nwis_leaves_its_key_out_and_reads_the_environment_on_load(
+@pytest.mark.parametrize(
+    ("cls", "variable"),
+    [
+        (WaterData, "USGS_API_KEY"),
+        (water_ogcapi.WaterData, "USGS_API_KEY"),
+        (WaterDataSTAC, "USGS_STAC_API_KEY"),
+        (water_ogcapi.WaterDataSTAC, "USGS_STAC_API_KEY"),
+    ],
+)
+@pytest.mark.parametrize("env", ["env-key", None])
+def test_a_pickled_keyed_service_leaves_its_key_out_and_reads_the_environment_on_load(
     monkeypatch: pytest.MonkeyPatch,
     clone: Callable[[object], object],
     cls: type,
+    variable: str,
     env: str | None,
-    sent: dict[str, str],
 ) -> None:
+    sent = {} if env is None else {"X-Api-Key": env}
     service = cls(api_key="arg-key")
     assert b"arg-key" not in pickle.dumps(service)
-    if env is None:
-        monkeypatch.delenv("USGS_API_KEY", raising=False)
-    else:
-        monkeypatch.setenv("USGS_API_KEY", env)
+    monkeypatch.delenv("USGS_API_KEY", raising=False)
+    monkeypatch.delenv("USGS_STAC_API_KEY", raising=False)
+    if env is not None:
+        monkeypatch.setenv(variable, env)
     loaded = clone(service)
     assert getattr(loaded, "_service", loaded)._headers() == sent
 

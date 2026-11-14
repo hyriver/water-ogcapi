@@ -377,6 +377,10 @@ def test_stac_sends_equal_numbers_in_one_piece() -> None:
     assert sum(v is True for v in sent) == 1
 
 
+def test_stac_sends_an_empty_in_list_whole() -> None:
+    assert len(stac_pieces(filter={"op": "in", "args": [{"property": "n"}, []]})) == 1
+
+
 def test_stac_sends_a_query_without_a_site_list_whole() -> None:
     assert len(stac_pieces(filter="file_type = 'base'")) == 1
 

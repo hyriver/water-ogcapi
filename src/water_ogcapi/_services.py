@@ -152,8 +152,8 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
             # Only literal values make disjoint pieces; a property reference can match twice.
             if not all(isinstance(v, str | int | float | bool) for v in values):
                 return None
-            # Keyed by JSON text, so 1 and true stay apart.
-            unique = list({json.dumps(v, sort_keys=True): v for v in values}.values())
+            # 1 and 1.0 match the same feature, so they merge; true stays apart from 1.
+            unique = list({(isinstance(v, bool), v): v for v in values}.values())
             pieces = [
                 json.dumps({"op": "in", "args": [prop, list(chunk)]}, separators=(",", ":"))
                 for chunk in batched(unique, size)

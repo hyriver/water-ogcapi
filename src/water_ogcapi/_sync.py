@@ -31,7 +31,7 @@ from water_ogcapi._transport import Transport
 from water_ogcapi.exceptions import ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+    from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
 
 __all__ = ["Client", "FabricData", "GeoConnex", "OGCService", "WaterData", "WaterDataSTAC"]
 
@@ -129,8 +129,8 @@ def _blocking[**P, T](
 
 
 def _iterating[**P, T](
-    method: Callable[Concatenate[Any, P], AsyncIterator[T]],
-) -> Callable[Concatenate[OGCService, P], Iterator[T]]:
+    method: Callable[Concatenate[Any, P], AsyncGenerator[T]],
+) -> Callable[Concatenate[OGCService, P], Generator[T]]:
     """Return a method that steps through the async iterator ``method`` returns.
 
     Each step fetches one item, so an unsplit query sends no request between steps; the
@@ -139,7 +139,7 @@ def _iterating[**P, T](
     """
 
     @functools.wraps(method)
-    def call(self: OGCService, /, *args: P.args, **kwargs: P.kwargs) -> Iterator[T]:
+    def call(self: OGCService, /, *args: P.args, **kwargs: P.kwargs) -> Generator[T]:
         service = self._service  # pyright: ignore[reportPrivateUsage]
         items = getattr(service, method.__name__)(*args, **kwargs)
         while True:

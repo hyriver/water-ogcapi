@@ -51,7 +51,6 @@ from water_ogcapi.exceptions import (
 if TYPE_CHECKING:
     from collections.abc import (
         AsyncGenerator,
-        AsyncIterator,
         Callable,
         Collection,
         Coroutine,
@@ -668,7 +667,7 @@ class OGCService:
         sites_per_piece: int | None = None,
         validate: bool = True,
         resume: Checkpoint | None = None,
-    ) -> AsyncIterator[Page]:
+    ) -> AsyncGenerator[Page]:
         """Yield each page of a collection's items, following ``next`` links (D-34).
 
         Only a page without a ``next`` link ends the traversal. A page shorter than

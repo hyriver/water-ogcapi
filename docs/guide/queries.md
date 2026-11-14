@@ -2,10 +2,10 @@
 
 ## Services and collections
 
-Three classes cover the three services: `WaterData` for the USGS Water Data API,
-`FabricData` for the USGS FabricData service, and `GeoConnex` for the GeoConnex
-reference features. Building one sends no request. Each holds its HTTP connections until
-`close()`, which a `with` block calls:
+Four classes cover the four services: `WaterData` for the USGS Water Data API,
+`WaterDataSTAC` for the USGS Water Data STAC API, `FabricData` for the USGS FabricData
+service, and `GeoConnex` for the GeoConnex reference features. Building one sends no
+request. Each holds its HTTP connections until `close()`, which a `with` block calls:
 
 ```python
 from water_ogcapi import WaterData

@@ -1,9 +1,9 @@
-"""Record live responses from NWIS, FabricData, and GeoConnex into ``tests/fixtures/``.
+"""Record live responses from Water Data, FabricData, and GeoConnex into ``tests/fixtures/``.
 
-Follow ``.agents/skills/live-api/SKILL.md``. NWIS requests carry the key from
+Follow ``.agents/skills/live-api/SKILL.md``. Water Data requests carry the key from
 ``USGS_API_KEY`` in ``X-Api-Key``; FabricData and GeoConnex requests carry none. Each
 request goes through ``Transport(max_retries=0)``, about 30 in all, and the run stops
-when NWIS reports fewer than 100 requests remaining. No request header is stored, and
+when Water Data reports fewer than 100 requests remaining. No request header is stored, and
 the key's value is replaced in everything written.
 """
 
@@ -20,7 +20,7 @@ from water_ogcapi import Transport
 from water_ogcapi._transport import parse_count
 
 ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
-NWIS = "https://api.waterdata.usgs.gov/ogcapi/v1"
+WATERDATA = "https://api.waterdata.usgs.gov/ogcapi/v1"
 FABRICDATA = "https://api.water.usgs.gov/fabric/pygeoapi"
 GEOCONNEX = "https://reference.geoconnex.us"
 DC_BBOX = "-77.12,38.80,-76.91,38.99"
@@ -43,25 +43,25 @@ def metadata(
 
 # Fixture path, first URL, params, and pages to fetch by following `next` links.
 PLAN = [
-    ("nwis/landing", f"{NWIS}/", {}, 1),
-    ("nwis/collections", f"{NWIS}/collections", {}, 1),
-    *metadata("nwis", NWIS, "monitoring-locations"),
+    ("nwis/landing", f"{WATERDATA}/", {}, 1),
+    ("nwis/collections", f"{WATERDATA}/collections", {}, 1),
+    *metadata("nwis", WATERDATA, "monitoring-locations"),
     (
         "nwis/monitoring-locations/items",
-        f"{NWIS}/collections/monitoring-locations/items",
+        f"{WATERDATA}/collections/monitoring-locations/items",
         {"bbox": DC_BBOX, "limit": "3"},
         3,
     ),
     (
         f"nwis/monitoring-locations/item-{SITE}",
-        f"{NWIS}/collections/monitoring-locations/items/{SITE}",
+        f"{WATERDATA}/collections/monitoring-locations/items/{SITE}",
         {},
         1,
     ),
-    *metadata("nwis", NWIS, "daily"),
+    *metadata("nwis", WATERDATA, "daily"),
     (
         "nwis/daily/items",
-        f"{NWIS}/collections/daily/items",
+        f"{WATERDATA}/collections/daily/items",
         {
             "monitoring_location_id": SITE,
             "parameter_code": "00060",
@@ -111,7 +111,7 @@ async def main() -> None:
             url, query = first, {"f": "json", **params}
             for number in range(1, pages + 1):
                 # Decided per page: a next link on another host or scheme gets no key.
-                headers = {"X-Api-Key": key} if url.startswith(f"{NWIS}/") else None
+                headers = {"X-Api-Key": key} if url.startswith(f"{WATERDATA}/") else None
                 resp = await transport.get(url, params=query, headers=headers)
                 body = resp.json()
                 envelope = {

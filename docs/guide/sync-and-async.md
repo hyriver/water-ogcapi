@@ -2,11 +2,11 @@
 
 ## Blocking classes
 
-`WaterData`, `FabricData`, `GeoConnex`, and `OGCService` at the package root block until
-each call returns. Each one owns an async service of its own and runs it on one
-background event-loop thread that the package starts on first use. A call from any
-thread, a Jupyter cell included, waits for that loop and never calls `asyncio.run()`, so
-it works where another event loop is already running.
+`WaterData`, `WaterDataSTAC`, `FabricData`, `GeoConnex`, and `OGCService` at the package
+root block until each call returns. Each one owns an async service of its own and runs
+it on one background event-loop thread that the package starts on first use. A call from
+any thread, a Jupyter cell included, waits for that loop and never calls
+`asyncio.run()`, so it works where another event loop is already running.
 
 `iter_pages()` returns a plain iterator. Each step fetches one page, and closing the
 iterator, or dropping it, stops the query:

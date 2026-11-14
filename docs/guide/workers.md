@@ -6,8 +6,9 @@ client, the quota pacing, and the metadata cache.
 
 - Pass the service as a task argument, to `Pool.map`, `ProcessPoolExecutor.map`, or a
     Dask task, where it is pickled.
-- Set `USGS_API_KEY` in each worker's environment. A pickled `WaterData` leaves its key
-    out, and the worker reads `USGS_API_KEY` when it loads the service.
+- Set `USGS_API_KEY` in each worker's environment, and `USGS_STAC_API_KEY` too when
+    `WaterDataSTAC` has a key of its own. A pickled `WaterData` or `WaterDataSTAC`
+    leaves its key out, and the worker reads the variable when it loads the service.
 - Expect each worker to fetch its own metadata the first time it checks a query, and to
     pace its requests on its own. Several workers share one hourly quota but not the
     pacing, so keep the worker count small.

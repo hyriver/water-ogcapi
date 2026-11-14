@@ -1339,7 +1339,7 @@ Layering rule for anything new:
     transport's 429 handling takes over. A 429's `Retry-After` is the server's own wait,
     which its zero count would stretch to 60 s. The maintainer chose the transport hook,
     the 1 s default, the cap, the ramp, pacing a service without a profile, and the
-    single profile field, after advice from Codex, Gemini, and Fable.
+    single profile field, after advice from Codex and Fable.
 
 - **Rejected:** The governor in `OGCService._send()`, which leaves the transport as it
     was but reads only the final response and leaves retries unpaced. State in
@@ -1451,13 +1451,13 @@ Layering rule for anything new:
     `_traverse()`.
 - **Why:** D-24 made the resume point exist after every page, since a process can stop
     without an exception, and #14's fan-out leaves several unfinished requests, which
-    one `Page` cannot name. Codex and Gemini both reviewed a first version that resumed
-    from a held `Page` or `QueryResult` (`91fb915`) and found that its first request was
-    sent before the repeat check, that a resume from one page forgot the earlier ones,
-    and that a split query lost its unsent pieces. A checkpoint stores the request
-    headers exactly, holds no feature, and names every unfinished request. The identity
-    includes the body because two CQL2 `POST` pieces can share a URL. Chosen by the
-    maintainer after the 2026-10-21 review (`.agents/reviews/2026-10-21/summary.md`).
+    one `Page` cannot name. Codex reviewed a first version that resumed from a held
+    `Page` or `QueryResult` (`91fb915`) and found that its first request was sent before
+    the repeat check, that a resume from one page forgot the earlier ones, and that a
+    split query lost its unsent pieces. A checkpoint stores the request headers exactly,
+    holds no feature, and names every unfinished request. The identity includes the body
+    because two CQL2 `POST` pieces can share a URL. Chosen by the maintainer after the
+    2026-10-21 review (`.agents/reviews/2026-10-21/summary.md`).
 - **Rejected:** Resuming from a `Page` or `QueryResult` with no checkpoint type (the
     first version), which rebuilt the headers from the body and carried every feature.
     `collect(resume=checkpoint, previous=result)` (Codex), which allows a mismatched
@@ -1495,7 +1495,7 @@ Layering rule for anything new:
     the key into a URL, and the 2026-10-21 review (Codex) found that a stamped `next`
     link was refused while the page holding it was yielded and kept. Checking the raw
     `href` also covers a fragment, which `redact_url()` drops before the traversal's own
-    check sees it (Gemini).
+    check sees it.
 - **Rejected:** Scrubbing the key out of `body` and `content`, which changes the bytes
     D-23 promises as received and still misses a key elsewhere in the document.
 - **Limits:** Only link objects are checked, those of the document and of each feature,
@@ -1513,7 +1513,7 @@ Layering rule for anything new:
     the `count` check does not run, and `completeness` is `unknown`.
 - **Why:** The first rule took the reporting pages as agreeing, so a resume whose held
     pages reported 10 and whose new pages reported nothing could read `complete` on a
-    count no page after the gap confirmed (Gemini, 2026-10-21 review).
+    count no page after the gap confirmed (2026-10-21 review).
 - **Rejected:** Running the count check on the reporting pages alone.
 - **Limits:** NWIS reports no `numberMatched` on any page, so its results keep only the
     `end_of_links` check and, when every feature has an id, D-57's `unique_ids`.

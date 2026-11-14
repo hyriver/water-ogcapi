@@ -534,7 +534,8 @@ class OGCService:
     ) -> Sequence[Request]:
         """Split an items request into independent pieces, run concurrently (D-44, D-56).
 
-        The base service keeps it whole and refuses a split; WaterData overrides this (D-35).
+        The base service keeps it whole and refuses a split; WaterData and WaterDataSTAC
+        override this (D-35, D-95).
 
         Raises
         ------
@@ -750,9 +751,11 @@ class OGCService:
             number, a filter is empty, ``params`` also holds a parameter a keyword sets
             (``bbox``, ``filter``, ``filter-lang``) or a credential such as ``api_key``,
             or ``limit`` is not an integer from 1 to the profile's ``max_limit``, or
-            a split is given to a service other than WaterData, both splits are given,
-            the query has no closed ``datetime`` interval or site list to split, or a
-            query split into more than one piece has an ``offset`` in ``params``.
+            ``split_datetime`` is given to a service other than WaterData or
+            ``sites_per_piece`` to one other than WaterData and WaterDataSTAC, both
+            splits are given, the query has no closed ``datetime`` interval or site
+            list to split, or a query split into more than one piece has an
+            ``offset`` in ``params``.
             With ``validate``, before the first page request, when the collection, a
             name in ``params``, or ``id_property`` is unknown; the message lists the
             valid ones.

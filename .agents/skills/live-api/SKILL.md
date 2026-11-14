@@ -1,6 +1,6 @@
 ---
 name: live-api
-description: Use before sending any request to the live NWIS, FabricData, or GeoConnex endpoints, including recording test fixtures, writing or running network-marked tests, checking rate-limit or auth headers, and writing up API behavior findings. Covers credential handling, quota limits, and what evidence to keep.
+description: Use before sending any request to the live Water Data (OGC API or STAC), FabricData, or GeoConnex endpoints, including recording test fixtures, writing or running network-marked tests, checking rate-limit or auth headers, and writing up API behavior findings. Covers credential handling, quota limits, and what evidence to keep.
 ---
 
 # Working against the live endpoints
@@ -13,11 +13,12 @@ These are production services that USGS runs for every user. Base URLs are in
 A leaked key ends up in git history, CI logs, or a public issue, where anyone can spend
 its quota. Recorded fixtures and copied URLs are the easy ways for it to reach disk.
 
-- Read the key from the `USGS_API_KEY` environment variable. Never print it or write it
-    into a file, commit, issue, or chat message. Run an offline probe of code that reads
-    the variable as `env -u USGS_API_KEY <probe>` or with a fake value, and print only
-    comparisons (`headers["X-Api-Key"] == FAKE`); put `env -u` on the probe command
-    only, since the redaction filter below reads the variable.
+- Read the key from the `USGS_API_KEY` environment variable, and the STAC key, when set,
+    from `USGS_STAC_API_KEY`. Treat both alike: never print one or write it into a file,
+    commit, issue, or chat message. Run an offline probe of code that reads the variable
+    as `env -u USGS_API_KEY <probe>` or with a fake value, and print only comparisons
+    (`headers["X-Api-Key"] == FAKE`); put `env -u` on the probe command only, since the
+    redaction filter below reads the variable.
 - USGS documents two forms: an `X-Api-Key` request header and an `api_key` query
     parameter. Use the header. The query form puts the key in the request URL, and the
     server may echo query parameters into the `next` links of the response body.
@@ -33,16 +34,19 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
     and request a base URL with its trailing slash, since the bare form redirects.
 
 ```bash
-<probe command> 2>&1 | python3 -c 'import os, sys; k = os.environ["USGS_API_KEY"]; sys.stdout.writelines(l.replace(k, "REDACTED") for l in sys.stdin)'
+<probe command> 2>&1 | python3 -c 'import os, sys; ks = [os.environ["USGS_API_KEY"], *filter(None, [os.environ.get("USGS_STAC_API_KEY")])]
+for l in sys.stdin:
+    for k in ks: l = l.replace(k, "REDACTED")
+    sys.stdout.write(l)'
 ```
 
-- Before finishing, scan for the current key. The command fails loudly when the variable
-    is unset or empty, prints file names only, and keeps the key off the command line.
-    No output means the current key is not in the working tree; it cannot find old or
-    encoded keys.
+- Before finishing, scan for the current keys. The command fails loudly when the
+    variable is unset or empty, prints file names only, and keeps the key off the
+    command line. No output means neither current key is in the working tree; it cannot
+    find old or encoded keys.
 
 ```bash
-: "${USGS_API_KEY:?}" && command grep -rlF -f <(printenv USGS_API_KEY) . --exclude-dir=.git --exclude-dir=.pixi
+: "${USGS_API_KEY:?}" && command grep -rlF -f <(printenv USGS_API_KEY; printenv USGS_STAC_API_KEY | grep .) . --exclude-dir=.git --exclude-dir=.pixi
 ```
 
 ## Quota
@@ -65,8 +69,8 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
 
 ## Stable targets
 
-- NWIS: monitoring location `01646500` (Potomac River near Washington, DC), and a small
-    bounding box around Washington, DC.
+- Water Data, OGC API and STAC: monitoring location `01646500` (Potomac River near
+    Washington, DC), and a small bounding box around Washington, DC.
 - GeoConnex: the 22 two-digit HUCs in `hu02`, `01` to `22`.
 
 ## Fixtures
@@ -77,7 +81,8 @@ its quota. Recorded fixtures and copied URLs are the easy ways for it to reach d
     `content-encoding` and `content-length`: a mock serving a decoded body under
     `content-encoding: gzip` tries to gunzip plain JSON. Never store `set-cookie`.
     `scripts/record_fixtures.py` drops all three.
-- Record the request date with each fixture. The NWIS API is v1 and USGS may change it.
+- Record the request date with each fixture. The Water Data OGC API is v1 and its STAC
+    API v0, and USGS may change either.
 - If `tests/fixtures/` does not exist yet, propose a layout before creating one.
 - Note which services send `X-RateLimit-*` headers. The quota logic depends on it.
 

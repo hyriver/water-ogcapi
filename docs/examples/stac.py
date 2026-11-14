@@ -43,11 +43,11 @@ stac = WaterDataSTAC()
 # name; the items carry site metadata, not the parameters or periods inside the files.
 
 # %%
-for collection in stac.collections().collections:
+for collection in stac.collections().collections or ():
     print(f"{collection.id:12} {collection.title}")
 
 # %%
-print(", ".join(stac.queryables("daily").properties))
+print(", ".join(stac.queryables("daily").properties or {}))
 
 # %% [markdown]
 # ## Find one gage's files
@@ -80,12 +80,13 @@ sites[["id", "monitoring_location_name", "site_type", "drainage_area"]].head()
 # %%
 import contextily as ctx
 import matplotlib.pyplot as plt
+from xyzservices import providers
 
 points = sites.to_crs(3857)
 gage = points[points["id"] == SITE]
 ax = points.plot(color="dimgray", markersize=25, figsize=(6, 6), label="Sites with daily values")
 gage.plot(ax=ax, color="tab:blue", edgecolor="white", markersize=120, label="Potomac River gage")
-ctx.add_basemap(ax, source=ctx.providers.Esri.WorldGrayCanvas)
+ctx.add_basemap(ax, source=providers.Esri.WorldGrayCanvas)
 ax.legend(loc="upper center", bbox_to_anchor=(0.5, 0), ncols=2, frameon=False)
 ax.set(title="Daily-value files in HUC 02070008")
 ax.set_axis_off()
@@ -106,7 +107,7 @@ import polars as pl
 
 from water_ogcapi import Client
 
-item = stac.item("daily", SITE).body
+item = stac.item("daily", SITE).body or {}
 with Client() as client:
     path = Path(tempfile.mkdtemp()) / f"{SITE}.parquet"
     download = client.download(item["assets"]["data"]["href"], path)

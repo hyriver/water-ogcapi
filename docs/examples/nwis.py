@@ -87,12 +87,13 @@ frame["site_type"].value_counts().head()
 
 # %%
 import contextily as ctx
+from xyzservices import providers
 
 ax = frame.to_crs(3857).plot(color="dimgray", markersize=8, figsize=(6, 6), label="All sites")
 gpd.GeoDataFrame.from_arrow(streams.to_arrow()).to_crs(3857).plot(
     ax=ax, color="tab:blue", edgecolor="white", linewidth=0.5, markersize=28, label="Stream sites"
 )
-ctx.add_basemap(ax, source=ctx.providers.Esri.WorldGrayCanvas)
+ctx.add_basemap(ax, source=providers.Esri.WorldGrayCanvas)
 ax.legend(loc="upper center", bbox_to_anchor=(0.5, 0), ncols=2, frameon=False)
 ax.set(title="Monitoring locations around Washington, DC")
 ax.set_axis_off()
@@ -126,7 +127,7 @@ print(daily.pagination.completeness, daily.pagination.checks)
 import polars as pl
 
 values = (
-    pl.from_arrow(daily.to_arrow())
+    pl.DataFrame(daily.to_arrow())
     .select(pl.col("time").str.to_date(), pl.col("value").cast(pl.Float64))
     .sort("time")
 )

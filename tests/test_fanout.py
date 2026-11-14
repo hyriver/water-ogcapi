@@ -364,6 +364,14 @@ def test_the_blocking_class_splits_too() -> None:
         ({"sites_per_piece": 2.5, "params": WIDE}, "positive integer"),
         ({"sites_per_piece": 2, "params": WIDE}, "takes a site list"),
         ({"sites_per_piece": 2, "split_datetime": "year", "params": WIDE}, "not both"),
+        ({"split_datetime": "year", "params": {**WIDE, "offset": "1"}}, "each of the 3 pieces"),
+        (
+            {
+                "sites_per_piece": 1,
+                "params": {"monitoring_location_id": "USGS-01,USGS-02", "offset": 1},
+            },
+            "each of the 2 pieces",
+        ),
     ],
 )
 def test_a_malformed_split_sends_nothing(query: dict[str, Any], match: str) -> None:

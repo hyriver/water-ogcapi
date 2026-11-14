@@ -750,8 +750,9 @@ class OGCService:
             number, a filter is empty, ``params`` also holds a parameter a keyword sets
             (``bbox``, ``filter``, ``filter-lang``) or a credential such as ``api_key``,
             or ``limit`` is not an integer from 1 to the profile's ``max_limit``, or
-            a split is given to a service other than WaterData, both splits are given, or
-            the query has no closed ``datetime`` interval or site list to split.
+            a split is given to a service other than WaterData, both splits are given,
+            the query has no closed ``datetime`` interval or site list to split, or a
+            query split into more than one piece has an ``offset`` in ``params``.
             With ``validate``, before the first page request, when the collection, a
             name in ``params``, or ``id_property`` is unknown; the message lists the
             valid ones.
@@ -796,6 +797,12 @@ class OGCService:
                 json_in_query=self.profile is not None and self.profile.cql2_json_in_query,
             )
             pieces = tuple(self._pieces(request, split_datetime, sites_per_piece))
+            if len(pieces) > 1 and "offset" in request.params:
+                msg = (
+                    f"offset applies to each of the {len(pieces)} pieces of a split query, "
+                    "so each would skip its own first features; drop the offset or the split"
+                )
+                raise ValidationError(msg)
             if validate:
                 # The request's copy: the caller's mapping may change during the await.
                 await self._validate(collection, request.params, id_property)

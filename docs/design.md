@@ -2808,6 +2808,18 @@ Layering rule for anything new:
 - **Check:** `pixi r -e test315 pytest --collect-only` deselects the network-marked
     tests, `test-network` collects only them, and `test-all` deselects none.
 
+### L-15: Every split piece kept the caller's offset
+
+- **What happened:** D-56's pieces copy `params` whole, `offset` included, so each piece
+    skipped its own first features. A 120-site query with `offset=1` lost three features
+    in place of one, and with no `numberMatched` the result still read `complete`. The
+    2026-11-13 review found it once D-95 made `WaterDataSTAC` split by default.
+- **Rule:** `iter_pages()` refuses an `offset` in `params` when a query makes more than
+    one piece. A query sent whole keeps it.
+- **Check:** `test_a_malformed_split_sends_nothing`,
+    `test_stac_refuses_an_offset_on_a_site_list_it_splits`, and
+    `test_stac_keeps_an_offset_on_a_site_list_it_sends_whole`.
+
 ## Open questions
 
 ### Q-01: How frame conversion ships

@@ -150,7 +150,8 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
     match doc:
         case {"op": "in", "args": [{"property": str()} as prop, list() as values]} if len(doc) == 2:
             # Only literal values make disjoint pieces; a property reference can match twice.
-            if not all(isinstance(v, str | int | float | bool) for v in values):
+            # An empty list makes no piece at all, so the server gets it whole.
+            if not values or not all(isinstance(v, str | int | float | bool) for v in values):
                 return None
             # 1 and 1.0 match the same feature, so they merge; true stays apart from 1.
             unique = list({(isinstance(v, bool), v): v for v in values}.values())

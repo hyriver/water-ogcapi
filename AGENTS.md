@@ -123,7 +123,8 @@ Pages.
     accumulates across runs. Delete `.coverage` and any `.coverage.*` files before
     trusting a number.
 - `report` and `html` depend on `test-all`, so they also run the network-marked tests.
-- pyright checks only `src/`, so a green `typecheck` says nothing about `tests/`.
+- pyright checks `src/` and the `docs/examples/*.py` scripts, so a green `typecheck`
+    says nothing about `tests/` or the paired `.ipynb` files.
 - `pixi r lint` runs vulture at 80% confidence, which catches only unused imports,
     unused function arguments, and unreachable code. Unused functions, classes, and
     local variables score 60% and pass.

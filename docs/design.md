@@ -2648,6 +2648,23 @@ Layering rule for anything new:
     `_http_date` catches with the `OverflowError` of older 3.13 and 3.14 releases; older
     3.12 releases were not probed.
 
+### D-97: The What's New page comes from the GitHub releases
+
+- **Status:** accepted. Amends D-32.
+- **Date:** 2026-11-16.
+- **Decision:** `scripts/whats_new.py` writes `docs/whats-new.md` before each docs build
+    from the published GitHub releases, newest first: a heading linking each release,
+    then its notes as `release.yml` wrote them, minus git-cliff's own version heading.
+    Drafts are left out and pre-releases are labeled.
+- **Why:** D-32 makes the GitHub releases page the changelog, and the site had no way to
+    reach it. Reading the releases keeps one source per text (D-17), as D-28 does for
+    the roadmap, and needs no full-history checkout in `docs.yml`.
+- **Rejected:** A tracked `CHANGELOG.md`, for the reason D-32 gives. Running git-cliff
+    in the docs build, which needs every tag and commit in the checkout and can drift
+    from the published notes when a release's notes are edited on GitHub.
+- **Limits:** The page shows a release only after the next docs build; the daily
+    `docs.yml` run bounds that at a day. Unreleased commits do not appear.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates

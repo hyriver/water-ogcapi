@@ -3,6 +3,7 @@ nav:
 - guide
 - examples
 - api.md
+- whats-new.md
 - Development:
   - contributing.md
   - design.md

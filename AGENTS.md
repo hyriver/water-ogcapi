@@ -149,8 +149,9 @@ Pages.
     the `.ipynb` and `.py` files, so a link to `other.ipynb` downloads the notebook;
     link `other.md` to reach its page.
 - `pixi r docs` also writes the git-ignored `docs/roadmap.md` from the GitHub milestones
-    and issues, so a docs build fails without network access. Past the anonymous limit
-    of 60 requests an hour, set `GITHUB_TOKEN`.
+    and issues and `docs/whats-new.md` from the GitHub releases, so a docs build fails
+    without network access. Past the anonymous limit of 60 requests an hour, set
+    `GITHUB_TOKEN`.
 - The API page documents the blocking methods through `scripts/griffe_twins.py`, which
     copies each async method that a `_blocking` or `_iterating` call in `_sync.py`
     wraps. A new wrapper name goes in its `WRAPPERS`.

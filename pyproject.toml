@@ -140,8 +140,9 @@ guides = "python scripts/run_guides.py"
 notebooks = "python scripts/convert_notebooks.py"
 # Fetches the GitHub milestones, so docs builds need network access.
 roadmap = "python scripts/roadmap.py"
-docs = { cmd = "zensical build --clean --strict", depends-on = [ "notebooks", "roadmap" ] }
-docs-serve = { cmd = "zensical serve", depends-on = [ "notebooks", "roadmap" ] }
+whats-new = "python scripts/whats_new.py"
+docs = { cmd = "zensical build --clean --strict", depends-on = [ "notebooks", "roadmap", "whats-new" ] }
+docs-serve = { cmd = "zensical serve", depends-on = [ "notebooks", "roadmap", "whats-new" ] }
 
 [tool.pixi.feature.lint.tasks]
 lint = "pre-commit run --all-files && python scripts/lint_untracked.py && python scripts/lock_sdists.py"

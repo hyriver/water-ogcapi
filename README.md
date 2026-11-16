@@ -124,6 +124,8 @@ decisions behind the library.
 
 The [roadmap](https://docs.hyriver.io/water-ogcapi/roadmap/) shows the progress on each
 GitHub milestone, regenerated daily from the milestone issues.
+[What's New](https://docs.hyriver.io/water-ogcapi/whats-new/) collects the notes of
+every release.
 
 ## Contributing
 

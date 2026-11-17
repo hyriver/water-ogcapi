@@ -33,16 +33,17 @@ Report problems and missing features in
 
 ## Services
 
-| Service         | Class           | Base URL                              |
-| --------------- | --------------- | ------------------------------------- |
-| Water Data      | `WaterData`     | `api.waterdata.usgs.gov/ogcapi/v1/`   |
-| Water Data STAC | `WaterDataSTAC` | `api.waterdata.usgs.gov/stac/v0/`     |
-| FabricData      | `FabricData`    | `api.water.usgs.gov/fabric/pygeoapi/` |
-| GeoConnex       | `GeoConnex`     | `reference.geoconnex.us/`             |
+| Service             | Class               | Base URL                              |
+| ------------------- | ------------------- | ------------------------------------- |
+| Water Data          | `WaterData`         | `api.waterdata.usgs.gov/ogcapi/v1/`   |
+| Water Data STAC     | `WaterDataSTAC`     | `api.waterdata.usgs.gov/stac/v0/`     |
+| FabricData          | `FabricData`        | `api.water.usgs.gov/fabric/pygeoapi/` |
+| GeoConnex reference | `GeoConnex`         | `reference.geoconnex.us/`             |
+| GeoConnex features  | `GeoConnexFeatures` | `features.geoconnex.us/`              |
 
 `WaterData` sends the key in `USGS_API_KEY`, when set, in the `X-Api-Key` header, and
-`WaterDataSTAC` the key in `USGS_STAC_API_KEY`, else `USGS_API_KEY`. The other two
-services never receive it. `NWIS`, its name in 0.1.0, is gone.
+`WaterDataSTAC` the key in `USGS_STAC_API_KEY`, else `USGS_API_KEY`. The other services
+never receive it. `NWIS`, its name in 0.1.0, is gone.
 
 ## Installation
 

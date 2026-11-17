@@ -2,10 +2,11 @@
 
 ## Services and collections
 
-Four classes cover the four services: `WaterData` for the USGS Water Data API,
+Five classes cover the five services: `WaterData` for the USGS Water Data API,
 `WaterDataSTAC` for the USGS Water Data STAC API, `FabricData` for the USGS FabricData
-service, and `GeoConnex` for the GeoConnex reference features. Building one sends no
-request. Each holds its HTTP connections until `close()`, which a `with` block calls:
+service, `GeoConnex` for the GeoConnex reference features, and `GeoConnexFeatures` for
+every feature registered in GeoConnex. Building one sends no request. Each holds its
+HTTP connections until `close()`, which a `with` block calls:
 
 ```python
 from water_ogcapi import WaterData
@@ -19,6 +20,26 @@ print(sorted(queryables.properties or {})[:5])
 
 `collections()` and `queryables()` return typed documents, `Collections` and `Schema`,
 and each service caches them for an hour. `refresh()` drops the cache.
+
+`GeoConnexFeatures` has one collection, `GeoconnexFeatures`, with five properties per
+feature: `id`, `geoconnex_sitemap`, `feature_name`, `feature_description`, and
+`mainstem_uri`. It finds features across every contributor; the reference collections of
+`GeoConnex` hold the full attributes. A reference feature's `id` there is its `uri` in
+`GeoConnex`:
+
+```python
+from water_ogcapi import GeoConnex, GeoConnexFeatures
+
+with GeoConnexFeatures() as gcf:
+    found = gcf.collect(
+        "GeoconnexFeatures",
+        filter="feature_name ILIKE 'Lake Mead%' AND geoconnex_sitemap = 'ref:gages'",
+    )
+uris = [f["id"] for f in found.geojson["features"]]
+with GeoConnex() as gc:
+    gages = gc.collect("gages", ids=uris, id_property="uri")
+print(len(uris), len(gages.geojson["features"]))
+```
 
 ## Query forms
 

@@ -18,7 +18,14 @@ import pytest
 
 import water_ogcapi
 from water_ogcapi import Page, QueryResult, Transport, _sync, aio
-from water_ogcapi.aio import FabricData, GeoConnex, OGCService, WaterData, WaterDataSTAC
+from water_ogcapi.aio import (
+    FabricData,
+    GeoConnex,
+    GeoConnexFeatures,
+    OGCService,
+    WaterData,
+    WaterDataSTAC,
+)
 from water_ogcapi.exceptions import PaginationError, ServiceError, ValidationError
 
 if TYPE_CHECKING:
@@ -177,14 +184,17 @@ def test_errors_propagate_with_their_type() -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["OGCService", "WaterData", "WaterDataSTAC", "FabricData", "GeoConnex"]
+    "name",
+    ["OGCService", "WaterData", "WaterDataSTAC", "FabricData", "GeoConnex", "GeoConnexFeatures"],
 )
 def test_the_root_classes_block_and_the_aio_classes_await(name: str) -> None:
     assert not inspect.iscoroutinefunction(getattr(water_ogcapi, name).collect)
     assert inspect.iscoroutinefunction(getattr(aio, name).collect)
 
 
-@pytest.mark.parametrize("name", ["WaterData", "WaterDataSTAC", "FabricData", "GeoConnex"])
+@pytest.mark.parametrize(
+    "name", ["WaterData", "WaterDataSTAC", "FabricData", "GeoConnex", "GeoConnexFeatures"]
+)
 def test_a_blocking_service_reads_its_twin_s_profile(name: str) -> None:
     profile = getattr(water_ogcapi, name)().profile
     assert profile is not None
@@ -212,6 +222,7 @@ PAIRS = [
     (water_ogcapi.WaterDataSTAC, WaterDataSTAC),
     (water_ogcapi.FabricData, FabricData),
     (water_ogcapi.GeoConnex, GeoConnex),
+    (water_ogcapi.GeoConnexFeatures, GeoConnexFeatures),
 ]
 TWINS = {"aclose": "close"}
 
@@ -257,6 +268,7 @@ def test_iter_pages_names_the_generator_it_returns() -> None:
         (water_ogcapi.WaterDataSTAC, WaterDataSTAC),
         (water_ogcapi.FabricData, FabricData),
         (water_ogcapi.GeoConnex, GeoConnex),
+        (water_ogcapi.GeoConnexFeatures, GeoConnexFeatures),
     ],
 )
 def test_each_class_queries_its_own_service(
@@ -265,8 +277,9 @@ def test_each_class_queries_its_own_service(
         | water_ogcapi.WaterDataSTAC
         | water_ogcapi.FabricData
         | water_ogcapi.GeoConnex
+        | water_ogcapi.GeoConnexFeatures
     ],
-    service: type[WaterData | WaterDataSTAC | FabricData | GeoConnex],
+    service: type[WaterData | WaterDataSTAC | FabricData | GeoConnex | GeoConnexFeatures],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("USGS_API_KEY", "k")

@@ -2665,6 +2665,33 @@ Layering rule for anything new:
 - **Limits:** The page shows a release only after the next docs build; the daily
     `docs.yml` run bounds that at a day. Unreleased commits do not appear.
 
+### D-98: `GeoConnexFeatures` queries every GeoConnex feature
+
+- **Status:** accepted. Answers Q-10.
+- **Date:** 2026-11-17.
+- **Decision:** `GeoConnexFeatures`, blocking at the package root and async in
+    `water_ogcapi.aio`, queries `features.geoconnex.us` through the inherited
+    `OGCService` methods. Callers name its one collection, `GeoconnexFeatures`. Its
+    profile matches `GeoConnex`: no key, a default page of 500, and 10,000 at most.
+- **Why:** The Q-10 probes ran `OGCService` against the host unchanged, and its OpenAPI
+    document declares `limit` with a default of 500 and a maximum of 10,000. A class of
+    its own keeps one host per class (D-42), so its metadata cache,
+    `Checkpoint.base_url` (D-52), pickling (D-64), and blocking twin work as for the
+    other services.
+- **Rejected:** `GeoConnex.search()` over a private service on the second host: the
+    inherited `collections()`, `queryables()`, and `refresh()` would cover only the
+    reference host, and the blocking `close()` closes a passed transport, so sharing one
+    inside a class needs new ownership rules. A public `GeoConnex().features` client,
+    which has the same `close()` problem; passing one `Transport` to both classes
+    already shares connections. A virtual `GeoconnexFeatures` collection on `GeoConnex`,
+    which breaks D-42 and makes `base_url` and `Checkpoint.base_url` depend on the
+    collection. A guide example alone, which leaves the host without a profile or an API
+    entry.
+- **Limits:** Its pages carry no `numberMatched`, so a traversal ends only on a page
+    without a `next` link; the server reports a count for `resulttype=hits`. It sends no
+    `X-RateLimit-*` headers. The drift check snapshots no OpenAPI document for it, and
+    no probe sent a `limit` above 500.
+
 ## Lessons
 
 ### L-01: Offset pagination silently skips or truncates
@@ -2947,7 +2974,7 @@ the hot path is decoding.
 
 ### Q-10: Covering `features.geoconnex.us`
 
-**Status:** open. Probed 2026-11-17.
+**Status:** answered by D-98. Probed 2026-11-17.
 
 `https://features.geoconnex.us/` serves one collection, `GeoconnexFeatures`, holding
 every feature contributed to GeoConnex: 9,509,314 by `resulttype=hits`. Its queryables

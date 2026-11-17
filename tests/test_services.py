@@ -18,7 +18,14 @@ import pytest
 
 import water_ogcapi
 from water_ogcapi import QueryResult, Transport
-from water_ogcapi.aio import FabricData, GeoConnex, OGCService, WaterData, WaterDataSTAC
+from water_ogcapi.aio import (
+    FabricData,
+    GeoConnex,
+    GeoConnexFeatures,
+    OGCService,
+    WaterData,
+    WaterDataSTAC,
+)
 from water_ogcapi.exceptions import PaginationError, ServiceError, ValidationError
 
 FEATURE = {"type": "Feature", "geometry": None, "properties": {}, "links": []}
@@ -283,12 +290,20 @@ def test_the_key_never_reaches_geoconnex_on_a_shared_transport(
 ) -> None:
     monkeypatch.setenv("USGS_API_KEY", "env-key")
     transport, seen = recording()
-    exercise(WaterData(transport=transport), GeoConnex(transport=transport))
+    exercise(
+        WaterData(transport=transport),
+        GeoConnex(transport=transport),
+        GeoConnexFeatures(transport=transport),
+    )
+    hosts = ("api.waterdata.usgs.gov", "reference.geoconnex.us", "features.geoconnex.us")
     keys = {
-        host: [r.headers.get("x-api-key") for r in seen if r.url.host == host]
-        for host in ("api.waterdata.usgs.gov", "reference.geoconnex.us")
+        host: [r.headers.get("x-api-key") for r in seen if r.url.host == host] for host in hosts
     }
-    assert keys == {"api.waterdata.usgs.gov": ["env-key"] * 5, "reference.geoconnex.us": [None] * 5}
+    assert keys == {
+        "api.waterdata.usgs.gov": ["env-key"] * 5,
+        "reference.geoconnex.us": [None] * 5,
+        "features.geoconnex.us": [None] * 5,
+    }
 
 
 @pytest.mark.parametrize(
@@ -298,10 +313,13 @@ def test_the_key_never_reaches_geoconnex_on_a_shared_transport(
         (WaterDataSTAC, 1_000, 10_000),
         (FabricData, 1_000, 1_000),
         (GeoConnex, 500, 10_000),
+        (GeoConnexFeatures, 500, 10_000),
     ],
 )
 def test_a_service_sends_its_profile_page_sizes(
-    service: type[WaterData | WaterDataSTAC | FabricData | GeoConnex], default: int, cap: int
+    service: type[WaterData | WaterDataSTAC | FabricData | GeoConnex | GeoConnexFeatures],
+    default: int,
+    cap: int,
 ) -> None:
     transport, seen = recording()
     client = service(transport=transport)

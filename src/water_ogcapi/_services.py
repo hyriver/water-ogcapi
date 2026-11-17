@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from water_ogcapi._query import Request
     from water_ogcapi._transport import Transport
 
-__all__ = ["FabricData", "GeoConnex", "WaterData", "WaterDataSTAC"]
+__all__ = ["FabricData", "GeoConnex", "GeoConnexFeatures", "WaterData", "WaterDataSTAC"]
 
 PERIODS = frozenset({"year", "month"})
 SITES = "monitoring_location_id"
@@ -64,6 +64,12 @@ FABRICDATA_PROFILE = ServiceProfile(
 
 GEOCONNEX_PROFILE = ServiceProfile(
     base_url="https://reference.geoconnex.us/",
+    default_limit=500,
+    max_limit=10_000,
+)
+
+GEOCONNEX_FEATURES_PROFILE = ServiceProfile(
+    base_url="https://features.geoconnex.us/",
     default_limit=500,
     max_limit=10_000,
 )
@@ -365,6 +371,29 @@ class GeoConnex(OGCService):
     """
 
     profile = GEOCONNEX_PROFILE
+
+    def __init__(self, *, transport: Transport | None = None) -> None:
+        super().__init__(transport=transport)
+
+
+class GeoConnexFeatures(OGCService):
+    """Async client for every feature registered in GeoConnex, which never gets the USGS key.
+
+    Its one collection, ``GeoconnexFeatures``, holds the reference features of
+    `GeoConnex` and every contributor's features, each with ``id``,
+    ``geoconnex_sitemap``, ``feature_name``, ``feature_description``, and
+    ``mainstem_uri`` (D-98). Its pages carry no ``numberMatched``. Construction performs
+    no HTTP. A page asks for up to 500 features unless ``params`` set a ``limit``, and
+    10,000 at most (D-41).
+
+    Parameters
+    ----------
+    transport : Transport, optional
+        Sends every request, as for `OGCService`. Sharing one with a `GeoConnex` or
+        `WaterData` service is safe, since the key travels with each WaterData request.
+    """
+
+    profile = GEOCONNEX_FEATURES_PROFILE
 
     def __init__(self, *, transport: Transport | None = None) -> None:
         super().__init__(transport=transport)

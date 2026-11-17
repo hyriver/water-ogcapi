@@ -33,7 +33,15 @@ from water_ogcapi.exceptions import ValidationError
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
 
-__all__ = ["Client", "FabricData", "GeoConnex", "OGCService", "WaterData", "WaterDataSTAC"]
+__all__ = [
+    "Client",
+    "FabricData",
+    "GeoConnex",
+    "GeoConnexFeatures",
+    "OGCService",
+    "WaterData",
+    "WaterDataSTAC",
+]
 
 # Seconds between interrupt checks while a call waits; a call still returns once its result
 # is ready. A blocked wait misses an interrupt that only sets the flag, as ipykernel's on
@@ -285,6 +293,20 @@ class GeoConnex(OGCService):
     def __init__(self, *, transport: Transport | None = None) -> None:
         self._transport = Transport() if transport is None else transport
         self._service = _services.GeoConnex(transport=self._transport)
+
+
+class GeoConnexFeatures(OGCService):
+    """Blocking client for every GeoConnex feature, as `water_ogcapi.aio.GeoConnexFeatures`.
+
+    Parameters
+    ----------
+    transport : Transport, optional
+        Sends every request, as for `OGCService`.
+    """
+
+    def __init__(self, *, transport: Transport | None = None) -> None:
+        self._transport = Transport() if transport is None else transport
+        self._service = _services.GeoConnexFeatures(transport=self._transport)
 
 
 class Client:

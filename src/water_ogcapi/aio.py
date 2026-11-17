@@ -22,6 +22,19 @@ asyncio.run(main())
 from __future__ import annotations
 
 from water_ogcapi._client import OGCService
-from water_ogcapi._services import FabricData, GeoConnex, WaterData, WaterDataSTAC
+from water_ogcapi._services import (
+    FabricData,
+    GeoConnex,
+    GeoConnexFeatures,
+    WaterData,
+    WaterDataSTAC,
+)
 
-__all__ = ["FabricData", "GeoConnex", "OGCService", "WaterData", "WaterDataSTAC"]
+__all__ = [
+    "FabricData",
+    "GeoConnex",
+    "GeoConnexFeatures",
+    "OGCService",
+    "WaterData",
+    "WaterDataSTAC",
+]

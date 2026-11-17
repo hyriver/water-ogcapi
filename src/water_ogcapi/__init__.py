@@ -31,7 +31,15 @@ from water_ogcapi._results import (
     QueryResult,
     StopReason,
 )
-from water_ogcapi._sync import Client, FabricData, GeoConnex, OGCService, WaterData, WaterDataSTAC
+from water_ogcapi._sync import (
+    Client,
+    FabricData,
+    GeoConnex,
+    GeoConnexFeatures,
+    OGCService,
+    WaterData,
+    WaterDataSTAC,
+)
 from water_ogcapi._transport import Download, Response, Transport, __version__
 
 __all__ = [
@@ -47,6 +55,7 @@ __all__ = [
     "Extent",
     "FabricData",
     "GeoConnex",
+    "GeoConnexFeatures",
     "Governor",
     "Link",
     "OGCService",

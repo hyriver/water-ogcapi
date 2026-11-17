@@ -13,6 +13,8 @@ and the types they return.
 
 ::: water_ogcapi.GeoConnex
 
+::: water_ogcapi.GeoConnexFeatures
+
 ::: water_ogcapi.OGCService
 
 ::: water_ogcapi.ServiceProfile

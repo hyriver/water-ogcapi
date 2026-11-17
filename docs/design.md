@@ -2945,6 +2945,37 @@ the hot path is decoding.
     size, with and without orjson. Adopt it only if decoding is a meaningful share of
     wall time. If adopted, make both paths treat `NaN` the same way.
 
+### Q-10: Covering `features.geoconnex.us`
+
+**Status:** open. Probed 2026-11-17.
+
+`https://features.geoconnex.us/` serves one collection, `GeoconnexFeatures`, holding
+every feature contributed to GeoConnex: 9,509,314 by `resulttype=hits`. Its queryables
+are `id` (`x-ogc-role: id`), `geoconnex_sitemap`, `feature_name`, `feature_description`,
+and `mainstem_uri`. `GeoConnex` reaches only `reference.geoconnex.us`, which holds the
+reference boundaries such as HUCs, states, and mainstems. `OGCService` with this base
+URL and no profile ran unchanged:
+
+- A `bbox` plus `mainstem_uri` query returned 1,629 features in 4 pages at `limit=500`,
+    a CQL2-Text `ILIKE` filter 299 features in 3 pages, and a CQL2-JSON `like` filter 40
+    features in 5 pages, every page a `POST` with the same body (D-38). Each total
+    equals the server's `resulttype=hits` count for the same filter, and no `id`
+    repeated.
+- Pages carry no `numberMatched`, so a traversal ends on the first page without a `next`
+    link. A query matching nothing returns no `next` link.
+- Responses carry no `X-RateLimit-*` headers. `/conformance` lists no filter or CQL2
+    class, yet both encodings work.
+
+Adding it means a service class or a guide example.
+
+- **For:** it answers feature discovery by name, description, or mainstem across all
+    contributors, which the reference server cannot, and its ids are the subjects of the
+    GeoConnex SPARQL graph at `graph.geoconnex.us`.
+- **Against:** a service class adds a profile and its tests for a host callers already
+    reach through `OGCService("https://features.geoconnex.us/")`.
+- **To decide:** which of the two. A class needs a profile (D-41, D-42), so measure the
+    page cap first, since no probe went above `limit=500`.
+
 ## Questions for USGS
 
 Sent on 2026-10-07. The water data team and the FabricData operator answered the same

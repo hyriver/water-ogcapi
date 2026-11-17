@@ -18,10 +18,13 @@
 # %% [markdown]
 # # Querying GeoConnex
 #
-# `GeoConnex` queries the reference features at `reference.geoconnex.us`. It takes no key
-# and never receives `USGS_API_KEY`. This notebook lists the 22 two-digit hydrologic
-# regions of `hu02` without their geometry, streams them a few at a time, and maps the 18
-# regions of the contiguous United States with a CQL2 filter. `to_arrow()` turns each
+# `GeoConnex` queries the reference features at `reference.geoconnex.us`, and
+# `GeoConnexFeatures` every feature registered in GeoConnex at `features.geoconnex.us`.
+# Neither takes a key or receives `USGS_API_KEY`. This notebook lists the 22 two-digit
+# hydrologic regions of `hu02` without their geometry, streams them a few at a time, and
+# maps the 18 regions of the contiguous United States with a CQL2 filter. It then finds
+# every feature along the Charles River, from all contributors, and fetches the full
+# attributes of its stream gages from the reference collection. `to_arrow()` turns each
 # result into a table for polars or geopandas, which needs the `arrow` extra.
 
 # %%
@@ -122,5 +125,64 @@ ax.set(title="Hydrologic regions of the contiguous United States")
 ax.set_axis_off()
 plt.tight_layout()
 
+# %% [markdown]
+# ## Find features from every contributor
+#
+# `GeoConnexFeatures` has one collection, `GeoconnexFeatures`, holding the reference
+# features above and those of every other contributor, with five properties each. Its
+# `mainstem_uri` ties a feature to a reference mainstem. The Charles River in
+# Massachusetts is mainstem `2290857`, and `item()` fetches it from `GeoConnex`:
+
+# %%
+from water_ogcapi import GeoConnexFeatures
+
+gcf = GeoConnexFeatures()
+river = gc.item("mainstems", "2290857").body or {}
+print(river["properties"]["name_at_outlet"], river["properties"]["uri"])
+
+# %% [markdown]
+# Its pages carry no `numberMatched`, so a query ends on the first page without a `next`
+# link. `skipGeometry` keeps the response to the properties:
+
+# %%
+on_river = gcf.collect(
+    "GeoconnexFeatures",
+    params={"mainstem_uri": river["properties"]["uri"], "skipGeometry": "true"},
+)
+print(len(on_river.geojson["features"]), "features in", on_river.pagination.page_count, "pages")
+print(on_river.pagination.completeness, on_river.pagination.checks)
+
+# %% [markdown]
+# `geoconnex_sitemap` names the source of each feature: a reference collection such as
+# `ref:gages`, or a contributor such as the Water Quality Portal, `epa:wqp`.
+
+# %%
+features = pl.DataFrame(on_river.to_arrow())
+features.group_by("geoconnex_sitemap").len().sort("len", descending=True)
+
+# %% [markdown]
+# ## Fetch the full attributes
+#
+# A reference feature's `id` here is its `uri` property in `GeoConnex`, so `ids` fetches
+# the river's stream gages from `gages` with every attribute:
+
+# %%
+uris = features.filter(pl.col("geoconnex_sitemap") == "ref:gages")["id"].to_list()
+gages = gc.collect("gages", ids=uris, id_property="uri")
+print(len(uris), "gages found,", len(gages.geojson["features"]), "fetched")
+pl.DataFrame(gages.to_arrow()).select("provider_id", "name", "nhdpv2_comid").sort(
+    "provider_id"
+).head(10)
+
+# %%
+gage_frame = gpd.GeoDataFrame.from_arrow(gages.to_arrow()).to_crs(5070)
+river_frame = gpd.GeoDataFrame.from_features([river], crs=4326).to_crs(5070)
+ax = river_frame.plot(color="tab:blue", linewidth=1.5, figsize=(6, 5))
+gage_frame.plot(ax=ax, color="tab:red", markersize=8)
+ax.set(title="Stream gages along the Charles River")
+ax.set_axis_off()
+plt.tight_layout()
+
 # %%
 gc.close()
+gcf.close()

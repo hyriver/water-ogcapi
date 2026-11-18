@@ -855,11 +855,12 @@ Layering rule for anything new:
     construction and leaves the round trip test nothing to prove (L-03). Raising on any
     malformed member, which turns one odd member into a failed metadata fetch.
 - **Limits:** `to_dict` returns `href` values redacted (D-04), so a link that carried a
-    credential does not round trip. Redaction reaches only parsed links: a `Link.extra`
-    member, or a `links` list kept whole in `extra` because one entry lacks `href`,
-    passes through like a key inside a body (D-29). `extra` is read-only at its top
-    level; nested values are plain dicts and lists. `Property` types five JSON Schema
-    keywords; `enum`, `example`, and the rest stay in its `extra`.
+    credential does not round trip. Redaction reaches the string `href` of each entry of
+    a `links` list, parsed or kept whole in `extra`. A `Link.extra` member, a `links`
+    member that is not a list, and every other member of `extra` pass through like a key
+    inside a body (D-29). `extra` is read-only at its top level; nested values are plain
+    dicts and lists. `Property` types five JSON Schema keywords; `enum`, `example`, and
+    the rest stay in its `extra`.
 
 ### D-34: `iter_pages()` follows `next` links within the base URL's origin
 

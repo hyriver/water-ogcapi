@@ -1023,3 +1023,11 @@ def test_a_download_refuses_a_total_that_is_not_positive_and_finite(
         fetch(transport, tmp_path / "sub" / "f", total=total)
     assert seen == []
     assert not list(tmp_path.iterdir())
+
+
+def test_a_304_with_no_file_to_keep_is_an_error(tmp_path: Path) -> None:
+    transport, _ = serve({URL: lambda _: httpx2.Response(304)})
+    with pytest.raises(ServiceError, match="304 with no file") as excinfo:
+        fetch(transport, tmp_path / "f")
+    assert excinfo.value.status == 304
+    assert list(tmp_path.iterdir()) == []

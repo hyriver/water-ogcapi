@@ -399,7 +399,8 @@ def json_object(
     """
     try:
         doc = resp.json()
-    except ValueError:
+    except (ValueError, RecursionError):
+        # RecursionError: a body nested deeper than the decoder goes.
         doc = None
     if not isinstance(doc, dict):
         # Raised outside the except block: a JSONDecodeError holds the whole body.

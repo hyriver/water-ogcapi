@@ -91,6 +91,22 @@ def test_body_must_be_a_json_object(content: bytes) -> None:
     assert excinfo.value.__context__ is None, "a JSONDecodeError holds the whole body"
 
 
+def test_a_body_nested_too_deep_fails_its_page_and_keeps_the_checkpoint() -> None:
+    deep = (
+        b'{"type":"FeatureCollection","features":[],"x":' + b"[" * 200_000 + b"]" * 200_000 + b"}"
+    )
+    first = {
+        "type": "FeatureCollection",
+        "features": [],
+        "links": [{"rel": "next", "href": "?p=2"}],
+    }
+    transport, _ = serve(first, httpx2.Response(200, content=deep))
+    with pytest.raises(PartialResultsError) as excinfo:
+        asyncio.run(OGCService(BASE, transport=transport).collect("c", validate=False))
+    assert "not a JSON object" in str(excinfo.value.failures[0])
+    assert excinfo.value.checkpoint is not None
+
+
 @pytest.mark.parametrize("base_url", ["https://host:abc/api", "https://host:99999/api"])
 def test_a_base_url_whose_port_does_not_parse_is_refused(base_url: str) -> None:
     """Two URLs without a readable origin compared equal in the D-34 check."""

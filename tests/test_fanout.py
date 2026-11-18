@@ -644,6 +644,17 @@ def test_a_cut_split_query_whose_sum_matches_one_piece_reads_unknown() -> None:
     assert "count" not in result.pagination.checks
 
 
+def test_a_piece_s_shortfall_does_not_cancel_another_s_excess() -> None:
+    """Each piece's features are counted against its own ``numberMatched``."""
+    sizes = {"USGS-01": 8, "USGS-02": 9}
+    claimed: dict[str, int | None] = {"USGS-01": 9, "USGS-02": 8}
+    result = collect(nwis(counted(sizes, claimed))[0], params=TWO_SITES, sites_per_piece=1)
+    assert isinstance(result, QueryResult)
+    assert result.pagination.number_returned == result.pagination.number_matched == 17
+    assert result.pagination.completeness == "unknown"
+    assert "count" not in result.pagination.checks
+
+
 def test_a_split_query_with_a_piece_that_reports_no_count_reads_unknown() -> None:
     claimed: dict[str, int | None] = {"USGS-02": None}
     result = collect(nwis(counted(claimed=claimed))[0], params=TWO_SITES, sites_per_piece=1)

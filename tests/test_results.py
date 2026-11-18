@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 import pytest
 
 from water_ogcapi import CRS, Link, Page, Pagination, QueryResult
+from water_ogcapi._paging import summarize
 from water_ogcapi._results import CRS84, REDACTED, crs_of, redact_url
 from water_ogcapi.exceptions import ValidationError
 
@@ -280,6 +281,17 @@ def test_crs_provenance(
     crs = crs_of(pages)
     assert (crs.requested, crs.effective, crs.source) == expected
     assert len(crs.page_crs) == len(headers)
+
+
+def test_a_split_summary_checks_only_the_sum_when_a_page_answers_no_next_link() -> None:
+    """D-93: a piece sent without ``params`` reads as a ``next`` link no page offered."""
+    short = make_page(url=f"{URL}?a=1", params={"a": "1"}, number_matched=3, feature_count=2)
+    whole = make_page(url=f"{URL}?a=2", params={"a": "2"}, number_matched=2, feature_count=2)
+    stray = make_page(url=f"{URL}?a=3", params={}, number_matched=1, number_returned=1)
+    pages = [short, whole, dataclasses.replace(stray, feature_count=1)]
+    features = [{"id": n} for n in range(5)]
+    summary = summarize(pages, features, failed=False, malformed=False)
+    assert (summary.number_matched, summary.completeness) == (5, "complete")
 
 
 def test_crs_reads_the_request_as_sent() -> None:

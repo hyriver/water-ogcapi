@@ -2552,12 +2552,15 @@ Layering rule for anything new:
 - **Date:** 2026-11-04.
 - **Decision:** When a traversal has more than one chain, `summarize()` sets
     `Pagination.number_matched` to the sum of `numberMatched` over each chain's first
-    page, and the count check compares that sum with the features received. A chain's
-    first page is the one with `params`, since a `next` link carries its query in its
-    URL, and a `QueryResult` keeps its pages' `params`, so a resume still tells the
-    pieces apart. Pieces reporting different counts no longer read `unknown` for that
-    alone. A page that leaves the count out still does. The maintainer asked for the fix
-    after the final review; this shape is the implementer's.
+    page, and the count check compares that sum with the features received. Since
+    2026-11-18 it also compares each chain's features with that chain's own count,
+    following each page's `next` link to the page that answered it, so one piece's
+    shortfall cannot cancel another's excess. A chain's first page is the one with
+    `params`, since a `next` link carries its query in its URL, and a `QueryResult`
+    keeps its pages' `params`, so a resume still tells the pieces apart. Pieces
+    reporting different counts no longer read `unknown` for that alone. A page that
+    leaves the count out still does. The maintainer asked for the fix after the final
+    review; this shape is the implementer's.
 - **Why:** Each piece reports only its own matches, so read as one traversal the check
     was wrong both ways. Two pieces of 10 cut to 5 each with no `next` link agreed on 10
     against 10 features and read `complete`, and two whole pieces of 9 read `unknown`.
@@ -2566,9 +2569,9 @@ Layering rule for anything new:
 - **Rejected:** Dropping the count check for a split query, which gives up a check that
     costs nothing. A piece id on `Page` or `Checkpoint`, which adds a public field and a
     pickled one for what `params` already says.
-- **Limits:** Pages of different chains interleave, so a count that changes within one
-    piece is seen only through the sum. A hand-built `Request` with no `params` reads as
-    a `next` link.
+- **Limits:** A hand-built `Request` with no `params` reads as a `next` link. Its page
+    answers no `next` link of an earlier page, so the chains cannot be told apart and
+    only the sum is checked.
 
 ### D-94: The Water Data API class is `WaterData`
 

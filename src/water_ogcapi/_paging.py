@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urljoin
 
 from water_ogcapi._metadata import json_object, parse_link
+from water_ogcapi._redact import redact_url
 from water_ogcapi._results import Page, Pagination
-from water_ogcapi._transport import reject_credentials, reject_userinfo
+from water_ogcapi._transport import reject_credentials, reject_userinfo, sent_url
 from water_ogcapi.exceptions import ServiceError, ValidationError
 
 if TYPE_CHECKING:
@@ -170,6 +172,30 @@ def _repeats_an_id(features: list[Any]) -> bool | None:
     return False if len(ids) == len(features) else None
 
 
+def _chains(pages: list[Page]) -> list[list[Page]] | None:
+    """Group ``pages`` by chain: a page with ``params``, then the pages its ``next`` links reach.
+
+    ``None`` when a page without ``params`` answers no ``next`` link of an earlier page.
+    """
+    chains: list[list[Page]] = []
+    # Keyed as `Request.identity()` names the request of a ``next`` link (D-38).
+    reached: dict[tuple[str, str, bytes | None], list[Page]] = {}
+    for page in pages:
+        if page.params:
+            chains.append([])
+            chain = chains[-1]
+        else:
+            chain = reached.get((page.method, page.url, page.request_body))
+            if chain is None:
+                return None
+        chain.append(page)
+        href = next_href(page.links)
+        if href is not None:
+            url = redact_url(sent_url(urljoin(page.url, href), {}))
+            reached[page.method, url, page.request_body] = chain
+    return chains
+
+
 def summarize(
     pages: list[Page], features: list[Any], *, failed: bool, malformed: bool
 ) -> Pagination:
@@ -194,13 +220,17 @@ def summarize(
     # pages that disagree with each other, or a repeated feature id leave the result
     # unknown.
     checks: tuple[Check, ...] = ("end_of_links",)
-    if matched is not None and matched == returned:
+    # In the sum, one piece's shortfall cancels another's excess, so each chain is also
+    # counted against its own first page (D-93).
+    chains = _chains(pages) if split and every else None
+    uneven = any(c[0].number_matched != sum(p.feature_count for p in c) for c in chains or [])
+    if matched is not None and matched == returned and not uneven:
         checks += ("count",)
     repeated = _repeats_an_id(features)
     if repeated is False:
         checks = (*checks, "unique_ids")
     short = any(p.number_returned not in (None, p.feature_count) for p in pages)
-    mismatch = matched is not None and matched != returned
+    mismatch = uneven or (matched is not None and matched != returned)
     completeness: Completeness = (
         "unknown"
         if malformed

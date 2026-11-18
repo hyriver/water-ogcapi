@@ -21,7 +21,8 @@ def render(releases: list[dict[str, Any]]) -> str:
     ]
     published = [r for r in releases if not r["draft"]]
     for release in sorted(published, key=lambda r: r["published_at"], reverse=True):
-        body = release["body"].replace("\r\n", "\n").strip()
+        # The API sends null for a release without notes.
+        body = (release["body"] or "").replace("\r\n", "\n").strip()
         # git-cliff heads a final release's notes with its version and date.
         if body.startswith("## "):
             body = body.partition("\n")[2].strip()

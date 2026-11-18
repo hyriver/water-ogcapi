@@ -44,3 +44,9 @@ def test_render_orders_releases_and_replaces_cliff_heading() -> None:
     assert "\r" not in page
     assert "v0.3.0" not in page
     assert page.endswith("Reserves the name.\n")
+
+
+def test_render_takes_a_release_without_notes() -> None:
+    release = _release("v0.3.0", "2026-11-20", "")
+    release["body"] = None
+    assert whats_new.render([release]).endswith("2026-11-20\n\n\n")

@@ -19,16 +19,33 @@ REPO = "hyriver/water-ogcapi"
 API = f"https://api.github.com/repos/{REPO}"
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect: urllib would send the token to the new host."""
+
+    def redirect_request(self, *_args: object, **_kwargs: object) -> None:
+        return None
+
+
 def fetch(url: str) -> list[dict[str, Any]]:
-    """Return every item of a paginated GitHub list endpoint."""
+    """Return every item of a paginated GitHub list endpoint.
+
+    Raises
+    ------
+    ValueError
+        If a ``next`` link leaves the GitHub API, where the token must not follow.
+    """
+    opener = urllib.request.build_opener(_NoRedirect)
     headers = {"Accept": "application/vnd.github+json"}
     if token := os.environ.get("GITHUB_TOKEN"):
         headers["Authorization"] = f"Bearer {token}"
     items: list[dict[str, Any]] = []
     next_url: str | None = url
     while next_url:
+        if not next_url.startswith("https://api.github.com/"):
+            msg = f"refused a next link outside the GitHub API: {next_url}"
+            raise ValueError(msg)
         request = urllib.request.Request(next_url, headers=headers)  # noqa: S310
-        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+        with opener.open(request, timeout=30) as response:
             items.extend(json.load(response))
             link = re.search(r'<([^>]+)>; rel="next"', response.headers.get("Link", ""))
         next_url = link.group(1) if link else None

@@ -155,15 +155,19 @@ def next_href(links: tuple[Link, ...]) -> str | None:
 
 
 def _repeats_an_id(features: list[Any]) -> bool | None:
-    """Whether a feature id repeats, ``None`` when a feature has no string or integer id."""
+    """Whether a string or integer feature id repeats.
+
+    ``None`` when none repeats and a feature has no such id.
+    """
     ids: list[tuple[type, object]] = []
     for feature in features:
         fid = cast("dict[str, Any]", feature).get("id") if isinstance(feature, dict) else None
-        if type(fid) not in (str, int):
-            return None
-        # Keyed by type too, so the id "1" and the id 1 stay apart.
-        ids.append((type(fid), fid))
-    return len(set(ids)) != len(ids)
+        if type(fid) in (str, int):
+            # Keyed by type too, so the id "1" and the id 1 stay apart.
+            ids.append((type(fid), fid))
+    if len(set(ids)) != len(ids):
+        return True
+    return False if len(ids) == len(features) else None
 
 
 def summarize(

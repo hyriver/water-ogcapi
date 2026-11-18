@@ -702,6 +702,17 @@ def test_the_id_check_runs_when_every_feature_has_a_string_or_integer_id(
     assert ("unique_ids" in result.pagination.checks) is listed
 
 
+def test_a_repeated_id_beside_a_feature_without_one_reads_unknown() -> None:
+    docs = hu02()
+    docs[1]["features"][0] = docs[0]["features"][-1]
+    tail = docs[2]["features"][-1]
+    docs[2]["features"][-1] = {k: v for k, v in tail.items() if k != "id"}
+    transport, _ = serve(*docs[:-1], without_next(docs[-1]))
+    result, _ = collected(OGCService(GEOCONNEX, transport=transport))
+    assert result.pagination.completeness == "unknown"
+    assert "unique_ids" not in result.pagination.checks
+
+
 @pytest.mark.parametrize("clone", [copy.copy, lambda e: pickle.loads(pickle.dumps(e))])
 def test_partial_results_error_round_trip(clone: Any) -> None:
     """The error crosses process pools and Dask workers with its partial result."""

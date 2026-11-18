@@ -840,10 +840,11 @@ Layering rule for anything new:
     in a read-only `extra`, deep-copied both ways, so `from_dict(doc).to_dict() == doc`.
     A field is `None` when its member is absent or has a shape the field cannot hold,
     such as a null, a string where a list belongs, or a bbox of 5 numbers; that member
-    stays in `extra` as sent. A list with one unparsable item stays whole in `extra`.
-    `Collection.from_dict` raises `ValueError` without a string `id`, `Link.from_dict`
-    without a string `href`, and `Collections.from_dict` for an entry without an `id`.
-    `extra` is left out of the hash, so every type stays hashable.
+    stays in `extra` as sent. A list with one unparsable item stays whole in `extra`, a
+    `links` list with each string `href` redacted. `Collection.from_dict` raises
+    `ValueError` without a string `id`, `Link.from_dict` without a string `href`, and
+    `Collections.from_dict` for an entry without an `id`. `extra` is left out of the
+    hash, so every type stays hashable.
 - **Why:** L-04. Keeping a malformed member in `extra` matches how the transport treats
     a malformed header (`parse_count` returns `None`), and a USGS schema change stays
     visible to the caller while parsing goes on. A collection with no `id` cannot enter

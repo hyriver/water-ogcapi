@@ -78,6 +78,18 @@ def _links(value: object) -> tuple[Link, ...] | None:
     return _list_of(value, parse_link)
 
 
+def _mask_hrefs(doc: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return ``doc`` with each link's ``href`` redacted, for a ``links`` list kept in ``extra``."""
+    links = doc.get("links")
+    if not isinstance(links, list):
+        return doc
+    masked = [
+        {**link, "href": parsed.href} if (parsed := parse_link(link)) else link
+        for link in cast("list[Any]", links)
+    ]
+    return {**doc, "links": masked}
+
+
 @dataclass(frozen=True, slots=True)
 class SpatialExtent:
     """The ``spatial`` member of a collection's extent.
@@ -241,10 +253,10 @@ class Collection:
         ValueError
             If ``doc`` has no string ``id``.
         """
-        return cls(**from_members(doc, cls._MEMBERS, required="id"))
+        return cls(**from_members(_mask_hrefs(doc), cls._MEMBERS, required="id"))
 
     def to_dict(self) -> dict[str, Any]:
-        """Return the document as the server sent it, ``href`` redacted in parsed links."""
+        """Return the document as the server sent it, ``href`` redacted in its links."""
         return to_members(self, self._MEMBERS, self.extra)
 
 
@@ -287,10 +299,10 @@ class Collections:
         ValueError
             If an entry of ``collections`` is not an object with a string ``id``.
         """
-        return cls(**from_members(doc, cls._MEMBERS))
+        return cls(**from_members(_mask_hrefs(doc), cls._MEMBERS))
 
     def to_dict(self) -> dict[str, Any]:
-        """Return the document as the server sent it, ``href`` redacted in parsed links."""
+        """Return the document as the server sent it, ``href`` redacted in its links."""
         return to_members(self, self._MEMBERS, self.extra)
 
 

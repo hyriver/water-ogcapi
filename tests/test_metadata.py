@@ -155,6 +155,16 @@ def test_collections_rejects_an_entry_without_id(entry: object) -> None:
         Collections.from_dict({"collections": [COLLECTION, entry]})
 
 
+def test_a_link_list_kept_in_extra_has_each_href_redacted() -> None:
+    """One link without a string ``href`` keeps the whole list in ``extra`` (D-33)."""
+    links = [{"href": "https://example.com/c?api_key=SECRET", "rel": "self"}, {"rel": "next"}]
+    masked = [{"href": "https://example.com/c?api_key=REDACTED", "rel": "self"}, {"rel": "next"}]
+    index = Collections.from_dict({"links": links, "collections": [COLLECTION | {"links": links}]})
+    assert "SECRET" not in repr(index)
+    assert index.to_dict()["links"] == index.to_dict()["collections"][0]["links"] == masked
+    assert links[0]["href"].endswith("SECRET"), "the caller's document is left as given"
+
+
 def test_link_needs_a_string_href() -> None:
     with pytest.raises(ValueError, match="'href'"):
         Link.from_dict({"rel": "self"})

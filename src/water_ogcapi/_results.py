@@ -118,7 +118,8 @@ class CRS:
     Parameters
     ----------
     requested : str or None
-        The ``crs`` query parameter of the first request as sent, ``None`` when absent.
+        The ``crs`` query parameter of the first request as sent, its first value when
+        it repeats, ``None`` when absent.
     page_crs : tuple of str or None
         Each page's ``Content-Crs`` header with its angle brackets removed, ``None``
         for a page without one. A repeated header lists its values comma-separated.
@@ -129,8 +130,8 @@ class CRS:
         page: ``default`` (CRS84, the OGC API Features default) when no request asked
         for another CRS, ``unconfirmed`` when every request asked for the same other
         CRS, which a server applying it must name in ``Content-Crs``, and ``unknown``
-        when the requests disagreed. ``unknown`` also when pages named different CRSs
-        or only some named one.
+        when the requests disagreed or one named two CRSs. ``unknown`` also when pages
+        named different CRSs or only some named one.
     """
 
     requested: str | None
@@ -439,10 +440,9 @@ class Pagination:
 CRS84 = "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
 
 
-def _requested_crs(page: Page) -> str | None:
-    """Return the ``crs`` value in the query of the request that fetched ``page``."""
-    values = parse_qs(urlsplit(page.url).query).get("crs")
-    return values[0] if values else None
+def _requested_crs(page: Page) -> list[str]:
+    """Return every ``crs`` value in the query of the request that fetched ``page``."""
+    return parse_qs(urlsplit(page.url).query).get("crs", [])
 
 
 def _named_crs(page: Page) -> tuple[str, ...]:
@@ -453,7 +453,7 @@ def _named_crs(page: Page) -> tuple[str, ...]:
 
 def crs_of(pages: Sequence[Page]) -> CRS:
     """Determine the CRS of ``pages`` from their ``Content-Crs`` headers and requests."""
-    requested = _requested_crs(pages[0]) if pages else None
+    requested = next(iter(_requested_crs(pages[0])), None) if pages else None
     per_page = [_named_crs(p) for p in pages]
     seen = tuple(", ".join(uris) or None for uris in per_page)
     named = {uri for uris in per_page for uri in uris}
@@ -465,7 +465,7 @@ def crs_of(pages: Sequence[Page]) -> CRS:
     # drop or change the parameter. A server that applies crs must name it in
     # Content-Crs (OGC API Features Part 2, requirement 15), so a request no page
     # confirmed may have been ignored.
-    asked = {None if crs == CRS84 else crs for crs in map(_requested_crs, pages)}
+    asked = {None if crs == CRS84 else crs for p in pages for crs in _requested_crs(p) or [None]}
     if asked <= {None}:
         return CRS(requested, seen, CRS84, "default")
     return CRS(requested, seen, None, "unconfirmed" if len(asked) == 1 else "unknown")

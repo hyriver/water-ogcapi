@@ -954,7 +954,8 @@ Layering rule for anything new:
     name one (`unknown`). Without a header on any page, each page's own request query
     decides: CRS84 when no request asked for another CRS (`default`), and `None` when
     every request asked for the same other CRS (`unconfirmed`) or the requests disagree
-    (`unknown`). Asking for CRS84 counts as asking for the default.
+    (`unknown`), as does one request whose query names two CRSs. Asking for CRS84 counts
+    as asking for the default.
 - **Why:** A server that applies `crs` must name the CRS in `Content-Crs` (OGC API
     Features Part 2, requirement 15; abstract test 4 expects the requested CRS there),
     so a request no page confirmed may have been ignored. All four recorded fixtures

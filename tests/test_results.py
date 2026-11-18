@@ -292,6 +292,13 @@ def test_crs_of_no_pages_is_the_default() -> None:
     assert crs_of([]) == CRS(None, (), CRS84, "default")
 
 
+def test_crs_is_unknown_when_one_request_names_two_crs_values() -> None:
+    twice = crs_of([make_page(url=f"{URL}?crs={CRS84}&crs={UTM}", params={})])
+    assert (twice.requested, twice.effective, twice.source) == (CRS84, None, "unknown")
+    same = crs_of([make_page(url=f"{URL}?crs={UTM}&crs={UTM}", params={})])
+    assert (same.requested, same.source) == (UTM, "unconfirmed")
+
+
 def test_crs_is_unknown_when_a_next_link_drops_or_changes_the_requested_crs() -> None:
     first = make_page(url=f"{URL}?f=json&crs={UTM}", params={"f": "json", "crs": UTM})
     dropped = make_page(url=f"{URL}?offset=2", params={})

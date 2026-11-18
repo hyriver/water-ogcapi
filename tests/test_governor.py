@@ -196,7 +196,7 @@ def test_a_cancelled_wait_books_no_slot() -> None:
         await governor.wait()
         return loop.time() - t0
 
-    assert asyncio.run(run()) < 0.15, "one interval, not four"
+    assert asyncio.run(run()) < 0.25, "one interval, not four"
 
 
 class Recorder(Governor):

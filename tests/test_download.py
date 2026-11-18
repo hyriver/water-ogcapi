@@ -111,14 +111,15 @@ def test_a_cross_origin_redirect_drops_the_key_and_keeps_the_signature_out(
     logger.addHandler(records)
     caplog.set_level(logging.DEBUG)
     try:
-        result = fetch(
-            transport, tmp_path / "f", headers={"X-Api-Key": "KEY", "User-Agent": "hyriver"}
-        )
+        sent = {"X-Api-Key": "KEY", "Authorization": "Bearer T", "X-Other": "v"}
+        result = fetch(transport, tmp_path / "f", headers={**sent, "User-Agent": "hyriver"})
     finally:
         logger.removeHandler(records)
     assert (tmp_path / "f").read_bytes() == b"payload"
     assert result.redirects == 2
     assert [r.headers.get("x-api-key") for r in seen] == ["KEY", "KEY", None]
+    assert [r.headers.get("authorization") for r in seen] == ["Bearer T", "Bearer T", None]
+    assert [r.headers.get("x-other") for r in seen] == ["v", "v", None]
     assert seen[-1].headers["user-agent"] == "hyriver"
     assert "SECRETSIG" not in repr(result)
     assert all("SECRETSIG" not in m for m in records.messages)
@@ -526,7 +527,8 @@ def test_a_cancelled_download_removes_its_file_and_frees_its_permit(tmp_path: Pa
 
     async def run() -> None:
         task = asyncio.create_task(transport.download(URL, tmp_path / "f", total=None))
-        await asyncio.sleep(0.05)
+        while not list(tmp_path.iterdir()):  # noqa: ASYNC110, ASYNC240
+            await asyncio.sleep(0.001)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task

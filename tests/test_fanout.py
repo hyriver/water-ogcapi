@@ -403,11 +403,15 @@ def test_a_resume_takes_no_split() -> None:
 def test_a_failure_while_the_caller_holds_a_page_stops_new_pieces() -> None:
     """A piece that fails between steps still keeps the next piece from starting."""
     held = asyncio.Event()
+    failing: list[asyncio.Task[Any]] = []
 
     async def fail_late(
         request: httpx2.Request, _: list[tuple[str, str]]
     ) -> httpx2.Response | None:
         if request.url.params.get("monitoring_location_id") == "USGS-02":
+            task = asyncio.current_task()
+            assert task is not None
+            failing.append(task)
             await held.wait()
             return httpx2.Response(503)
         return None
@@ -419,7 +423,9 @@ def test_a_failure_while_the_caller_holds_a_page_stops_new_pieces() -> None:
             items = service.iter_pages("daily", params=sites, sites_per_piece=1, validate=False)
             await anext(items)
             held.set()
-            await asyncio.sleep(0.05)  # USGS-02 fails while the caller holds the page
+            # USGS-02 fails while the caller holds the page.
+            while not failing[0].done():  # noqa: ASYNC110
+                await asyncio.sleep(0.001)
             try:
                 async for _ in items:
                     pass

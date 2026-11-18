@@ -630,6 +630,25 @@ class Download:
         object.__setattr__(self, "url", redact_url(self.url))
 
 
+def _downloaded(
+    target: Path, named: str, outcome: tuple[int, dict[str, str], int, int], attempts: int
+) -> Download:
+    """Build the result of a download, refusing a 304 that leaves no file at ``target``."""
+    status, kept, size, redirects = outcome
+    if status == 304 and not target.exists():
+        msg = "HTTP 304 with no file at the path to keep"
+        raise ServiceError(msg, named, status=304, attempts=attempts)
+    return Download(
+        path=target,
+        url=named,
+        status=status,
+        headers=kept,
+        size=size,
+        attempts=attempts,
+        redirects=redirects,
+    )
+
+
 class Transport:
     """Bounded, retrying async HTTP client.
 
@@ -1342,7 +1361,8 @@ class Transport:
         ------
         ServiceError
             As `request` does, and also for a refused redirect, more than
-            ``MAX_REDIRECTS`` redirects, or a call that outlasted ``total``.
+            ``MAX_REDIRECTS`` redirects, a call that outlasted ``total``, or a 304 when
+            ``path`` holds no file.
         ValidationError
             As for `request`, and if ``total`` is not positive and finite.
         """
@@ -1396,22 +1416,14 @@ class Transport:
             except TimeoutError:
                 msg = f"download exceeded its total budget of {total} s"
                 raise ServiceError(msg, named, attempts=made) from None
-            status, kept, size, redirects = outcome
+            status, kept = outcome[:2]
             # Closed first: Windows does not rename a file that is still open.
             out.close()
             if status != 304:
                 # Outside the budget's scope, so a check's TimeoutError stays its own.
                 await _finish_part(part, kept, check, remote_time=remote_time)
                 part.replace(target)
-            return Download(
-                path=target,
-                url=named,
-                status=status,
-                headers=kept,
-                size=size,
-                attempts=made,
-                redirects=redirects,
-            )
+            return _downloaded(target, named, outcome, made)
         finally:
             # Synchronous, so the cleanup runs even while the task is being cancelled, and
             # even when closing fails on a full disk.

@@ -323,6 +323,10 @@ class OGCService:
         reject_credentials(base_url, None)
         # Metadata calls would send userinfo as Basic auth, and pickles and errors keep it.
         reject_userinfo(base_url, "base_url")
+        if _origin(base_url) is None:
+            # Two unparsable URLs would compare equal in the origin check (D-34).
+            msg = "base_url does not parse as a URL"
+            raise ValidationError(msg)
         self._base_url = base_url.rstrip("/")
         self._owns_transport = transport is None
         self._transport = Transport() if transport is None else transport

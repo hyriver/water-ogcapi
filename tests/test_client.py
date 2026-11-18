@@ -91,6 +91,13 @@ def test_body_must_be_a_json_object(content: bytes) -> None:
     assert excinfo.value.__context__ is None, "a JSONDecodeError holds the whole body"
 
 
+@pytest.mark.parametrize("base_url", ["https://host:abc/api", "https://host:99999/api"])
+def test_a_base_url_whose_port_does_not_parse_is_refused(base_url: str) -> None:
+    """Two URLs without a readable origin compared equal in the D-34 check."""
+    with pytest.raises(ValidationError, match="does not parse"):
+        OGCService(base_url)
+
+
 def test_a_body_without_a_collections_list_is_not_cached() -> None:
     error = {"code": "InternalError", "description": "upstream timed out"}
     transport, seen = serve(error, body("nwis/collections.json"))

@@ -187,13 +187,14 @@ def _reject_unsendable_headers(headers: Mapping[str, str]) -> None:
     """Refuse a header value that is not printable ASCII, naming only the header (D-43).
 
     httpx2 raises ``UnicodeEncodeError`` for a non-ASCII value, and its ``repr`` holds
-    the whole value, API key included.
+    the whole value, API key included. h11 refuses a value with a space at either end
+    and quotes it in a message httpcore2 logs at DEBUG.
     """
     reject_non_str(headers, "header names")
     reject_non_str(headers.values(), "header values")
     for name, value in headers.items():
-        if not (value.isascii() and value.isprintable()):
-            msg = f"header {name!r} must be printable ASCII"
+        if not (value.isascii() and value.isprintable()) or value != value.strip():
+            msg = f"header {name!r} must be printable ASCII with no space at either end"
             raise ValidationError(msg)
 
 

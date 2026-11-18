@@ -210,8 +210,10 @@ def _key(api_key: str | None, key_env: str | None) -> str | None:
     # Transport.request() refuses such a key too, but only once a query runs (D-43, D-65).
     if api_key is not None:
         reject_non_str([api_key], "the USGS API key")
-    if api_key and not (api_key.isascii() and api_key.isprintable()):
-        msg = "the USGS API key must be printable ASCII"
+    if api_key and (
+        not (api_key.isascii() and api_key.isprintable()) or api_key != api_key.strip()
+    ):
+        msg = "the USGS API key must be printable ASCII with no space at either end"
         raise ValidationError(msg)
     return api_key or None
 

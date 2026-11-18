@@ -1564,3 +1564,10 @@ def test_a_paced_wait_at_a_total_of_one_holds_back_another_host() -> None:
 
     asyncio.run(run())
     assert sent == ["a.test", "b.test"]
+
+
+def test_a_header_value_with_a_space_at_either_end_is_refused() -> None:
+    transport = Transport(transport=httpx2.MockTransport(lambda _r: httpx2.Response(200)))
+    with pytest.raises(ValidationError, match="'X-Api-Key' must be printable ASCII") as excinfo:
+        asyncio.run(transport.get(URL, headers={"X-Api-Key": "SECRET "}))
+    assert "SECRET" not in str(excinfo.value)

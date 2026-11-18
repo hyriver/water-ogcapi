@@ -577,3 +577,11 @@ def test_geoconnex_answers_an_ids_query_sent_as_cql2_json() -> None:
     result = asyncio.run(run())
     assert sorted(f["id"] for f in result.geojson["features"]) == ["01", "02"]
     assert result.pagination.completeness == "complete"
+
+
+@pytest.mark.parametrize("key", [" SECRET", "SECRET ", "\tSECRET"])
+def test_waterdata_refuses_a_key_with_a_space_at_either_end(key: str) -> None:
+    """h11 quotes such a value in an error that httpcore2 logs at DEBUG."""
+    with pytest.raises(ValidationError, match="no space at either end") as excinfo:
+        WaterData(api_key=key)
+    assert "SECRET" not in repr(excinfo.value)

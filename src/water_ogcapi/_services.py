@@ -151,8 +151,12 @@ def _site_pieces(request: Request, size: int) -> list[Request] | None:
             for chunk in batched(sites, size)
         ]
     in_query = request.body is None and request.params.get("filter-lang") == "cql2-json"
-    text = request.params["filter"] if in_query else request.body
-    doc: Any = None if text is None else json.loads(text)
+    text = request.params.get("filter") if in_query else request.body
+    try:
+        doc: Any = None if text is None else json.loads(text)
+    except ValueError:
+        msg = "filter is not JSON, which filter-lang=cql2-json says it is"
+        raise ValidationError(msg) from None
     match doc:
         case {"op": "in", "args": [{"property": str()} as prop, list() as values]} if len(doc) == 2:
             # Only literal values make disjoint pieces; a property reference can match twice.

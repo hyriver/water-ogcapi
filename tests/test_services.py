@@ -585,3 +585,16 @@ def test_waterdata_refuses_a_key_with_a_space_at_either_end(key: str) -> None:
     with pytest.raises(ValidationError, match="no space at either end") as excinfo:
         WaterData(api_key=key)
     assert "SECRET" not in repr(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "params", [{"filter-lang": "cql2-json", "filter": "n = 1"}, {"filter-lang": "cql2-json"}]
+)
+def test_stac_names_a_filter_that_is_not_the_json_its_filter_lang_claims(
+    params: dict[str, str],
+) -> None:
+    if "filter" in params:
+        with pytest.raises(ValidationError, match="filter is not JSON"):
+            stac_pieces(params=params)
+    else:
+        assert len(stac_pieces(params=params)) == 1

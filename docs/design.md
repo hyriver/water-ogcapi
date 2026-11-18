@@ -1125,7 +1125,8 @@ Layering rule for anything new:
     `ValueError` before sending for a header value that is not printable ASCII, naming
     the header and never its value: httpx2's `UnicodeEncodeError` for a non-ASCII value
     holds the whole value in its `repr`, and the check in `NWIS` (D-42) covers only its
-    own key.
+    own key. A value with a space at either end is refused the same way, as is such a
+    key: h11 quotes the value in a `LocalProtocolError` that httpcore2 logs at DEBUG.
 
 ### D-44: `_query.py` builds the request, and `_pieces()` is the fan-out seam
 

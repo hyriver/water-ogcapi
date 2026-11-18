@@ -1571,3 +1571,25 @@ def test_a_header_value_with_a_space_at_either_end_is_refused() -> None:
     with pytest.raises(ValidationError, match="'X-Api-Key' must be printable ASCII") as excinfo:
         asyncio.run(transport.get(URL, headers={"X-Api-Key": "SECRET "}))
     assert "SECRET" not in str(excinfo.value)
+
+
+def test_a_client_bound_during_a_close_survives_it() -> None:
+    """A second ``aclose()`` released the binding while the first still waited."""
+
+    async def run() -> None:
+        gate = asyncio.Event()
+        transport = Transport(transport=_SlowClose(lambda _r: httpx2.Response(200), gate))
+        await transport.get(URL)
+        first = asyncio.create_task(transport.aclose())
+        await asyncio.sleep(0)
+        await transport.aclose()
+        await transport.get(URL)
+        rebound = transport._client
+        gate.set()
+        await first
+        assert rebound is not None
+        assert transport._client is rebound
+        await transport.aclose()
+        assert rebound.is_closed
+
+    asyncio.run(run())

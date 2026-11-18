@@ -46,6 +46,11 @@ def test_render_orders_releases_and_replaces_cliff_heading() -> None:
     assert page.endswith("Reserves the name.\n")
 
 
+def test_render_keeps_a_heading_the_notes_start_with() -> None:
+    release = _release("v0.3.0", "2026-11-20", "## Security fixes\n\nRotate the key.")
+    assert "\n\n## Security fixes\n\nRotate the key.\n" in whats_new.render([release])
+
+
 def test_render_takes_a_release_without_notes() -> None:
     release = _release("v0.3.0", "2026-11-20", "")
     release["body"] = None

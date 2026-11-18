@@ -1622,8 +1622,9 @@ Layering rule for anything new:
 - **Decision:** `summarize()` reads the `id` of every feature `collect()` received. When
     every feature has a string or integer `id` and none repeats, `Pagination.checks`
     lists `unique_ids`. A repeated `id` makes `completeness` `unknown`. A feature with
-    no `id`, or with a float, boolean, or other `id`, skips the check. Ids compare with
-    their type, so `"1"` and `1` differ.
+    no `id`, or with a float, boolean, or other `id`, keeps `unique_ids` off the list,
+    and a repeat among the other features still reads `unknown`. Ids compare with their
+    type, so `"1"` and `1` differ.
 - **Why:** Chosen by the maintainer. On an offset service, a feature inserted before the
     current offset shifts the last feature of one page onto the next. An insert plus a
     delete leaves `numberMatched` and the count as they were, so the count check passes

@@ -346,7 +346,7 @@ def test_a_forked_child_starts_its_own_loop() -> None:
             threading.Event().wait(0.2)
 
     threading.Thread(target=hold_the_lock, daemon=True).start()
-    held.wait(5)
+    assert held.wait(5)
     assert exitcode_in_fork(collect_in_child) == 0
 
 

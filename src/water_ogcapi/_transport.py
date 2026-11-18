@@ -1427,14 +1427,14 @@ class Transport:
         Closing pooled connections from a different loop is what fails, and the
         binding is released either way so a failed close cannot strand the instance.
         """
-        try:
-            if self._client is not None:
-                await self._client.aclose()
-        finally:
-            self._client = None
-            self._sem = None
-            self._origins = {}
-            self._loop = None
+        # Released before the await, so a request that binds a new client while this one
+        # closes keeps it.
+        client, self._client = self._client, None
+        self._sem = None
+        self._origins = {}
+        self._loop = None
+        if client is not None:
+            await client.aclose()
 
     async def __aenter__(self) -> Self:
         return self

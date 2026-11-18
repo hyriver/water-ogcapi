@@ -1027,9 +1027,14 @@ def test_a_download_refuses_a_total_that_is_not_positive_and_finite(
     assert not list(tmp_path.iterdir())
 
 
-def test_a_304_with_no_file_to_keep_is_an_error(tmp_path: Path) -> None:
+@pytest.mark.parametrize("folder", [False, True])
+def test_a_304_with_no_file_to_keep_is_an_error(tmp_path: Path, folder: bool) -> None:
+    """A missing path, and a folder, hold no file."""
+    path = tmp_path / "f"
+    if folder:
+        path.mkdir()
     transport, _ = serve({URL: lambda _: httpx2.Response(304)})
     with pytest.raises(ServiceError, match="304 with no file") as excinfo:
-        fetch(transport, tmp_path / "f")
+        fetch(transport, path)
     assert excinfo.value.status == 304
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.iterdir()) == ([path] if folder else [])

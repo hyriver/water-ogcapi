@@ -635,7 +635,7 @@ def _downloaded(
 ) -> Download:
     """Build the result of a download, refusing a 304 that leaves no file at ``target``."""
     status, kept, size, redirects = outcome
-    if status == 304 and not target.exists():
+    if status == 304 and not target.is_file():
         msg = "HTTP 304 with no file at the path to keep"
         raise ServiceError(msg, named, status=304, attempts=attempts)
     return Download(

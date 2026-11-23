@@ -1526,7 +1526,7 @@ Layering rule for anything new:
 
 - **Status:** accepted.
 - **Date:** 2026-10-21.
-- **Decision:** Every `prefix-dev/setup-pixi` step passes `pixi-version`, now `v0.84.0`.
+- **Decision:** Every `prefix-dev/setup-pixi` step passes `pixi-version`, now `v0.84.2`.
     A pixi upgrade in CI is a one-line edit per step, made in its own PR.
 - **Why:** Without the input, setup-pixi installs the latest pixi on each run, so a
     release changes CI with no commit to show it. pixi 0.82.1 (2026-10-20) is a security

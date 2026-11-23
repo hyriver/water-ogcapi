@@ -27,9 +27,9 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       with:
         fetch-depth: 0  # hatch-vcs reads tags for the version
-    - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
+    - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e  # v0.11.3
       with:
-        pixi-version: v0.84.0  # Dependabot does not bump this; see D-55
+        pixi-version: v0.84.2  # Dependabot does not bump this; see D-55
         environments: ${{ matrix.environment }}
     # `test` excludes the network marker, so CI never touches USGS servers.
     - run: pixi run -e ${{ matrix.environment }} test
@@ -46,9 +46,9 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       with:
         fetch-depth: 0  # hatch-vcs reads tags for the version
-    - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
+    - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e  # v0.11.3
       with:
-        pixi-version: v0.84.0  # Dependabot does not bump this; see D-55
+        pixi-version: v0.84.2  # Dependabot does not bump this; see D-55
         environments: dev
 
   typecheck:
@@ -57,9 +57,9 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       with:
         fetch-depth: 0
-    - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
+    - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e  # v0.11.3
       with:
-        pixi-version: v0.84.0  # Dependabot does not bump this; see D-55
+        pixi-version: v0.84.2  # Dependabot does not bump this; see D-55
         environments: typecheck
     - run: pixi run typecheck
 
@@ -67,9 +67,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-    - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
+    - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e  # v0.11.3
       with:
-        pixi-version: v0.84.0  # Dependabot does not bump this; see D-55
+        pixi-version: v0.84.2  # Dependabot does not bump this; see D-55
         environments: lint
     - run: pixi run lint
     # Needs network: resolves the runtime dependencies from PyPI and checks their advisories.
